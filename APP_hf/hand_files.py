@@ -4,6 +4,7 @@ import readTGjson
 import readWAtxt
 import re
 
+
 def remove_special_chars(text):
     #не всегда корректно обрабатываются хитрые имена, убираю спец символы
     arr_text = text.split(' ')
@@ -25,6 +26,7 @@ def clearText(content):
 def content_pre_process(filename, max_len=15200):
     # Вернет контент, почищенный и нужной длины и словарь преобразования обратно в имена
     try:
+        df = ''
         if filename.split('.')[-1] == 'json':
             df = readTGjson.readTGjson(filename)  # Читаю файл и чищу его
         elif filename.split('.')[-1] == 'txt':
@@ -33,9 +35,12 @@ def content_pre_process(filename, max_len=15200):
             print('Не поддерживаемый формат')
             return None, None
 
+        if df is None:
+            print('Некорректная структура файла')
+            return None, None
+        
         df['Name'] = df['Name'].apply(lambda x: remove_special_chars(x))
         df['Text'] = df['Text'].apply(lambda x: clearText(x))
-
         # Закодирую имена для экономии пространства
         name_code = {}
         code_name = {}
@@ -45,7 +50,7 @@ def content_pre_process(filename, max_len=15200):
             code_name[tname] = on
 
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-
+        # здесь можно было бы несколько оптимизировать...
         content = ''
         len_tokens = 0
         for index in df.index[::-1]:  # Иду в обратном порядке
@@ -73,5 +78,6 @@ def content_pre_process(filename, max_len=15200):
         print(f"Произошла ошибка: {e}")
     return None, None
 
-
-print(content_pre_process('text.json')) # протестируем "руками" для начала)
+# протестируем "руками" для начала)
+# print(content_pre_process('text.txt'))
+print(content_pre_process('messages.json'))
