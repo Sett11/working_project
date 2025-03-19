@@ -3,6 +3,9 @@ import pandas as pd
 
 
 def validate_json(file):
+    """
+    Checking structure json file
+    """
     if  'messages' not in file or not isinstance(file['messages'], list):
         return False
     
@@ -20,13 +23,15 @@ def validate_json(file):
         
     return True
         
-# есть повод оптимизировать, примерно 3 секунды 5 тыс строк
+
 def readTGjson(filename, encoding='utf8'):
-    # Read telegram's json and take only messages
-    # Return DataFrame
+    """
+    Read telegram's json and take only messages
+    Return DataFrame
+    """
     df = pd.DataFrame()
     jdata = ''
-    # Exceptions during reading
+
     try:
         with open(filename, 'r', encoding=encoding) as f:
             jdata = json.load(f)

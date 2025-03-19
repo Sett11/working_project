@@ -1,16 +1,24 @@
 import pandas as pd
 import re
 
+
 def validate_txt(line):
+    """
+    Checking structure txt file
+    """
     return re.match(r'^\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2} - [^:]+: .+$', line) is not None
 
 
-def readWAtxt(filename):
+def readWAtxt(filename, encoding='utf8'):
+    """
+    Read whatsApp's txt and take only messages
+    Return DataFrame
+    """
     df = pd.DataFrame()
+    text = ''
 
     try:
-        text = ''
-        with open(filename, 'r', encoding="utf8") as f:
+        with open(filename, 'r', encoding=encoding) as f:
             text = f.read()
     except FileNotFoundError:
         print(f"Файл {filename} не найден.")

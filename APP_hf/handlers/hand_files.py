@@ -1,42 +1,51 @@
 import unicodedata
-import tiktoken #считает количество токенов
-import readTGjson
-import readWAtxt
+import tiktoken # считает количество токенов
+import readTGjson as readTGjson
+import readWAtxt as readWAtxt
+import readTGhtml
 import re
 
 
 def remove_special_chars(text):
-    #не всегда корректно обрабатываются хитрые имена, убираю спец символы
+    """
+    Removes special characters from a string
+    """
     arr_text = text.split(' ')
     for i in range(len(arr_text)):
         arr_text[i] = ''.join(c for c in arr_text[i] if unicodedata.category(c).startswith(('L', 'N')))
     return ' '.join(arr_text)
 
+
 def clearText(content):
-    # чистит текст от спец символов
-    # вынести в библиотеку (Вот этот пункт не вполне понял. Добавить в re в виде отдельных функций?)
-    # сюда можно добавить проверки и удаление персональной информации (Нужны примеры или более чёткие указания: что именно нужно проверить/удалить)
-    content = re.sub('<.*?>', ' ', content).strip() #html code
-    content = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', content) #ссылки
-    content = re.sub('&lt;br&gt;|&lt;br /&gt;|&nbsp;|\n', ' ', content) #спец символы
-    content = re.sub('[ ]{2,10}', ' ', content).strip() #личшние пробелы
+    """
+    Clears text from unnecessary characters
+    """
+    content = re.sub('<.*?>', ' ', content).strip() # html code
+    content = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', content) # ссылки
+    content = re.sub('&lt;br&gt;|&lt;br /&gt;|&nbsp;|\n', ' ', content) # спец символы
+    content = re.sub('[ ]{2,10}', ' ', content).strip() # личшние пробелы
     return content
 
 
 def content_pre_process(filename, max_len=15200):
-    # Вернет контент, почищенный и нужной длины и словарь преобразования обратно в имена
+    """
+    Accepts a file name and optionally the maximum length of the context.
+    Returns a cleaned string of the required length and a dictionary of chat participant name IDs
+    """
     try:
         df = ''
         if filename.split('.')[-1] == 'json':
             df = readTGjson.readTGjson(filename)  # Читаю файл и чищу его
         elif filename.split('.')[-1] == 'txt':
             df = readWAtxt.readWAtxt(filename)
+        elif filename.split('.')[-1] == 'html':
+            df = readTGhtml.readTGhtml(filename)
         else:  # Если с другим расширением
             print('Не поддерживаемый формат')
             return None, None
-
+        
         if df is None:
-            print('Некорректная структура файла')
+            print(f'Ошибка обработки файла {filename}')
             return None, None
         
         df['Name'] = df['Name'].apply(lambda x: remove_special_chars(x))
@@ -78,6 +87,9 @@ def content_pre_process(filename, max_len=15200):
         print(f"Произошла ошибка: {e}")
     return None, None
 
-# протестируем "руками" для начала)
-# print(content_pre_process('text.txt'))
-print(content_pre_process('messages.json'))
+
+# протестируем "руками" для начала
+
+print(content_pre_process('..\\test_files\messages.txt'))
+# print(content_pre_process('..\\test_files\messages.json'))
+# print(content_pre_process('..\\test_files\messages.html'))
