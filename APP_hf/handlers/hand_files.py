@@ -1,5 +1,5 @@
 import unicodedata
-import tiktoken # считает количество токенов
+import tiktoken
 import readTGjson as readTGjson
 import readWAtxt as readWAtxt
 import readTGhtml
@@ -10,6 +10,8 @@ def remove_special_chars(text):
     """
     Removes special characters from a string
     """
+    # проблема с удалением спецсимволов из имени - оно может стать пустой строкой
+    # и таких 'имён' может оказаться больше одного в одной беседе, что приведёт к путанице
     arr_text = text.split(' ')
     for i in range(len(arr_text)):
         arr_text[i] = ''.join(c for c in arr_text[i] if unicodedata.category(c).startswith(('L', 'N')))
@@ -23,7 +25,9 @@ def clearText(content):
     content = re.sub('<.*?>', ' ', content).strip() # html code
     content = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', content) # ссылки
     content = re.sub('&lt;br&gt;|&lt;br /&gt;|&nbsp;|\n', ' ', content) # спец символы
-    content = re.sub('[ ]{2,10}', ' ', content).strip() # личшние пробелы
+    content = re.sub(r'[^A-zА-Яа-яЁё0-9 .,:;?!]', ' ', content) # пока пробуем оставлять только русские и английские буквы, цифры и знаки препинания,
+    # а то смайлики все проверки проходят :) А это прецедент - значит и много чего ещё пройдёт
+    content = re.sub('[ ]{2,10}', ' ', content).strip() # лишние пробелы
     return content
 
 
