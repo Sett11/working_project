@@ -1,8 +1,8 @@
 import unicodedata
 import tiktoken
-import readTGjson as readTGjson
-import readWAtxt as readWAtxt
-import readTGhtml
+from readWAtxt import readWAtxt
+from readTGjson import readTGjson
+from readTGhtml import readTGhtml
 import re
 from collections import deque
 
@@ -55,11 +55,11 @@ def content_pre_process(filename, max_len=15200):
     try:
         df = ''
         if filename.split('.')[-1] == 'json':
-            df = readTGjson.readTGjson(filename)
+            df = readTGjson(filename)
         elif filename.split('.')[-1] == 'txt':
-            df = readWAtxt.readWAtxt(filename)
+            df = readWAtxt(filename)
         elif filename.split('.')[-1] == 'html':
-            df = readTGhtml.readTGhtml(filename)
+            df = readTGhtml(filename)
         else:
             print('Не поддерживаемый формат')
             return None, None
@@ -107,4 +107,4 @@ def content_pre_process(filename, max_len=15200):
 # протестируем "руками" для начала
 # print(content_pre_process('..\\test_files\messages.txt'))
 # print(content_pre_process('..\\test_files\messages.json'))
-print(content_pre_process('..\\test_files\messages.html'))
+# print(content_pre_process('..\\test_files\messages.html'))
