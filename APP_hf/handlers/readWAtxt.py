@@ -32,15 +32,17 @@ def readWAtxt(filename, encoding='utf8'):
     
     text = re.split(r'\n(?=\d\d.\d\d.\d\d\d\d)', text)
     
-    for one in text[2:]:  # надо что-то придумывать и с передачей файлов в пользовательских сообщениях и с системными сообщениями
-                          # основная проблема - они могут быть весьма различны
+    for one in text[1:]:
+        
+        if re.search('‎', one): # !!! пока такой вариант. Очень топорная валидация - нужно лучше)
+            continue
 
         mes=re.sub(r'\n',' ',one)
 
         if not validate_txt(mes):
-            print('Некорректная структура txt файла', mes, sep='\n')
+            print('Некорректная структура txt файла')
             return None
-        
+            
         tone = re.split(' - |: ', mes)
         df = pd.concat([df,
                         pd.DataFrame([{'Date': pd.to_datetime(tone[0], format='%d.%m.%Y, %H:%M'), 'Name': tone[1],

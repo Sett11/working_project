@@ -4,17 +4,34 @@ import readTGjson as readTGjson
 import readWAtxt as readWAtxt
 import readTGhtml
 import re
+from collections import deque
+
+
+def hand_names(names):
+    """
+    The function receives a numpy.ndarray with unique names and returns 2 dictionaries: 1. name -> name_id; 2. name_id -> name
+    """
+    name_code = {}
+    code_name = {}
+    indexes = iter(range(100))
+
+    for on in names:
+        tname = 'У' + str(next(indexes))
+        name_code[on] = tname
+        code_name[tname] = on
+    
+    return name_code, code_name
 
 
 def remove_special_chars(text):
     """
     Removes special characters from a string
     """
-    # проблема с удалением спецсимволов из имени - оно может стать пустой строкой
-    # и таких 'имён' может оказаться больше одного в одной беседе, что приведёт к путанице
     arr_text = text.split(' ')
+
     for i in range(len(arr_text)):
         arr_text[i] = ''.join(c for c in arr_text[i] if unicodedata.category(c).startswith(('L', 'N')))
+    
     return ' '.join(arr_text)
 
 
@@ -25,8 +42,7 @@ def clearText(content):
     content = re.sub('<.*?>', ' ', content).strip() # html code
     content = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', content) # ссылки
     content = re.sub('&lt;br&gt;|&lt;br /&gt;|&nbsp;|\n', ' ', content) # спец символы
-    content = re.sub(r'[^A-zА-Яа-яЁё0-9 .,:;?!]', ' ', content) # пока пробуем оставлять только русские и английские буквы, цифры и знаки препинания,
-    # а то смайлики все проверки проходят :) А это прецедент - значит и много чего ещё пройдёт
+    content = re.sub(r'[^A-zА-Яа-яЁё0-9 .,:;?!]', ' ', content) # !!! пока пробуем оставлять только русские и английские буквы, цифры и знаки препинания
     content = re.sub('[ ]{2,10}', ' ', content).strip() # лишние пробелы
     return content
 
@@ -39,12 +55,12 @@ def content_pre_process(filename, max_len=15200):
     try:
         df = ''
         if filename.split('.')[-1] == 'json':
-            df = readTGjson.readTGjson(filename)  # Читаю файл и чищу его
+            df = readTGjson.readTGjson(filename)
         elif filename.split('.')[-1] == 'txt':
             df = readWAtxt.readWAtxt(filename)
         elif filename.split('.')[-1] == 'html':
             df = readTGhtml.readTGhtml(filename)
-        else:  # Если с другим расширением
+        else:
             print('Не поддерживаемый формат')
             return None, None
         
@@ -54,28 +70,24 @@ def content_pre_process(filename, max_len=15200):
         
         df['Name'] = df['Name'].apply(lambda x: remove_special_chars(x))
         df['Text'] = df['Text'].apply(lambda x: clearText(x))
-        # Закодирую имена для экономии пространства
-        name_code = {}
-        code_name = {}
-        for on in df.Name.unique():
-            tname = 'У' + str(len(name_code))
-            name_code[on] = tname
-            code_name[tname] = on
 
+        name_code, code_name = hand_names(df.Name.unique())
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-        # здесь можно было бы несколько оптимизировать...
-        content = ''
+        content = deque() # использование двусвязного списка лучше конкатенации строк с точки зрения асимптотики - на больших файлах скажется
         len_tokens = 0
-        for index in df.index[::-1]:  # Иду в обратном порядке
+
+        for index in df.index[::-1]:
             new_content = name_code[df.loc[index, 'Name']] + ': ' + re.sub('\n', ' ', df.loc[index, 'Text']) + '\n'
+            if not new_content.rstrip('\n'): # убираем пустые сообщения, которые "съедают" контекст за счёт добавления имён и переносов без payload
+                continue
             new_len = len(enc.encode(new_content))
             if new_len + len_tokens > max_len:
-                break  # Если превысили длину
-            content = new_content + content
+                break
+            content.appendleft(new_content)
             len_tokens += new_len
 
         print(f"Всего сообщений {df.shape[0]}, попало в контент {df.shape[0] - index}")
-        return content, code_name
+        return ''.join(content), code_name
 
     except FileNotFoundError:
         print(f"Файл {filename} не найден.")
@@ -93,7 +105,6 @@ def content_pre_process(filename, max_len=15200):
 
 
 # протестируем "руками" для начала
-
-print(content_pre_process('..\\test_files\messages.txt'))
+# print(content_pre_process('..\\test_files\messages.txt'))
 # print(content_pre_process('..\\test_files\messages.json'))
-# print(content_pre_process('..\\test_files\messages.html'))
+print(content_pre_process('..\\test_files\messages.html'))
