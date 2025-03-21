@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+from custom_print import custom_print
 
 
 def validate_txt(line):
@@ -21,11 +22,11 @@ def readWAtxt(filename, encoding='utf8'):
         with open(filename, 'r', encoding=encoding) as f:
             text = f.read()
     except FileNotFoundError:
-        print(f"Файл {filename} не найден.")
+        custom_print(f"Файл {filename} не найден.")
     except UnicodeDecodeError:
-        print(f"Ошибка декодирования файла {filename}. Проверьте кодировку.")
+        custom_print(f"Ошибка декодирования файла {filename}. Проверьте кодировку.")
     except OSError as e:
-        print(f"Ошибка при работе с файлом {filename}: {e}")
+        custom_print(f"Ошибка при работе с файлом {filename}: {e}")
 
     if not text:
         return None

@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 import pandas as pd
+from custom_print import custom_print
 
 
 def validate_html(block):
@@ -26,11 +27,11 @@ def readTGhtml(filename, encoding='utf8'):
         messages = soup.find_all('div', class_ = 'message default clearfix')
 
     except FileNotFoundError:
-        print(f'Файл {filename} не найден')
+        custom_print(f'Файл {filename} не найден')
     except UnicodeDecodeError:
-        print(f'Ошибка декодирования файла {filename}. Проверьте кодировку.')
+        custom_print(f'Ошибка декодирования файла {filename}. Проверьте кодировку.')
     except OSError as e:
-        print(f'Ошибка при работе с файлом {filename}: {e}')
+        custom_print(f'Ошибка при работе с файлом {filename}: {e}')
 
     if not messages:
         return None
@@ -38,7 +39,7 @@ def readTGhtml(filename, encoding='utf8'):
     for mes in messages:
 
         if not validate_html(mes): # можно или прекращать обработку файла или переходить к следующему блоку. Второе предпочтительнее, что видно на примере messages.html
-            # print(f'Некорректная структура файла {filename}')
+            # custom_print(f'Некорректная структура файла {filename}')
             # return None
             continue
         

@@ -3,6 +3,7 @@ import tiktoken
 from readWAtxt import readWAtxt
 from readTGjson import readTGjson
 from readTGhtml import readTGhtml
+from custom_print import custom_print
 import re
 from collections import deque
 
@@ -47,7 +48,7 @@ def clearText(content):
     return content
 
 
-def content_pre_process(filename, anonymize_names, save_datetime, max_len=15200):
+def content_pre_process(filename, anonymize_names, save_datetime, max_len_context):
     """
     Accepts a file name and optionally the maximum length of the context.
     Returns a cleaned string of the required length and a dictionary of chat participant name IDs
@@ -61,11 +62,11 @@ def content_pre_process(filename, anonymize_names, save_datetime, max_len=15200)
         elif filename.split('.')[-1] == 'html':
             df = readTGhtml(filename)
         else:
-            print('Не поддерживаемый формат')
+            custom_print('Не поддерживаемый формат')
             return None, None
         
         if df is None:
-            print(f'Ошибка обработки файла {filename}')
+            custom_print(f'Ошибка обработки файла {filename}')
             return None, None
         
         df['Name'] = df['Name'].apply(lambda x: remove_special_chars(x))
@@ -78,27 +79,27 @@ def content_pre_process(filename, anonymize_names, save_datetime, max_len=15200)
 
         for index in df.index[::-1]:
             new_content = name_code[df.loc[index, 'Name']] + ': ' + re.sub('\n', ' ', df.loc[index, 'Text']) + '\n'
-            if not new_content.rstrip('\n'): # убираем пустые сообщения, которые "съедают" контекст за счёт добавления имён и переносов без payload
+            if not re.sub(r'[ \n]', '' ,new_content.split(': ')[1]): # убираем пустые сообщения, которые "съедают" контекст за счёт добавления имён и переносов без payload
                 continue
             new_len = len(enc.encode(new_content))
-            if new_len + len_tokens > max_len:
+            if new_len + len_tokens > max_len_context:
                 break
             content.appendleft(new_content)
             len_tokens += new_len
 
-        print(f"Всего сообщений {df.shape[0]}, попало в контент {df.shape[0] - index}")
+        custom_print(f"Всего сообщений {df.shape[0]}, попало в контент {df.shape[0] - index}")
         return ''.join(content), code_name
 
     except FileNotFoundError:
-        print(f"Файл {filename} не найден.")
+        custom_print(f"Файл {filename} не найден.")
     except UnicodeDecodeError:
-        print(f"Ошибка декодирования файла {filename}. Проверьте кодировку.")
+        custom_print(f"Ошибка декодирования файла {filename}. Проверьте кодировку.")
     except ValueError as e:
-        print(f"Ошибка преобразования данных: {e}")
+        custom_print(f"Ошибка преобразования данных: {e}")
     except KeyError as e:
-        print(f"Ключ не найден в DataFrame: {e}")
+        custom_print(f"Ключ не найден в DataFrame: {e}")
     except TypeError as e:
-        print(f"Ошибка типа данных: {e}")
+        custom_print(f"Ошибка типа данных: {e}")
     except Exception as e:
-        print(f"Произошла ошибка: {e}")
+        custom_print(f"Произошла ошибка: {e}")
     return None, None

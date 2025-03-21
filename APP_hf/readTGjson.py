@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+from custom_print import custom_print
 
 
 def validate_json(file):
@@ -36,20 +37,20 @@ def readTGjson(filename, encoding='utf8'):
         with open(filename, 'r', encoding=encoding) as f:
             jdata = json.load(f)
     except FileNotFoundError:
-        print(f"Файл {filename} не найден.")
+        custom_print(f"Файл {filename} не найден.")
         return None
     except json.JSONDecodeError:
-        print(f"Ошибка декодирования JSON в файле {filename}.")
+        custom_print(f"Ошибка декодирования JSON в файле {filename}.")
         return None
     except UnicodeDecodeError:
-        print(f"Ошибка декодирования файла {filename}. Проверьте кодировку.")
+        custom_print(f"Ошибка декодирования файла {filename}. Проверьте кодировку.")
         return None
     except OSError as e:
-        print(f"Ошибка при работе с файлом {filename}: {e}")
+        custom_print(f"Ошибка при работе с файлом {filename}: {e}")
         return None
     
     if not jdata or not validate_json(jdata):
-        print('Некорректная структура JSON файла')
+        custom_print('Некорректная структура JSON файла')
         return None
     
     for one in jdata['messages']:  # если простой формат сообщения
