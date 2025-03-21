@@ -29,7 +29,7 @@ def readWAtxt(filename, encoding='utf8'):
         custom_print(f"Ошибка при работе с файлом {filename}: {e}")
 
     if not text:
-        return None
+        return
     
     text = re.split(r'\n(?=\d\d.\d\d.\d\d\d\d)', text)
     
@@ -42,7 +42,7 @@ def readWAtxt(filename, encoding='utf8'):
 
         if not validate_txt(mes):
             print('Некорректная структура txt файла')
-            return None
+            return
             
         tone = re.split(' - |: ', mes)
         df = pd.concat([df,

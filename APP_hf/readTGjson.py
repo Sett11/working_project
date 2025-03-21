@@ -38,22 +38,22 @@ def readTGjson(filename, encoding='utf8'):
             jdata = json.load(f)
     except FileNotFoundError:
         custom_print(f"Файл {filename} не найден.")
-        return None
+        return
     except json.JSONDecodeError:
         custom_print(f"Ошибка декодирования JSON в файле {filename}.")
-        return None
+        return
     except UnicodeDecodeError:
         custom_print(f"Ошибка декодирования файла {filename}. Проверьте кодировку.")
-        return None
+        return
     except OSError as e:
         custom_print(f"Ошибка при работе с файлом {filename}: {e}")
-        return None
+        return
     
     if not jdata or not validate_json(jdata):
         custom_print('Некорректная структура JSON файла')
-        return None
+        return
     
-    for one in jdata['messages']:  # если простой формат сообщения
+    for one in jdata['messages']:
         if one['type'] != 'message':
             continue
 

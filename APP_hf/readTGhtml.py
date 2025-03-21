@@ -34,13 +34,13 @@ def readTGhtml(filename, encoding='utf8'):
         custom_print(f'Ошибка при работе с файлом {filename}: {e}')
 
     if not messages:
-        return None
+        return
 
     for mes in messages:
 
         if not validate_html(mes): # можно или прекращать обработку файла или переходить к следующему блоку. Второе предпочтительнее, что видно на примере messages.html
             # custom_print(f'Некорректная структура файла {filename}')
-            # return None
+            # return
             continue
         
         date = mes.find('div', class_ = 'pull_right date details').text.strip()
