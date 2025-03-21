@@ -47,7 +47,7 @@ def clearText(content):
     return content
 
 
-def content_pre_process(filename, max_len=15200):
+def content_pre_process(filename, anonymize_names, save_datetime, max_len=15200):
     """
     Accepts a file name and optionally the maximum length of the context.
     Returns a cleaned string of the required length and a dictionary of chat participant name IDs
@@ -102,9 +102,3 @@ def content_pre_process(filename, max_len=15200):
     except Exception as e:
         print(f"Произошла ошибка: {e}")
     return None, None
-
-
-# протестируем "руками" для начала
-# print(content_pre_process('..\\test_files\messages.txt'))
-# print(content_pre_process('..\\test_files\messages.json'))
-# print(content_pre_process('..\\test_files\messages.html'))
