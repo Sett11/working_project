@@ -35,7 +35,7 @@ def get_resp(file_path, anonymize_names, save_datetime, max_len_context, time_ch
         custom_print('Пользовательский файл не был загружен')
         return
     
-    URL = 'http://127.0.0.1:8000/upload_file/'
+    URL = 'http://localhost:8000/upload_file/'
     
     with open(file_path, 'rb') as f:
         files = {'file': (file_path, f)}
