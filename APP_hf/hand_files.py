@@ -1,11 +1,12 @@
 import unicodedata
 import tiktoken
+import re
+from collections import deque
+import pandas as pd
 from readWAtxt import readWAtxt
 from readTGjson import readTGjson
 from readTGhtml import readTGhtml
 from custom_print import custom_print
-import re
-from collections import deque
 
 
 def hand_names(names):
@@ -48,7 +49,7 @@ def clearText(content):
     return content
 
 
-def content_pre_process(filename, anonymize_names, save_datetime, max_len_context):
+def content_pre_process(filename, anonymize_names=True, save_datetime=False, max_len_context=15200, time_choise=None):
     """
     Accepts a file name and optionally the maximum length of the context.
     Returns a cleaned string of the required length and a dictionary of chat participant name IDs
@@ -76,13 +77,16 @@ def content_pre_process(filename, anonymize_names, save_datetime, max_len_contex
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
         content = deque() # использование двусвязного списка лучше конкатенации строк с точки зрения асимптотики - на больших файлах скажется
         len_tokens = 0
-
+        date = pd.to_datetime(time_choise) if time_choise else None
+        
         for index in df.index[::-1]:
-            new_content = name_code[df.loc[index, 'Name']] + ': ' + re.sub('\n', ' ', df.loc[index, 'Text']) + '\n'
-            if not re.sub(r'[ \n]', '' ,new_content.split(': ')[1]): # убираем пустые сообщения, которые "съедают" контекст за счёт добавления имён и переносов без payload
+            new_content = (name_code[df.loc[index, 'Name']] if anonymize_names else df.loc[index, 'Name']) +\
+            (('&' + str(df.loc[index, 'Date']).replace(' ','|')) if save_datetime else '') +\
+            (': ' if not save_datetime else '> ') + re.sub('\n', ' ', df.loc[index, 'Text']) + '\n'
+            if not re.sub(r'[ \n]', '' ,new_content.split(': ')[-1]): # убираем пустые сообщения, которые "съедают" контекст за счёт добавления имён и переносов без payload
                 continue
             new_len = len(enc.encode(new_content))
-            if new_len + len_tokens > max_len_context:
+            if new_len + len_tokens > max_len_context or (date and date > df.loc[index, 'Date']):
                 break
             content.appendleft(new_content)
             len_tokens += new_len
@@ -103,3 +107,5 @@ def content_pre_process(filename, anonymize_names, save_datetime, max_len_contex
     except Exception as e:
         custom_print(f"Произошла ошибка: {e}")
     return None, None
+
+print(content_pre_process('test_files/messages.json', False, True, 15200, '2025-03-19 00:14:55'))
