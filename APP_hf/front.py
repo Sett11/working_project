@@ -43,9 +43,11 @@ def get_resp(file_path, anonymize_names, save_datetime, max_len_context, time_ch
         out = requests.post(URL, files=files, data=data)
         
     if out.status_code == 200:
-        with open('result.txt', 'wb') as result_file:
-            result_file.write(out.content)
-        return 'result.txt'
+        with open('result.txt', 'w', encoding='utf8') as result_file:
+            result_file.write(out.json().get('result'))
+
+        code_name = out.json().get('code_name', '')  # получаем словарь code_name из ответа
+        return 'result.txt', '\n'.join(f'{id}->{name}' for id, name in code_name.items()) if code_name else ''  # возвращаем также code_name
     else:
         return 'Error processing file', None
 
@@ -57,6 +59,7 @@ with gr.Blocks() as app:
     current_time = round(get_timestamp())
     file_input = gr.File(label='загрузите файл', type='filepath')
     anonymize_checkbox = gr.Checkbox(label='Анонимизировать имена', value=False)
+    output_code_name = gr.Textbox(label='закодированные имена', interactive=False)
     save_datetime_checkbox = gr.Checkbox(label='Сохранять дату/время', value=False)
     max_len_context = gr.Slider(label='Выберите максимальную длину итогового текста', minimum=1000, maximum=15200, value=5550, step=10)
     time_choise = gr.Slider(
@@ -73,7 +76,7 @@ with gr.Blocks() as app:
     process_btn.click(
         fn=get_resp, 
         inputs=[file_input, anonymize_checkbox, save_datetime_checkbox, max_len_context, time_choise],
-        outputs=output_get
+        outputs=[output_get, output_code_name]
     )
 
 
