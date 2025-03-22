@@ -1,7 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, Form, Response
 import re
 from hand_files import content_pre_process
-from delete_files import delete_files
 import uvicorn
 
 app = FastAPI()
@@ -12,7 +11,6 @@ async def upload_file(file: UploadFile = File(...), anonymize_names: bool = Form
     """
     receives the request data and returns the result of the file handler
     """
-    delete_files('result.txt', 'app_logs.txt') # удаляем старые файлы при загрузке нового файла
     
     dirty_path = file.headers.get('content-disposition')
     clean_path = dirty_path[re.search(r'filename\=.+', dirty_path).span()[0]:].replace('filename=','')[1:-1]

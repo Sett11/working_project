@@ -29,6 +29,7 @@ def get_resp(file_path, anonymize_names, save_datetime, max_len_context, time_ch
     """
     processes the user's request and returns a response
     """
+    delete_files('result.txt') # удаляем старый файл результата обработки при любом новом запросе - даже некорректном
 
     if file_path is None:
         custom_print('Пользовательский файл не был загружен')
@@ -46,23 +47,23 @@ def get_resp(file_path, anonymize_names, save_datetime, max_len_context, time_ch
             result_file.write(out.content)
         return 'result.txt'
     else:
-        return 'Error processing file'
+        return 'Error processing file', None
 
 
 with gr.Blocks() as app:
-    delete_files('result.txt', 'app_logs.txt') # удаляем старые файлы перед запуском приложения
+    delete_files('app_logs.txt', 'result.txt') # удаляем все старые файлы перед запуском приложения
     gr.Markdown('## ЗАГРУЗКА ФАЙЛА ДЛЯ ОБРАБОТКИ', elem_id='title')
 
     current_time = round(get_timestamp())
     file_input = gr.File(label='загрузите файл', type='filepath')
-    anonymize_checkbox = gr.Checkbox(label='Анонимизировать имена', value=True)
+    anonymize_checkbox = gr.Checkbox(label='Анонимизировать имена', value=False)
     save_datetime_checkbox = gr.Checkbox(label='Сохранять дату/время', value=False)
     max_len_context = gr.Slider(label='Выберите максимальную длину итогового текста', minimum=1000, maximum=15200, value=5550, step=10)
     time_choise = gr.Slider(
         minimum=round(current_time - 86400 * 28),
         maximum=current_time,
         step=60,
-        value=current_time,
+        value=round(current_time / 2),
         label="Выберите дату и время отсчёта начала чата")
     output_time_choise = gr.Textbox(label="Выбранное время", value=format_timestamp(time_choise.value))
     process_btn = gr.Button('запустить обработку файла')

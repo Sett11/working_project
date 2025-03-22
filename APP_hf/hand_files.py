@@ -73,20 +73,25 @@ def content_pre_process(filename, anonymize_names=True, save_datetime=False, max
         df['Name'] = df['Name'].apply(lambda x: remove_special_chars(x))
         df['Text'] = df['Text'].apply(lambda x: clearText(x))
 
-        name_code, code_name = hand_names(df.Name.unique())
+        name_code, code_name = hand_names(df.Name.unique()) if anonymize_names else (None, None)
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
         content = deque() # использование двусвязного списка лучше конкатенации строк с точки зрения асимптотики - на больших файлах скажется
         len_tokens = 0
         date = pd.to_datetime(time_choise) if time_choise else None
         
         for index in df.index[::-1]:
+            # если анонимизация установлена в True, то добавляем идентификатор имени к контенту, если нет - то просто имя
+            # то же самое по сохранению даты/времени в контенте - добавляем к выводу, если установлено в True
+            # на лету выбираем форматирование выходного контента - в зависимости от установленных пользователем параметров
             new_content = (name_code[df.loc[index, 'Name']] if anonymize_names else df.loc[index, 'Name']) +\
-            (('&' + str(df.loc[index, 'Date']).replace(' ','|')) if save_datetime else '') +\
+            (('&' + str(df.loc[index, 'Date'])) if save_datetime else '') +\
             (': ' if not save_datetime else '> ') + re.sub('\n', ' ', df.loc[index, 'Text']) + '\n'
+
             if not re.sub(r'[ \n]', '' ,new_content.split(': ')[-1]): # убираем пустые сообщения, которые "съедают" контекст за счёт добавления имён и переносов без payload
                 continue
+
             new_len = len(enc.encode(new_content))
-            if new_len + len_tokens > max_len_context or (date and date > df.loc[index, 'Date']):
+            if new_len + len_tokens > max_len_context or (date and date > df.loc[index, 'Date']): # если превышена установленная длина контекста или при итерации достигнута установленная дата начала отсчёта сообщений
                 break
             content.appendleft(new_content)
             len_tokens += new_len
@@ -107,5 +112,3 @@ def content_pre_process(filename, anonymize_names=True, save_datetime=False, max
     except Exception as e:
         custom_print(f"Произошла ошибка: {e}")
     return None, None
-
-print(content_pre_process('test_files/messages.json', False, True, 15200, '2025-03-19 00:14:55'))
