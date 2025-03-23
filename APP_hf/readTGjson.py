@@ -1,6 +1,7 @@
 import json
 import pandas as pd
 from custom_print import custom_print
+import io
 
 
 def validate_json(file):
@@ -31,27 +32,35 @@ def readTGjson(filename, encoding='utf8'):
     Return DataFrame
     """
     df = pd.DataFrame()
-    jdata = ''
+    jdata = None
 
     try:
-        with open(filename, 'r', encoding=encoding) as f:
-            jdata = json.load(f)
+        # Если filename это путь к файлу
+        if isinstance(filename, str):
+            with open(filename, 'r', encoding=encoding) as f:
+                jdata = json.load(f)
+        # Если filename это BytesIO объект
+        elif isinstance(filename, io.BytesIO):
+            jdata = json.loads(filename.getvalue().decode(encoding))
+        else:
+            custom_print("Неподдерживаемый тип входных данных")
+            return None
     except FileNotFoundError:
-        custom_print(f"Файл {filename} не найден.")
-        return
+        custom_print(f"Файл не найден.")
+        return None
     except json.JSONDecodeError:
-        custom_print(f"Ошибка декодирования JSON в файле {filename}.")
-        return
+        custom_print(f"Ошибка декодирования JSON.")
+        return None
     except UnicodeDecodeError:
-        custom_print(f"Ошибка декодирования файла {filename}. Проверьте кодировку.")
-        return
+        custom_print(f"Ошибка декодирования файла. Проверьте кодировку.")
+        return None
     except OSError as e:
-        custom_print(f"Ошибка при работе с файлом {filename}: {e}")
-        return
+        custom_print(f"Ошибка при работе с файлом: {e}")
+        return None
     
     if not jdata or not validate_json(jdata):
         custom_print('Некорректная структура JSON файла')
-        return
+        return None
     
     for one in jdata['messages']:
         if one['type'] != 'message':

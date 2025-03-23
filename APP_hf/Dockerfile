@@ -9,4 +9,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 7860
 EXPOSE 8000
 
-CMD ["python", "back.py"]
+CMD ["python", "front.py"]

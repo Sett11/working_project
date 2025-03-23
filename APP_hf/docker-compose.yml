@@ -1,12 +1,31 @@
 version: '3.9'
 
 services:
-  app:
+  frontend:
     build: .
     ports:
       - "7860:7860"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  backend:
+    build: .
+    command: python back.py
+    ports:
       - "8000:8000"
     volumes:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

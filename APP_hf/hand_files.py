@@ -3,6 +3,7 @@ import tiktoken
 import re
 from collections import deque
 import pandas as pd
+import io
 from readWAtxt import readWAtxt
 from readTGjson import readTGjson
 from readTGhtml import readTGhtml
@@ -41,6 +42,7 @@ def clearText(content):
     """
     Clears text from unnecessary characters
     """
+    content = remove_special_chars(content) # удаляем спец символы
     content = re.sub('<.*?>', ' ', content).strip() # html code
     content = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', content) # ссылки
     content = re.sub('&lt;br&gt;|&lt;br /&gt;|&nbsp;|\n', ' ', content) # спец символы
@@ -49,26 +51,40 @@ def clearText(content):
     return content
 
 
-def content_pre_process(filename, anonymize_names=True, save_datetime=False, max_len_context=15200, time_choise=None):
+def content_pre_process(file_obj, anonymize_names=True, save_datetime=False, max_len_context=15200, time_choise=None):
     """
-    Accepts a file name and optionally the maximum length of the context.
+    Accepts a BytesIO object and optionally the maximum length of the context.
     Returns a cleaned string of the required length and a dictionary of chat participant name IDs
     """
     try:
-        df = ''
-        if filename.split('.')[-1] == 'json':
-            df = readTGjson(filename)
-        elif filename.split('.')[-1] == 'txt':
-            df = readWAtxt(filename)
-        elif filename.split('.')[-1] == 'html':
-            df = readTGhtml(filename)
+        df = None
+        # Определяем тип файла по расширению в объекте файла
+        if isinstance(file_obj, io.BytesIO):
+            filename = getattr(file_obj, 'name', '')
+            custom_print(f"Обработка файла: {filename}")
+            if filename.endswith('.json'):
+                custom_print("Определен тип файла: JSON")
+                df = readTGjson(file_obj)
+            elif filename.endswith('.html'):
+                custom_print("Определен тип файла: HTML")
+                df = readTGhtml(file_obj)
+            else:
+                custom_print("Определен тип файла: TXT")
+                df = readWAtxt(file_obj)
         else:
-            custom_print('Не поддерживаемый формат')
+            custom_print('Ожидается объект BytesIO')
             return None, None
         
-        if df is None:
-            custom_print(f'Ошибка обработки файла {filename}')
+        if df is None or df.empty:
+            custom_print('Не удалось прочитать файл')
             return None, None
+            
+        if 'Name' not in df.columns:
+            custom_print('Файл не содержит необходимые колонки')
+            return None, None
+        
+        custom_print(f"Успешно прочитан файл. Количество строк: {len(df)}")
+        custom_print(f"Колонки в DataFrame: {df.columns.tolist()}")
         
         df['Name'] = df['Name'].apply(lambda x: remove_special_chars(x))
         df['Text'] = df['Text'].apply(lambda x: clearText(x))
@@ -100,9 +116,9 @@ def content_pre_process(filename, anonymize_names=True, save_datetime=False, max
         return ''.join(content), code_name
 
     except FileNotFoundError:
-        custom_print(f"Файл {filename} не найден.")
+        custom_print(f"Файл не найден.")
     except UnicodeDecodeError:
-        custom_print(f"Ошибка декодирования файла {filename}. Проверьте кодировку.")
+        custom_print(f"Ошибка декодирования файла. Проверьте кодировку.")
     except ValueError as e:
         custom_print(f"Ошибка преобразования данных: {e}")
     except KeyError as e:
