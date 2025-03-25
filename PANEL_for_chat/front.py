@@ -1,5 +1,4 @@
 import gradio as gr
-import os
 from hand_files import (
     update_file_display_sync,
     handle_file_delete_sync
@@ -52,20 +51,20 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
     )
     
     file_upload.upload(
-        lambda files: (log_event("FILE_UPLOAD", f"Files: {[os.path.basename(f) for f in files]}"), update_file_display_sync(files))[1],
+        update_file_display_sync,
         inputs=file_upload,
-        outputs=[file_output, file_output]
+        outputs=file_output
     )
     
     file_upload.change(
         handle_file_delete_sync,
         inputs=file_upload,
-        outputs=[file_output, file_output]
+        outputs=file_output
     )
     
     clear_files.click(
-        lambda: handle_file_delete_sync([]),
-        outputs=[file_output, file_output]
+        lambda: (handle_file_delete_sync([]), None),
+        outputs=[file_output, file_upload]
     )
     
     msg.submit(

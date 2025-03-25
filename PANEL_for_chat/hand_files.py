@@ -10,10 +10,14 @@ def process_uploaded_files(files: List[str]) -> str:
     """Обработка загруженных файлов"""
     file_info = []
     for file_path in files:
-        file_name = os.path.basename(file_path)
-        file_size = os.path.getsize(file_path) / 1024  # KB
-        file_info.append(f"{file_name} -> {file_size:.2f} KB")
-        uploaded_files[file_name] = file_path  # Сохраняем путь к файлу
+        try:
+            file_name = os.path.basename(file_path)
+            file_size = os.path.getsize(file_path) / 1024  # KB
+            file_info.append(f"{file_name} -> {file_size:.2f} KB")
+            uploaded_files[file_name] = file_path
+            log_event("FILE_PROCESS", f"Successfully processed: {file_name}")
+        except Exception as e:
+            log_event("ERROR", f"Failed to process file {file_path}: {str(e)}")
     return "\n".join(file_info) if file_info else "Нет загруженных файлов"
 
 
@@ -30,28 +34,21 @@ def clear_files_from_memory():
 
 def handle_file_delete(files: List[str]) -> str:
     """Обработка удаления файла"""
-    if not files:  # Если список файлов пустой
+    if not files:
         clear_files_from_memory()
         return "Нет загруженных файлов"
     
-    # Получаем список текущих файлов из компонента File
     current_files = {os.path.basename(f) for f in files}
-    
-    # Если текущий список файлов пустой, очищаем все файлы
-    if not current_files:
-        clear_files_from_memory()
-        return "Нет загруженных файлов"
-    
-    # Находим и удаляем файлы, которых нет в текущем списке
     for file_name in list(uploaded_files.keys()):
         if file_name not in current_files:
-            log_event("FILE_DELETE", f"Deleted file: {file_name}")
             try:
-                if os.path.exists(uploaded_files[file_name]):
-                    os.remove(uploaded_files[file_name])
+                file_path = uploaded_files[file_name]
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                del uploaded_files[file_name]
+                log_event("FILE_DELETE", f"Deleted file: {file_name}")
             except Exception as e:
-                log_event("ERROR", f"Failed to delete file {uploaded_files[file_name]}: {str(e)}")
-            del uploaded_files[file_name]
+                log_event("ERROR", f"Failed to delete file {file_name}: {str(e)}")
     
     return update_file_display()
 
@@ -66,17 +63,12 @@ def update_file_display() -> str:
     return "\n".join(file_info) if file_info else "Нет загруженных файлов"
 
 
-def update_file_display_sync(files: List[str]) -> Tuple[str, str]:
+def update_file_display_sync(files: List[str]) -> str:
     """Синхронизированное обновление отображения файлов"""
-    if not files:
-        result = "Нет загруженных файлов"
-    else:
-        result = process_uploaded_files(files)
-    return result, result
+    return process_uploaded_files(files) if files else "Нет загруженных файлов"
 
 
-def handle_file_delete_sync(files: List[str]) -> Tuple[str, str]:
+def handle_file_delete_sync(files: List[str]) -> str:
     """Синхронизированная обработка удаления файлов"""
-    log_event("FILE_DELETE", "File deleted")
-    result = handle_file_delete(files)
-    return result, result
+    log_event("FILE_DELETE", files)
+    return handle_file_delete(files)
