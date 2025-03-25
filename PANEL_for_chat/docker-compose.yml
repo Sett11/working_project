@@ -1,0 +1,13 @@
+version: '3.9'
+
+services:
+  chat_panel:
+    build: .
+    container_name: chat_panel
+    ports:
+      - "7860:7860"
+    environment:
+      - SERVER_IP=0.0.0.0
+    restart: always
+    volumes:
+      - ./logs:/app/logs 

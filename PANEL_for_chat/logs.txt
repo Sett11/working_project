@@ -1,13 +1,19 @@
 === Логи приложения ===
-[2025-03-25 11:02:39] APP_START Application started
-[2025-03-25 11:03:01] LOGIN User: admin, Success: True
-[2025-03-25 11:03:10] FILE_DELETE ['C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\e7327fa954b06ce0a48bd254a94ceb9bc660501a89d4c289db2e3e7e88f57fa3\\messages.html', 'C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\712a40ae09458c71b29d6e2b030f9270faa0bf089a31421989979a9bae34e65b\\messages.json', 'C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\f7e4d0ce3177ab4660e5cd7f56fa5c12672b0a326d8edd5aeb30613863cc4a1c\\messages.txt']
-[2025-03-25 11:03:10] FILE_LIST_UPDATE Current files: []
-[2025-03-25 11:03:10] FILE_PROCESS Successfully processed: messages.html
-[2025-03-25 11:03:10] FILE_PROCESS Successfully processed: messages.json
-[2025-03-25 11:03:10] FILE_PROCESS Successfully processed: messages.txt
-[2025-03-25 11:03:16] FILE_DELETE ['C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\e7327fa954b06ce0a48bd254a94ceb9bc660501a89d4c289db2e3e7e88f57fa3\\messages.html', 'C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\712a40ae09458c71b29d6e2b030f9270faa0bf089a31421989979a9bae34e65b\\messages.json']
-[2025-03-25 11:03:16] FILE_DELETE Deleted file: messages.txt
-[2025-03-25 11:03:16] FILE_LIST_UPDATE Current files: ['messages.html', 'messages.json']
-[2025-03-25 11:03:17] FILE_DELETE []
-[2025-03-25 11:03:18] FILE_DELETE None
+[2025-03-25 11:36:54] APP_START Application started
+[2025-03-25 11:37:56] LOGIN User: admin, Success: True
+[2025-03-25 11:38:04] FILE_PROCESS Successfully processed: messages.html
+[2025-03-25 11:38:04] FILE_PROCESS Successfully processed: messages.json
+[2025-03-25 11:38:04] FILE_PROCESS Successfully processed: messages.txt
+[2025-03-25 11:38:04] FILE_DELETE ['C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\e7327fa954b06ce0a48bd254a94ceb9bc660501a89d4c289db2e3e7e88f57fa3\\messages.html', 'C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\712a40ae09458c71b29d6e2b030f9270faa0bf089a31421989979a9bae34e65b\\messages.json', 'C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\f7e4d0ce3177ab4660e5cd7f56fa5c12672b0a326d8edd5aeb30613863cc4a1c\\messages.txt']
+[2025-03-25 11:38:04] FILE_LIST_UPDATE Current files: ['messages.html', 'messages.json', 'messages.txt']
+[2025-03-25 11:38:12] FILE_PROCESS Successfully processed: messages.html
+[2025-03-25 11:38:12] FILE_DELETE ['C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\e7327fa954b06ce0a48bd254a94ceb9bc660501a89d4c289db2e3e7e88f57fa3\\messages.html', 'C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\712a40ae09458c71b29d6e2b030f9270faa0bf089a31421989979a9bae34e65b\\messages.json', 'C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\f7e4d0ce3177ab4660e5cd7f56fa5c12672b0a326d8edd5aeb30613863cc4a1c\\messages.txt', 'C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\1ab1973b56d2141a540a92cb578f8bda8d7573e87c83cfcffb3340b661f93353\\Чат_WhatsApp_сконтактом_Лояльные_козырьки.txt']
+[2025-03-25 11:38:12] FILE_LIST_UPDATE Current files: ['messages.html', 'messages.json', 'messages.txt']
+[2025-03-25 11:38:12] FILE_PROCESS Successfully processed: messages.json
+[2025-03-25 11:38:12] FILE_PROCESS Successfully processed: messages.txt
+[2025-03-25 11:38:12] FILE_PROCESS Successfully processed: Чат_WhatsApp_сконтактом_Лояльные_козырьки.txt
+[2025-03-25 11:38:18] FILE_DELETE ['C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\e7327fa954b06ce0a48bd254a94ceb9bc660501a89d4c289db2e3e7e88f57fa3\\messages.html', 'C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\712a40ae09458c71b29d6e2b030f9270faa0bf089a31421989979a9bae34e65b\\messages.json', 'C:\\Users\\Lenovo\\AppData\\Local\\Temp\\gradio\\f7e4d0ce3177ab4660e5cd7f56fa5c12672b0a326d8edd5aeb30613863cc4a1c\\messages.txt']
+[2025-03-25 11:38:18] FILE_DELETE Deleted file: Чат_WhatsApp_сконтактом_Лояльные_козырьки.txt
+[2025-03-25 11:38:18] FILE_LIST_UPDATE Current files: ['messages.html', 'messages.json', 'messages.txt']
+[2025-03-25 11:38:19] FILE_DELETE []
+[2025-03-25 11:38:20] FILE_DELETE None
