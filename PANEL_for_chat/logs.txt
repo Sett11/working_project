@@ -1,0 +1,13 @@
+=== Логи приложения ===
+[2025-03-25 03:09:56] APP_START Application started
+[2025-03-25 03:10:17] LOGIN User: admin, Success: True
+[2025-03-25 03:10:26] FILE_DELETE File deleted
+[2025-03-25 03:10:26] FILE_UPLOAD Files: ['messages.html', 'messages.json']
+[2025-03-25 03:10:26] FILE_LIST_UPDATE Current files: []
+[2025-03-25 03:10:31] FILE_UPLOAD Files: ['messages.html', 'messages.json', 'messages.txt']
+[2025-03-25 03:10:31] FILE_DELETE File deleted
+[2025-03-25 03:10:31] FILE_LIST_UPDATE Current files: ['messages.html', 'messages.json', 'messages.txt']
+[2025-03-25 03:10:33] FILE_DELETE File deleted
+[2025-03-25 03:10:33] FILE_DELETE Deleted file: messages.txt
+[2025-03-25 03:10:33] FILE_LIST_UPDATE Current files: ['messages.html', 'messages.json']
+[2025-03-25 03:10:34] FILE_DELETE File deleted
