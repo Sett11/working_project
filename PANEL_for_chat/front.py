@@ -8,7 +8,7 @@ from authenticate import login
 from logs import clear_logs, log_event
 import os
 
-# m8TXp#5AjbRsWxT
+
 with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
     # Состояние для хранения информации о входе
     logged_in = gr.State(False)
