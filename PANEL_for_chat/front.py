@@ -1,7 +1,8 @@
 import gradio as gr
 from hand_files import (
-    update_file_display_sync,
-    handle_file_delete_sync
+    upload_and_update_status,
+    delete_and_update_status,
+    clear_all_files
 )
 from chat import chat_response, chat_history
 from authenticate import login
@@ -31,18 +32,25 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
                     file_output = gr.Textbox(label="Загруженные файлы", lines=10, value="Нет загруженных файлов")
                     file_upload = gr.File(file_count="multiple", label="Загрузить файлы", interactive=True)
                     clear_files = gr.Button("Очистить все файлы")
+                    gr.Markdown("### Поддерживаемые форматы:")
+                    gr.Markdown("- TXT - текстовые файлы")
+                    gr.Markdown("- PDF - документы PDF")
+                    gr.Markdown("- DOCX - документы Microsoft Word")
+                    gr.Markdown("- PPTX - презентации Microsoft PowerPoint")
+                    gr.Markdown("**Максимальный размер:** 100 000 символов")
             
             # Правая панель - чат
             with gr.Column(scale=3):
                 with gr.Blocks():
-                    gr.Markdown("## Чат")
+                    gr.Markdown("## Чат с документами")
                     chatbot = gr.Chatbot(height=500)
-                    msg = gr.Textbox(label="Ваше сообщение")
+                    msg = gr.Textbox(label="Ваш вопрос", placeholder="Задайте вопрос по загруженным документам...")
                     clear_chat = gr.Button("Очистить чат")
         
         # Нижняя панель - статус
         with gr.Row():
-            status = gr.Markdown()
+            with gr.Column():
+                status = gr.Markdown("Загрузите документы и задайте вопросы для анализа содержимого.")
     
     # Обработчики событий
     login_btn.click(
@@ -52,20 +60,20 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
     )
     
     file_upload.upload(
-        update_file_display_sync,
+        upload_and_update_status,
         inputs=file_upload,
-        outputs=file_output
+        outputs=[file_output, status]
     )
     
     file_upload.change(
-        handle_file_delete_sync,
+        delete_and_update_status,
         inputs=file_upload,
-        outputs=file_output
+        outputs=[file_output, status]
     )
     
     clear_files.click(
-        lambda: (handle_file_delete_sync([]), None),
-        outputs=[file_output, file_upload]
+        clear_all_files,
+        outputs=[file_output, file_upload, status]
     )
     
     msg.submit(
@@ -83,6 +91,11 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
     )
 
 if __name__ == "__main__":
+    # Создаем папку для загруженных файлов, если её нет
+    uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+    if not os.path.exists(uploads_dir):
+        os.makedirs(uploads_dir)
+        
     clear_logs()  # Очищаем старые логи перед запуском
     log_event("APP_START", "Application started")
     server_ip = os.environ.get("SERVER_IP", "0.0.0.0")

@@ -1,21 +1,34 @@
 #!/bin/bash
 
-# Остановка и удаление существующего контейнера, если он существует
-docker stop chat_panel || true
-docker rm chat_panel || true
+# Установка цветного вывода
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
 
-# Удаление образа, если он существует
-docker rmi chat_panel:latest || true
+echo -e "${YELLOW}Запускаем процесс развертывания чат-панели...${NC}"
 
-# Сборка нового образа
-docker build -t chat_panel:latest .
+# Запрашиваем API-ключи
+read -p "Введите ключ API Mistral (оставьте пустым, чтобы пропустить): " MISTRAL_API_KEY
+read -p "Введите ключ API OpenAI (оставьте пустым, чтобы пропустить): " OPENAI_API_KEY
 
-# Запуск контейнера
-docker run -d --name chat_panel \
-  -p 7860:7860 \
-  -e SERVER_IP=86.110.212.192 \
-  --restart always \
-  chat_panel:latest
+# Экспортируем переменные окружения
+export MISTRAL_API_KEY=$MISTRAL_API_KEY
+export OPENAI_API_KEY=$OPENAI_API_KEY
 
-# Проверка статуса контейнера
-docker ps -a | grep chat_panel 
+# Создаем необходимые директории
+mkdir -p logs
+mkdir -p uploads
+
+echo -e "${GREEN}Переменные окружения установлены.${NC}"
+echo -e "${YELLOW}Останавливаем предыдущие контейнеры...${NC}"
+
+# Останавливаем текущие контейнеры
+docker-compose down
+
+echo -e "${YELLOW}Пересобираем и запускаем контейнеры...${NC}"
+
+# Пересобираем и запускаем
+docker-compose up --build -d
+
+echo -e "${GREEN}Готово! Чат-панель запущена на http://localhost:7860${NC}" 

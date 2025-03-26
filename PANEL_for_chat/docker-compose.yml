@@ -8,6 +8,9 @@ services:
       - "7860:7860"
     environment:
       - SERVER_IP=0.0.0.0
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     restart: always
     volumes:
-      - ./logs:/app/logs 
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads 

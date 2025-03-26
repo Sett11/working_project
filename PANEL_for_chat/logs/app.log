@@ -1,0 +1,9 @@
+2025-03-26 16:16:21,437 - ERROR - Ошибка при очистке логов: [WinError 32] Процесс не может получить доступ к файлу, так как этот файл занят другим процессом: 'logs\\app.log'
+2025-03-26 16:16:21,437 - INFO - APP_START: Application started
+2025-03-26 16:16:53,537 - INFO - LOGIN: User: admin, Success: True
+2025-03-26 16:17:12,191 - INFO - LOGIN: User: admin, Success: True
+2025-03-26 16:17:19,406 - INFO - FILE_LIST_UPDATE: Current files: []
+2025-03-26 16:17:19,414 - INFO - WARNING: Пропущен небезопасный файл: messages.html
+2025-03-26 16:17:19,415 - INFO - WARNING: Пропущен небезопасный файл: messages.json
+2025-03-26 16:17:19,442 - INFO - WARNING: Unsupported file format: 
+2025-03-26 16:17:19,448 - INFO - FILE_PROCESS: Successfully processed: messages.txt

@@ -6,7 +6,7 @@ COPY . /app
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 7860
+EXPOSE 7861
 EXPOSE 8000
 
 CMD ["python", "front.py"]
