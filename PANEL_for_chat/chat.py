@@ -14,21 +14,31 @@ def chat_response(message: str, history: List[List[str]]) -> str:
         # Получаем содержимое документов для промпта
         documents_text = get_documents_for_prompt()
         
-        # Если нет загруженных документов
-        if not documents_text:
-            log_event("CHAT_RESPONSE", "No documents available")
-            return "Нет загруженных документов. Загрузите файлы для анализа."
+        # Если нет загруженных документов или они пустые
+        if not documents_text or documents_text.strip() == "":
+            log_event("CHAT_RESPONSE", "No documents available or documents are empty")
+            return "Нет загруженных документов или документы пусты. Загрузите файлы для анализа."
+        
+        # Проверяем, что в документах есть реальный контент
+        documents = documents_text.split("\n\n")
+        valid_documents = [doc for doc in documents if doc.strip() and not doc.startswith("<") or not doc.endswith(">")]
+        
+        if not valid_documents:
+            log_event("CHAT_RESPONSE", "All documents are empty or contain only markup")
+            return "Документы не содержат текста для анализа. Проверьте содержимое файлов."
         
         # Формируем промпт с документами
-        system_prompt = """Ты — ассистент, который отвечает на вопросы на основе предоставленных документов. 
+        system_prompt = f"""Ты — ассистент, который отвечает на вопросы на основе предоставленных документов. 
 Используй только информацию из документов. Если в документах нет ответа, скажи, что не можешь ответить.
 Ниже приведены документы, на основе которых нужно отвечать:
 
-{documents}
+{documents_text}
 
-Отвечай на русском языке, структурированно и по делу."""
+Отвечай на русском языке, структурированно и по делу. Если в документах есть информация по вопросу, обязательно используй её в ответе."""
         
         system_prompt = system_prompt.format(documents=documents_text)
+        log_event("CHAT_PROMPT", f"System prompt length: {len(system_prompt)}")
+        log_event("CHAT_PROMPT", f"System prompt first 500 chars: {system_prompt[:500]}")
         
         # Используем Mistral API для генерации ответа
         import requests
@@ -56,6 +66,8 @@ def chat_response(message: str, history: List[List[str]]) -> str:
                     payload["messages"].insert(1, {"role": "user", "content": h[0]})
                     payload["messages"].insert(2, {"role": "assistant", "content": h[1]})
         
+        log_event("CHAT_REQUEST", f"Request payload: {str(payload)}")
+        
         # Отправляем запрос
         response = requests.post(f"{know_client['base_url']}/chat/completions", headers=headers, json=payload)
         
@@ -63,7 +75,7 @@ def chat_response(message: str, history: List[List[str]]) -> str:
         if response.status_code == 200:
             response_data = response.json()
             answer = response_data["choices"][0]["message"]["content"]
-            log_event("CHAT_RESPONSE", "Successfully generated response")
+            log_event("CHAT_RESPONSE", f"Generated response: {answer}")
             return answer
         else:
             error_msg = f"Ошибка API: {response.status_code} - {response.text}"
@@ -74,11 +86,3 @@ def chat_response(message: str, history: List[List[str]]) -> str:
         error_msg = f"Failed to generate chat response: {str(e)}"
         log_event("ERROR", error_msg)
         return f"Ошибка: {str(e)}"
-
-# Создать config.py
-class Config:
-    MAX_CHARS = 100000
-    MAX_FILE_SIZE = 10 * 1024 * 1024
-    UPLOADS_DIR = "uploads"
-    ALLOWED_EXTENSIONS = {'.txt', '.pdf', '.docx', '.pptx'}
-    MAX_HISTORY_LENGTH = 5

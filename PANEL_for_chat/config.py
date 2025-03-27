@@ -13,12 +13,12 @@ know_client = {
 }
 
 # Другие настройки проекта
-UPLOADS_DIR = os.getenv('UPLOADS_DIR', 'uploads')
+UPLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 MAX_CHARS = int(os.getenv('MAX_CHARS', '100000'))
-MAX_FILE_SIZE = int(os.getenv('MAX_FILE_SIZE', '10485760'))  # 10MB по умолчанию
+MAX_FILE_SIZE = int(os.getenv('MAX_FILE_SIZE', '104857600'))  # 100MB по умолчанию
 
 # Настройки логирования
-LOG_DIR = os.getenv('LOG_DIR', 'logs')
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
 LOG_FILE = os.path.join(LOG_DIR, 'app.log')
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 MAX_LOG_SIZE = int(os.getenv('MAX_LOG_SIZE', '1048576'))  # 1MB

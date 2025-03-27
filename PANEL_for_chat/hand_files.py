@@ -1,10 +1,9 @@
 from typing import List, Dict, Tuple, Optional, Any
 import os
 import shutil
-import tempfile
 from logs import log_event
 from read_files import process_document, get_formatted_documents_for_prompt
-from config import UPLOADS_DIR, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
+from config import UPLOADS_DIR, MAX_FILE_SIZE, ALLOWED_EXTENSIONS, MAX_CHARS
 
 # Хранилище данных
 uploaded_files = {}
@@ -14,6 +13,11 @@ def is_safe_file(filename: str) -> bool:
     """Проверка безопасности файла"""
     return os.path.splitext(filename)[1].lower() in ALLOWED_EXTENSIONS
 
+def check_total_context_size(new_content: str) -> bool:
+    """Проверка общего размера контекста"""
+    current_total = sum(len(content) for content in processed_documents.values())
+    new_total = current_total + len(new_content)
+    return new_total <= MAX_CHARS
 
 def get_documents_status() -> str:
     """Получение статуса обработки документов"""
@@ -34,11 +38,21 @@ def process_uploaded_files(files: List[str]) -> str:
     file_info = []
     
     # Создаем директорию для загрузок, если не существует
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
+    log_event("FILE_PROCESS", f"Creating uploads directory at: {UPLOADS_DIR}")
+    try:
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
+        log_event("FILE_PROCESS", f"Uploads directory created/verified successfully")
+    except Exception as e:
+        log_event("ERROR", f"Failed to create uploads directory: {str(e)}")
+        return f"Ошибка при создании директории для загрузок: {str(e)}"
     
     for file_path in files:
         try:
             file_name = os.path.basename(file_path)
+            file_ext = os.path.splitext(file_name)[1].lower()
+            
+            log_event("FILE_PROCESS", f"Processing file: {file_name} with extension: {file_ext}")
+            log_event("FILE_PROCESS", f"Source file path: {file_path}")
             
             # Проверяем безопасность файла
             if not is_safe_file(file_name):
@@ -51,16 +65,32 @@ def process_uploaded_files(files: List[str]) -> str:
                 log_event("WARNING", f"Файл слишком большой: {file_name}")
                 continue
             
-            # Копируем файл во временную директорию
-            with tempfile.NamedTemporaryFile(delete=False, dir=UPLOADS_DIR) as temp_file:
-                shutil.copy2(file_path, temp_file.name)
-                dest_path = temp_file.name
+            # Копируем файл во временную директорию с сохранением расширения
+            temp_name = os.path.join(UPLOADS_DIR, f"temp_{os.urandom(4).hex()}{file_ext}")
+            log_event("FILE_PROCESS", f"Copying file to: {temp_name}")
+            shutil.copy2(file_path, temp_name)
+            dest_path = temp_name
+            
+            # Проверяем, что файл был успешно скопирован
+            if not os.path.exists(dest_path):
+                log_event("ERROR", f"File was not copied successfully to: {dest_path}")
+                continue
+                
+            log_event("FILE_PROCESS", f"File copied successfully, size: {os.path.getsize(dest_path)} bytes")
+            
+            # Обрабатываем документ и извлекаем текст и описания изображений
+            log_event("FILE_PROCESS", f"Starting document processing for: {file_name}")
+            document_result = process_document(dest_path)
+            
+            # Проверяем общий размер контекста
+            if not check_total_context_size(document_result["content"]):
+                log_event("WARNING", f"Превышен максимальный размер контекста при загрузке файла: {file_name}")
+                if os.path.exists(dest_path):
+                    os.remove(dest_path)
+                return "Размер контекста превышен!"
             
             file_info.append(f"{file_name} -> {file_size/1024:.2f} KB")
             uploaded_files[file_name] = dest_path
-            
-            # Обрабатываем документ и извлекаем текст и описания изображений
-            document_result = process_document(dest_path)
             processed_documents[file_name] = document_result["content"]
             
             # Добавляем информацию о результате обработки
@@ -68,8 +98,15 @@ def process_uploaded_files(files: List[str]) -> str:
             file_info[-1] += status
             
             log_event("FILE_PROCESS", f"Successfully processed: {file_name}{status}")
+            log_event("FILE_CONTENT", f"File {file_name} content length: {len(document_result['content'])}")
+            log_event("FILE_CONTENT", f"File {file_name} first 200 chars: {document_result['content'][:200]}")
         except Exception as e:
             log_event("ERROR", f"Failed to process file {file_path}: {str(e)}")
+            if 'dest_path' in locals() and os.path.exists(dest_path):
+                try:
+                    os.remove(dest_path)
+                except Exception as del_e:
+                    log_event("ERROR", f"Failed to delete temporary file {dest_path}: {str(del_e)}")
     return "\n".join(file_info) if file_info else "Нет загруженных файлов"
 
 
@@ -132,11 +169,28 @@ def get_documents_content() -> Dict[str, str]:
 
 def get_documents_for_prompt() -> str:
     """Возвращает форматированный текст документов для вставки в промпт"""
-    return get_formatted_documents_for_prompt(processed_documents)
+    formatted_text = get_formatted_documents_for_prompt(processed_documents)
+    log_event("DOCUMENTS_CONTENT", f"Documents content length: {len(formatted_text)}")
+    log_event("DOCUMENTS_CONTENT", f"First 500 chars: {formatted_text[:500]}")
+    return formatted_text
 
-def upload_and_update_status(files: List[str]) -> Tuple[str, str]:
+def get_formatted_documents_for_prompt(documents: Dict[str, str]) -> str:
+    """Форматирует содержимое документов для вставки в промпт"""
+    formatted_docs = []
+    for doc_name, content in documents.items():
+        # Проверяем, что документ не пустой
+        if not content or content.strip() == "":
+            log_event("WARNING", f"Document {doc_name} is empty, skipping")
+            continue
+            
+        log_event("DOCUMENT_CONTENT", f"Document {doc_name} length: {len(content)}")
+        log_event("DOCUMENT_CONTENT", f"Document {doc_name} first 200 chars: {content[:200]}")
+        formatted_docs.append(f"<{doc_name}>\n{content}\n</{doc_name}>")
+    return "\n\n".join(formatted_docs)
+
+def upload_and_update_status(files: List[str]) -> str:
     """Функция загрузки файлов с обновлением статуса"""
-    file_display = process_uploaded_files(files)
+    process_uploaded_files(files)
     
     # Получаем информацию о документах
     docs = get_documents_content()
@@ -146,11 +200,11 @@ def upload_and_update_status(files: List[str]) -> Tuple[str, str]:
     if total_chars > 0:
         status_text += "\nДокументы готовы для запросов."
     
-    return file_display, status_text
+    return status_text
 
-def delete_and_update_status(files: List[str]) -> Tuple[str, str]:
+def delete_and_update_status(files: List[str]) -> str:
     """Функция удаления файлов с обновлением статуса"""
-    file_display = handle_file_delete(files)
+    handle_file_delete(files)
     
     # Получаем информацию о документах
     docs = get_documents_content()
@@ -160,10 +214,10 @@ def delete_and_update_status(files: List[str]) -> Tuple[str, str]:
     if not docs:
         status_text = "Нет загруженных документов."
     
-    return file_display, status_text
+    return status_text
 
-def clear_all_files() -> Tuple[str, None, str]:
+def clear_all_files() -> Tuple[None, str]:
     """Очистка всех файлов"""
-    file_display = handle_file_delete([])
+    handle_file_delete([])
     status_text = "Все файлы удалены. Загрузите новые документы для анализа."
-    return file_display, None, status_text
+    return None, status_text

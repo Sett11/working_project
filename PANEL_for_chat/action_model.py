@@ -2,7 +2,7 @@ import os
 import requests
 import io
 import base64
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from PIL import Image
 from logs import log_event
 from config import know_client
@@ -17,6 +17,30 @@ def prepare_image_for_api(image: Image.Image) -> str:
 def create_image_prompt() -> str:
     """Создание промпта для анализа изображения"""
     return "Опиши подробно содержание этого изображения. Если это график, таблица или другая визуализация данных, опиши все представленные данные. Если это текст, приведи его дословно."
+
+def create_image_message(img_base64: str) -> List[Dict[str, Any]]:
+    """Создание сообщения с изображением для API"""
+    return [
+        {
+            "type": "text",
+            "text": create_image_prompt()
+        },
+        {
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:image/png;base64,{img_base64}"
+            }
+        }
+    ]
+
+def create_api_payload(messages: List[Dict[str, Any]], temperature: float = 0.2) -> Dict[str, Any]:
+    """Создание payload для API запроса"""
+    return {
+        "model": know_client['model'],
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": know_client['max_tokens']
+    }
 
 def describe_image(image: Image.Image) -> Optional[str]:
     """
@@ -39,29 +63,9 @@ def describe_image(image: Image.Image) -> Optional[str]:
             "Authorization": f"Bearer {know_client['api_key']}"
         }
         
-        # Создаем промпт для модели
-        payload = {
-            "model": know_client['model'],
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": create_image_prompt()
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{img_base64}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            "temperature": 0.2,
-            "max_tokens": know_client['max_tokens']
-        }
+        # Создаем сообщение и payload
+        messages = [{"role": "user", "content": create_image_message(img_base64)}]
+        payload = create_api_payload(messages)
         
         # Отправляем запрос
         response = requests.post(f"{know_client['base_url']}/chat/completions", headers=headers, json=payload)
@@ -101,21 +105,14 @@ def fallback_describe_image_openai(image: Image.Image) -> Optional[str]:
             
         client = OpenAI(api_key=api_key)
         
-        # Подготавливаем изображение
+        # Подготавливаем изображение и создаем сообщение
         img_base64 = prepare_image_for_api(image)
+        messages = [{"role": "user", "content": create_image_message(img_base64)}]
         
         # Отправляем запрос к OpenAI API
         response = client.chat.completions.create(
             model="gpt-4-vision-preview",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": create_image_prompt()},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_base64}"}}
-                    ]
-                }
-            ],
+            messages=messages,
             max_tokens=know_client['max_tokens']
         )
         

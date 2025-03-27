@@ -56,8 +56,8 @@ def get_resp(file_bytes, anonymize_names, save_datetime, max_len_context, time_c
         custom_print("Пользовательский файл не был загружен")
         return None, None
     
-    URL = "http://backend:8000/upload_file/" # для запуска в Docker
-    # URL = "http://localhost:8000/upload_file/" # для запуска на локальной машине
+    # URL = "http://backend:8000/upload_file/" # для запуска в Docker
+    URL = "http://localhost:8000/upload_file/" # для запуска на локальной машине
 
     # Определяем тип файла по содержимому
     file_type = detect_file_type(file_bytes)

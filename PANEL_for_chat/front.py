@@ -11,6 +11,8 @@ import os
 
 
 with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
+    # чистим логи
+    clear_logs()
     # Состояние для хранения информации о входе
     logged_in = gr.State(False)
     
@@ -29,7 +31,6 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
             with gr.Column(scale=1, min_width=200):
                 with gr.Blocks():
                     gr.Markdown("## Файлы")
-                    file_output = gr.Textbox(label="Загруженные файлы", lines=10, value="Нет загруженных файлов")
                     file_upload = gr.File(file_count="multiple", label="Загрузить файлы", interactive=True)
                     clear_files = gr.Button("Очистить все файлы")
                     gr.Markdown("### Поддерживаемые форматы:")
@@ -62,22 +63,23 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
     file_upload.upload(
         upload_and_update_status,
         inputs=file_upload,
-        outputs=[file_output, status]
+        outputs=status
     )
     
     file_upload.change(
         delete_and_update_status,
         inputs=file_upload,
-        outputs=[file_output, status]
+        outputs=status
     )
     
     clear_files.click(
         clear_all_files,
-        outputs=[file_output, file_upload, status]
+        outputs=[file_upload, status]
     )
     
     msg.submit(
-        lambda msg, history: (log_event("CHAT_MESSAGE", f"Message: {msg}"), chat_response(msg, history))[1],
+        lambda msg, history: (log_event("CHAT_MESSAGE", f"Message: {msg}"), 
+                            history + [[msg, chat_response(msg, history)]])[1],
         [msg, chatbot],
         chatbot
     ).then(
@@ -91,11 +93,6 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
     )
 
 if __name__ == "__main__":
-    # Создаем папку для загруженных файлов, если её нет
-    uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
-    if not os.path.exists(uploads_dir):
-        os.makedirs(uploads_dir)
-        
     clear_logs()  # Очищаем старые логи перед запуском
     log_event("APP_START", "Application started")
     server_ip = os.environ.get("SERVER_IP", "0.0.0.0")
