@@ -1,6 +1,6 @@
 import os
 import io
-from typing import Dict, List, Tuple, Optional, Union
+from typing import Dict, List, Tuple, Union
 import pdfplumber  # для работы с PDF
 import docx  # python-docx для работы с DOCX
 from pptx import Presentation  # python-pptx для работы с PPTX
@@ -210,7 +210,7 @@ def extract_text_from_pptx(file_path: str) -> Tuple[str, List[Image.Image]]:
     log_event("PPTX_PROCESS", f"PPTX processing completed. Text length: {len(text)}, Images: {len(images)}")
     log_event("PPTX_CONTENT", f"First 500 chars of extracted text: {text[:500]}")
     
-    return text, images
+    return text, images, []
 
 def process_document(file_path: str) -> Dict[str, Union[str, bool]]:
     """Обрабатывает документ и извлекает из него текст и описания изображений"""

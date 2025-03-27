@@ -1,8 +1,5 @@
 import os
-from dotenv import load_dotenv
 
-# Загружаем переменные окружения
-load_dotenv()
 
 # Конфигурация Mistral API
 know_client = {
