@@ -3,7 +3,6 @@ from hand_files import upload_and_update_status, delete_and_update_status, clear
 from chat import chat_response
 from authenticate import login
 from logs import clear_logs, log_event
-import os
 
 
 with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
@@ -86,9 +85,7 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
         outputs=chatbot
     )
 
-if __name__ == "__main__":
-    clear_logs()  # Очищаем старые логи перед запуском
-    clear_all_files() # очищаем папку uploads
-    log_event("APP_START", "Application started")
-    server_ip = os.environ.get("SERVER_IP", "0.0.0.0")
-    demo.launch(server_name=server_ip, server_port=7860)
+clear_logs()
+clear_all_files()
+log_event("APP_START", "Application started")
+demo.launch(server_name="0.0.0.0", server_port=7860, share=True)

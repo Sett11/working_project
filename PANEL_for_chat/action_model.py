@@ -1,4 +1,3 @@
-import os
 import requests
 import io
 import base64
