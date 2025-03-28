@@ -4,6 +4,7 @@ import shutil
 from logs import log_event
 from read_files import process_document, get_formatted_documents_for_prompt
 from config import UPLOADS_DIR, MAX_FILE_SIZE, ALLOWED_EXTENSIONS, MAX_CHARS
+import hashlib
 
 # Хранилище данных
 uploaded_files = {}
@@ -32,6 +33,13 @@ def get_documents_status() -> str:
         status += "\nДокументы готовы для запросов."
     return status
 
+def get_file_hash(file_path: str) -> str:
+    """Вычисляет хеш файла для проверки дубликатов"""
+    hasher = hashlib.md5()  # Используем MD5 для создания хеша
+    with open(file_path, 'rb') as f:
+        while chunk := f.read(8192):
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 def process_uploaded_files(files: List[str]) -> str:
     """Обработка загруженных файлов"""
@@ -63,6 +71,14 @@ def process_uploaded_files(files: List[str]) -> str:
             file_size = os.path.getsize(file_path)
             if file_size > MAX_FILE_SIZE:
                 log_event("WARNING", f"Файл слишком большой: {file_name}")
+                continue
+            
+            # Вычисляем хеш файла
+            file_hash = get_file_hash(file_path)
+            # Проверяем, существует ли файл с таким же хешем
+            existing_files = [f for f in os.listdir(UPLOADS_DIR) if f.endswith(file_ext)]
+            if any(get_file_hash(os.path.join(UPLOADS_DIR, f)) == file_hash for f in existing_files):
+                log_event("WARNING", f"Файл {file_name} уже загружен. Пропускаем.")
                 continue
             
             # Копируем файл во временную директорию с сохранением расширения
@@ -112,12 +128,15 @@ def process_uploaded_files(files: List[str]) -> str:
 
 def clear_files_from_memory():
     """Очистка файлов из памяти"""
-    for file_path in uploaded_files.values():
-        try:
-            if os.path.exists(file_path):
+    try:
+        for filename in os.listdir(UPLOADS_DIR):
+            file_path = os.path.join(UPLOADS_DIR, filename)
+            if os.path.isfile(file_path):
                 os.remove(file_path)
-        except Exception as e:
-            log_event("ERROR", f"Failed to delete file {file_path}: {str(e)}")
+                log_event("FILE_DELETE", f"Deleted file: {filename}")
+        log_event("FILE_DELETE", "All files in uploads directory have been deleted.")
+    except Exception as e:
+        log_event("ERROR", f"Failed to clear uploads directory: {str(e)}")
     uploaded_files.clear()
     processed_documents.clear()
 
@@ -174,19 +193,6 @@ def get_documents_for_prompt() -> str:
     log_event("DOCUMENTS_CONTENT", f"First 500 chars: {formatted_text[:500]}")
     return formatted_text
 
-def get_formatted_documents_for_prompt(documents: Dict[str, str]) -> str:
-    """Форматирует содержимое документов для вставки в промпт"""
-    formatted_docs = []
-    for doc_name, content in documents.items():
-        # Проверяем, что документ не пустой
-        if not content or content.strip() == "":
-            log_event("WARNING", f"Document {doc_name} is empty, skipping")
-            continue
-            
-        log_event("DOCUMENT_CONTENT", f"Document {doc_name} length: {len(content)}")
-        log_event("DOCUMENT_CONTENT", f"Document {doc_name} first 200 chars: {content[:200]}")
-        formatted_docs.append(f"<{doc_name}>\n{content}\n</{doc_name}>")
-    return "\n\n".join(formatted_docs)
 
 def upload_and_update_status(files: List[str]) -> str:
     """Функция загрузки файлов с обновлением статуса"""

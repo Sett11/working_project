@@ -1,18 +1,12 @@
 import gradio as gr
-from hand_files import (
-    upload_and_update_status,
-    delete_and_update_status,
-    clear_all_files
-)
-from chat import chat_response, chat_history
+from hand_files import upload_and_update_status, delete_and_update_status, clear_all_files
+from chat import chat_response
 from authenticate import login
 from logs import clear_logs, log_event
 import os
 
 
 with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
-    # чистим логи
-    clear_logs()
     # Состояние для хранения информации о входе
     logged_in = gr.State(False)
     
@@ -38,7 +32,7 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
                     gr.Markdown("- PDF - документы PDF")
                     gr.Markdown("- DOCX - документы Microsoft Word")
                     gr.Markdown("- PPTX - презентации Microsoft PowerPoint")
-                    gr.Markdown("**Максимальный размер:** 100 000 символов")
+                    gr.Markdown("**Максимальный размер:** 110 000 символов")
             
             # Правая панель - чат
             with gr.Column(scale=3):
@@ -94,6 +88,7 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
 
 if __name__ == "__main__":
     clear_logs()  # Очищаем старые логи перед запуском
+    clear_all_files() # очищаем папку uploads
     log_event("APP_START", "Application started")
     server_ip = os.environ.get("SERVER_IP", "0.0.0.0")
     demo.launch(server_name=server_ip, server_port=7860)

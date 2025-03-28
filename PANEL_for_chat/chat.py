@@ -25,7 +25,7 @@ def chat_response(message: str, history: List[List[str]]) -> str:
         
         if not valid_documents:
             log_event("CHAT_RESPONSE", "All documents are empty or contain only markup")
-            return "Документы не содержат текста для анализа. Проверьте содержимое файлов."
+            return "Ваши файлы или пустые или слишком большие."
         
         # Формируем промпт с документами
         system_prompt = f"""Ты — ассистент, который отвечает на вопросы на основе предоставленных документов. 

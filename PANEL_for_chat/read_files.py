@@ -7,9 +7,8 @@ from pptx import Presentation  # python-pptx для работы с PPTX
 from PIL import Image
 from logs import log_event
 from action_model import describe_image
+from config import MAX_CHARS
 
-# Максимальное количество символов для обработки
-MAX_CHARS = 100000
 
 def safe_extract_text(func):
     """Декоратор для безопасного извлечения текста с логированием ошибок"""
@@ -39,7 +38,6 @@ def extract_text_from_pdf(file_path: str) -> Tuple[str, List[Image.Image]]:
     image_positions = []  # Список для хранения позиций изображений
     
     with pdfplumber.open(file_path) as pdf:
-        current_pos = 0
         for page in pdf.pages:
             # Извлекаем текст
             page_text = page.extract_text() or ""
@@ -52,11 +50,12 @@ def extract_text_from_pdf(file_path: str) -> Tuple[str, List[Image.Image]]:
                     image_bytes = image["stream"].get_data()
                     image = Image.open(io.BytesIO(image_bytes))
                     images.append(image)
+                    
                     # Сохраняем позицию изображения
-                    image_positions.append(current_pos)
+                    # Позиция изображения будет равна длине текста до этого изображения
+                    image_positions.append(len(text.splitlines()))  # Сохраняем количество строк текста
                 except Exception as e:
                     log_event("ERROR", f"Failed to process image from PDF: {str(e)}")
-            current_pos += 1
     
     return text, images, image_positions
 
@@ -254,9 +253,8 @@ def process_document(file_path: str) -> Dict[str, Union[str, bool]]:
         # Обрабатываем изображения и вставляем их описания в текст
         if images:
             if file_ext == '.pptx':
-                # Для PPTX разбиваем на слайды
+            # Для PPTX разбиваем на слайды
                 slides = text.split("\nСлайд")
-                
                 # Обрабатываем каждый слайд
                 for i, slide in enumerate(slides):
                     if i == 0:  # Первый слайд не начинается с "Слайд"
@@ -273,17 +271,19 @@ def process_document(file_path: str) -> Dict[str, Union[str, bool]]:
                                 slides[i] = "\n".join(lines)
                             else:  # Если нет заголовка
                                 slides[i] = f"\n<text from image {i}>\n{description}\n</text from image {i}>" + slide
-                
                 # Собираем текст обратно
                 text = "Слайд".join(slides)
             else:
-                # Для других форматов (DOCX, PDF) вставляем описания в позиции изображений
-                text_lines = text.split("\n")
+                text_lines = text.splitlines()
                 for i, (img, pos) in enumerate(zip(images, image_positions)):
                     description = describe_image(img)
                     if description:
                         # Вставляем описание в позицию изображения
-                        text_lines.insert(pos, f"\n<text from image {i+1}>\n{description}\n</text from image {i+1}>")
+                        if pos < len(text_lines):
+                            text_lines.insert(pos, f"\n<text from image {i+1}>\n{description}\n</text from image {i+1}>")
+                        else:
+                            text += f"\n<text from image {i+1}>\n{description}\n</text from image {i+1}>"
+                
                 text = "\n".join(text_lines)
         
         # Проверяем длину и при необходимости обрезаем
