@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Tuple, Any
 import os
 import shutil
 from logs import log_event
@@ -9,6 +9,7 @@ import hashlib
 # Хранилище данных
 uploaded_files = {}
 processed_documents = {}  # Хранение обработанных документов: {"название файла": "содержимое"}
+mes = "Если Вы загружаете документы, то они будут обработаны и добавлены в контекст.\n\nНо дождитесь пока пропадёт это сообщение."
 
 def is_safe_file(filename: str) -> bool:
     """Проверка безопасности файла"""
@@ -26,7 +27,7 @@ def get_documents_status() -> str:
     total_chars = sum(len(content) for content in docs.values())
     
     if not docs:
-        return "Нет загруженных документов."
+        return mes
     
     status = f"Обработано документов: {len(docs)}, общее количество символов: {total_chars}"
     if total_chars > 0:
@@ -123,7 +124,7 @@ def process_uploaded_files(files: List[str]) -> str:
                     os.remove(dest_path)
                 except Exception as del_e:
                     log_event("ERROR", f"Failed to delete temporary file {dest_path}: {str(del_e)}")
-    return "\n".join(file_info) if file_info else "Нет загруженных файлов"
+    return "\n".join(file_info) if file_info else mes
 
 
 def clear_files_from_memory():
@@ -144,7 +145,7 @@ def handle_file_delete(files: List[str]) -> str:
     """Обработка удаления файла"""
     if not files:
         clear_files_from_memory()
-        return "Нет загруженных файлов"
+        return mes
     
     current_files = {os.path.basename(f) for f in files}
     for file_name in list(uploaded_files.keys()):
@@ -178,7 +179,7 @@ def update_file_display() -> str:
             status = f" (обработано, {content_len} символов)"
         
         file_info.append(f"{file_name} -> {file_size:.2f} KB{status}")
-    return "\n".join(file_info) if file_info else "Нет загруженных файлов"
+    return "\n".join(file_info) if file_info else mes
 
 
 def get_documents_content() -> Dict[str, str]:
@@ -218,7 +219,7 @@ def delete_and_update_status(files: List[str]) -> str:
     
     status_text = f"Обработано документов: {len(docs)}, общее количество символов: {total_chars}"
     if not docs:
-        status_text = "Нет загруженных документов."
+        status_text = mes
     
     return status_text
 

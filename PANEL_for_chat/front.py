@@ -1,23 +1,12 @@
 import gradio as gr
 from hand_files import upload_and_update_status, delete_and_update_status, clear_all_files
 from chat import chat_response
-from authenticate import login
 from logs import clear_logs, log_event
 
 
 with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
-    # Состояние для хранения информации о входе
-    logged_in = gr.State(False)
     
-    with gr.Column(visible=True, elem_id="login_section") as login_section:
-        with gr.Blocks():
-            gr.Markdown("## Вход в систему")
-            username = gr.Textbox(label="Логин", placeholder="admin")
-            password = gr.Textbox(label="Пароль", type="password", placeholder="password123")
-            login_btn = gr.Button("Войти")
-            login_status = gr.Markdown()
-    
-    with gr.Column(visible=False, elem_id="chat_section") as chat_section:
+    with gr.Column(visible=True, elem_id="chat_section") as chat_section:
         # Основной макет приложения после входа
         with gr.Row():
             # Левая панель - файлы
@@ -39,19 +28,13 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
                     gr.Markdown("## Чат с документами")
                     chatbot = gr.Chatbot(height=500)
                     msg = gr.Textbox(label="Ваш вопрос", placeholder="Задайте вопрос по загруженным документам...")
+                    push_prompt = gr.Button("Отправить")
                     clear_chat = gr.Button("Очистить чат")
         
         # Нижняя панель - статус
         with gr.Row():
             with gr.Column():
                 status = gr.Markdown("Загрузите документы и задайте вопросы для анализа содержимого.")
-    
-    # Обработчики событий
-    login_btn.click(
-        login,
-        inputs=[username, password],
-        outputs=[login_section, chat_section, login_status]
-    )
     
     file_upload.upload(
         upload_and_update_status,
@@ -68,6 +51,13 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
     clear_files.click(
         clear_all_files,
         outputs=[file_upload, status]
+    )
+
+    push_prompt.click(
+        lambda msg, history: (log_event("CHAT_MESSAGE", f"Message: {msg}"), 
+                            history + [[msg, chat_response(msg, history)]])[1],
+        [msg, chatbot],
+        chatbot
     )
     
     msg.submit(
@@ -88,4 +78,4 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
 clear_logs()
 clear_all_files()
 log_event("APP_START", "Application started")
-demo.launch(server_name="0.0.0.0", server_port=7860, share=True)
+demo.launch(server_name="0.0.0.0", server_port=7860, share=False, auth=("admin", "password123"))
