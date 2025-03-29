@@ -1,5 +1,4 @@
 from fastapi import FastAPI, File, UploadFile, Form, Response
-import re
 from hand_files import content_pre_process
 import uvicorn
 import io

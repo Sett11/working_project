@@ -35,7 +35,7 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
         with gr.Row():
             with gr.Column():
                 status = gr.Markdown("Загрузите документы и задайте вопросы для анализа содержимого.")
-    
+
     file_upload.upload(
         upload_and_update_status,
         inputs=file_upload,

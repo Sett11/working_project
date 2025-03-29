@@ -6,7 +6,7 @@ import docx  # python-docx для работы с DOCX
 from pptx import Presentation  # python-pptx для работы с PPTX
 from PIL import Image
 from logs import log_event
-from action_model import describe_image
+from action_model import describe_images_sync
 from config import MAX_CHARS
 
 
@@ -42,7 +42,6 @@ def extract_text_from_pdf(file_path: str) -> Tuple[str, List[Image.Image]]:
             # Извлекаем текст
             page_text = page.extract_text() or ""
             text += page_text
-            
             # Извлекаем изображения
             for image in page.images:
                 try:
@@ -50,13 +49,11 @@ def extract_text_from_pdf(file_path: str) -> Tuple[str, List[Image.Image]]:
                     image_bytes = image["stream"].get_data()
                     image = Image.open(io.BytesIO(image_bytes))
                     images.append(image)
-                    
                     # Сохраняем позицию изображения
                     # Позиция изображения будет равна длине текста до этого изображения
                     image_positions.append(len(text.splitlines()))  # Сохраняем количество строк текста
                 except Exception as e:
                     log_event("ERROR", f"Failed to process image from PDF: {str(e)}")
-    
     return text, images, image_positions
 
 @safe_extract_text
@@ -78,12 +75,10 @@ def extract_text_from_docx(file_path: str) -> Tuple[str, List[Image.Image]]:
         if para_text:  # Логируем только непустые параграфы
             log_event("DOCX_PARAGRAPH", f"Paragraph {i+1}: {para_text[:100]}...")
             text += para_text + "\n"
-        
         # Проверяем стиль параграфа
         if para.style.name.startswith('Heading'):
             log_event("DOCX_HEADING", f"Heading {i+1}: {para_text[:100]}...")
             text += "\n"  # Добавляем дополнительный перенос для заголовков
-    
     # Извлекаем текст из таблиц
     for table_idx, table in enumerate(doc.tables):
         log_event("DOCX_TABLE", f"Processing table {table_idx+1} with {len(table.rows)} rows")
@@ -103,7 +98,6 @@ def extract_text_from_docx(file_path: str) -> Tuple[str, List[Image.Image]]:
             if row_text.strip():
                 text += row_text.strip() + "\n"
         text += "\n"  # Добавляем перенос между таблицами
-    
     # Извлекаем изображения и их позиции
     image_count = 0
     current_pos = 0
@@ -120,7 +114,6 @@ def extract_text_from_docx(file_path: str) -> Tuple[str, List[Image.Image]]:
             except Exception as e:
                 log_event("ERROR", f"Failed to process image from DOCX: {str(e)}")
         current_pos += 1
-    
     # Очищаем текст от лишних пробелов и переносов
     text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
     
@@ -134,7 +127,7 @@ def extract_text_from_pptx(file_path: str) -> Tuple[str, List[Image.Image]]:
     """Извлечение текста и изображений из PPTX"""
     text = ""
     images = []
-    
+
     log_event("PPTX_PROCESS", f"Starting PPTX processing for file: {file_path}")
     
     prs = Presentation(file_path)
@@ -143,7 +136,6 @@ def extract_text_from_pptx(file_path: str) -> Tuple[str, List[Image.Image]]:
     for slide_idx, slide in enumerate(prs.slides):
         log_event("PPTX_SLIDE", f"Processing slide {slide_idx + 1}")
         slide_text = []
-        
         # Обрабатываем заголовок слайда
         try:
             if hasattr(slide.shapes, 'title') and slide.shapes.title:
@@ -153,7 +145,6 @@ def extract_text_from_pptx(file_path: str) -> Tuple[str, List[Image.Image]]:
                     slide_text.append(f"Заголовок: {title_text}")
         except Exception as e:
             log_event("WARNING", f"Could not process title for slide {slide_idx + 1}: {str(e)}")
-        
         # Обрабатываем все фигуры на слайде
         for shape_idx, shape in enumerate(slide.shapes):
             try:
@@ -162,7 +153,6 @@ def extract_text_from_pptx(file_path: str) -> Tuple[str, List[Image.Image]]:
                     shape_text = shape.text.strip()
                     log_event("PPTX_SHAPE", f"Slide {slide_idx + 1}, Shape {shape_idx + 1}: {shape_text[:100]}...")
                     slide_text.append(shape_text)
-                
                 # Обрабатываем таблицы
                 if hasattr(shape, "has_table") and shape.has_table:
                     table = shape.table
@@ -174,8 +164,7 @@ def extract_text_from_pptx(file_path: str) -> Tuple[str, List[Image.Image]]:
                             if cell_text:
                                 row_text.append(cell_text)
                         if row_text:
-                            slide_text.append(" | ".join(row_text))
-                
+                            slide_text.append(" | ".join(row_text))                
                 # Обрабатываем изображения
                 if hasattr(shape, "shape_type") and shape.shape_type == 13:  # MSO_SHAPE_TYPE.PICTURE
                     try:
@@ -188,7 +177,6 @@ def extract_text_from_pptx(file_path: str) -> Tuple[str, List[Image.Image]]:
             
             except Exception as e:
                 log_event("ERROR", f"Error processing shape {shape_idx + 1} on slide {slide_idx + 1}: {str(e)}")
-        
         # Обрабатываем заметки к слайду
         try:
             if hasattr(slide, "has_notes_slide") and slide.has_notes_slide and slide.notes_slide.notes_text_frame:
@@ -198,11 +186,10 @@ def extract_text_from_pptx(file_path: str) -> Tuple[str, List[Image.Image]]:
                     slide_text.append(f"Заметки: {notes_text}")
         except Exception as e:
             log_event("WARNING", f"Could not process notes for slide {slide_idx + 1}: {str(e)}")
-        
         # Добавляем текст слайда в общий текст
         if slide_text:
             text += f"\nСлайд {slide_idx + 1}:\n" + "\n".join(slide_text) + "\n"
-    
+
     # Очищаем текст от лишних пробелов и переносов
     text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
     
@@ -252,6 +239,8 @@ def process_document(file_path: str) -> Dict[str, Union[str, bool]]:
         
         # Обрабатываем изображения и вставляем их описания в текст
         if images:
+            images = describe_images_sync(images)
+            log_event("INFO", f"Images descriptions: {images}, 999\n, {image_positions}, 999\n")
             if file_ext == '.pptx':
             # Для PPTX разбиваем на слайды
                 slides = text.split("\nСлайд")
@@ -262,7 +251,7 @@ def process_document(file_path: str) -> Dict[str, Union[str, bool]]:
                     
                     # Получаем описание изображения для текущего слайда
                     if i <= len(images):
-                        description = describe_image(images[i-1])
+                        description = images[i-1]
                         if description:
                             # Вставляем описание изображения после заголовка слайда
                             lines = slide.split("\n")
@@ -276,7 +265,7 @@ def process_document(file_path: str) -> Dict[str, Union[str, bool]]:
             else:
                 text_lines = text.splitlines()
                 for i, (img, pos) in enumerate(zip(images, image_positions)):
-                    description = describe_image(img)
+                    description = images[i-1]
                     if description:
                         # Вставляем описание в позицию изображения
                         if pos < len(text_lines):
