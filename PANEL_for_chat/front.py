@@ -20,7 +20,7 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
                     gr.Markdown("- PDF - документы PDF")
                     gr.Markdown("- DOCX - документы Microsoft Word")
                     gr.Markdown("- PPTX - презентации Microsoft PowerPoint")
-                    gr.Markdown("**Максимальный размер:** 110 000 символов")
+                    gr.Markdown("**Максимальный размер:** 110 000 символов или 100 МБ")
             
             # Правая панель - чат
             with gr.Column(scale=3):
@@ -76,6 +76,5 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
     )
 
 clear_logs()
-clear_all_files()
 log_event("APP_START", "Application started")
 demo.launch(server_name="0.0.0.0", server_port=7860, share=False, auth=("admin", "password123"))

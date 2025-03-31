@@ -15,16 +15,12 @@ def prepare_image_for_api(image: Image.Image) -> str:
     img_byte_arr.seek(0)
     return base64.b64encode(img_byte_arr.read()).decode('utf-8')
 
-def create_image_prompt() -> str:
-    """Создание промпта для анализа изображения"""
-    return "Опиши подробно содержание этого изображения. Если это график, таблица или другая визуализация данных, опиши все представленные данные. Если это текст, приведи его дословно."
-
 def create_image_message(img_base64: str) -> List[Dict[str, Any]]:
     """Создание сообщения с изображением для API"""
     return [
         {
             "type": "text",
-            "text": create_image_prompt()
+            "text": "Если представленное тебе изображение является графиком, информационным графиком, таблицей или другой визуализацией данных - предоставь подробное описание этого изображения. В противном случае верни пустую строку."
         },
         {
             "type": "image_url",
@@ -71,11 +67,10 @@ async def describe_image(image: Image.Image) -> Optional[str]:
                     return description
                 else:
                     log_event("ERROR", f"Failed API call to Mistral API: {response.status} - {response.text}")
-                    return None
-            
+                    return ''
     except Exception as e:
         log_event("ERROR", f"Failed to describe image: {str(e)}")
-        return None
+        return ''
     
 async def describe_images(images: List[Image.Image]) -> List[Optional[str]]:
     """

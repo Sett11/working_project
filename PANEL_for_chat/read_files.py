@@ -10,6 +10,8 @@ from action_model import describe_images_sync
 from config import MAX_CHARS
 
 
+# start
+
 def safe_extract_text(func):
     """Декоратор для безопасного извлечения текста с логированием ошибок"""
     def wrapper(*args, **kwargs):
@@ -28,15 +30,13 @@ def extract_text_from_txt(file_path: str) -> Tuple[str, List[Image.Image]]:
         text = f.read()
     log_event("TXT_PROCESS", f"TXT processing completed. Text length: {len(text)}")
     log_event("TXT_CONTENT", f"First 500 chars of extracted text: {text[:500]}")
-    return text, [], []  # Возвращаем текст и пустые списки изображений и позиций
+    return text, []  # Возвращаем текст и пустой список изображений
 
 @safe_extract_text
 def extract_text_from_pdf(file_path: str) -> Tuple[str, List[Image.Image]]:
     """Извлечение текста и изображений из PDF"""
     text = ""
     images = []
-    image_positions = []  # Список для хранения позиций изображений
-    
     with pdfplumber.open(file_path) as pdf:
         for page in pdf.pages:
             # Извлекаем текст
@@ -47,27 +47,21 @@ def extract_text_from_pdf(file_path: str) -> Tuple[str, List[Image.Image]]:
                 try:
                     # Получаем изображение как bytes
                     image_bytes = image["stream"].get_data()
+                    log_event("INFO", f"Image size: {len(image_bytes) / (1024 * 1024):.2f} MB")
                     image = Image.open(io.BytesIO(image_bytes))
                     images.append(image)
-                    # Сохраняем позицию изображения
-                    # Позиция изображения будет равна длине текста до этого изображения
-                    image_positions.append(len(text.splitlines()))  # Сохраняем количество строк текста
                 except Exception as e:
                     log_event("ERROR", f"Failed to process image from PDF: {str(e)}")
-    return text, images, image_positions
+    return text, images
 
 @safe_extract_text
 def extract_text_from_docx(file_path: str) -> Tuple[str, List[Image.Image]]:
     """Извлечение текста и изображений из DOCX"""
     text = ""
     images = []
-    image_positions = []  # Список для хранения позиций изображений
-    
     log_event("DOCX_PROCESS", f"Starting DOCX processing for file: {file_path}")
-    
     doc = docx.Document(file_path)
     log_event("DOCX_PROCESS", f"Document loaded successfully. Paragraphs: {len(doc.paragraphs)}, Tables: {len(doc.tables)}")
-    
     # Извлекаем текст из параграфов
     for i, para in enumerate(doc.paragraphs):
         # Добавляем текст параграфа
@@ -100,7 +94,6 @@ def extract_text_from_docx(file_path: str) -> Tuple[str, List[Image.Image]]:
         text += "\n"  # Добавляем перенос между таблицами
     # Извлекаем изображения и их позиции
     image_count = 0
-    current_pos = 0
     for rel in doc.part.rels.values():
         if "image" in rel.target_ref:
             try:
@@ -108,31 +101,23 @@ def extract_text_from_docx(file_path: str) -> Tuple[str, List[Image.Image]]:
                 image = Image.open(io.BytesIO(image_data))
                 images.append(image)
                 image_count += 1
-                # Сохраняем позицию изображения
-                image_positions.append(current_pos)
-                log_event("DOCX_IMAGE", f"Successfully extracted image {image_count} at position {current_pos}")
+                log_event("INFO", f"Image size: {len(image_data) / (1024 * 1024):.2f} MB")
             except Exception as e:
                 log_event("ERROR", f"Failed to process image from DOCX: {str(e)}")
-        current_pos += 1
     # Очищаем текст от лишних пробелов и переносов
     text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
-    
     log_event("DOCX_PROCESS", f"DOCX processing completed. Text length: {len(text)}, Images: {image_count}")
     log_event("DOCX_CONTENT", f"First 500 chars of extracted text: {text[:500]}")
-    
-    return text, images, image_positions
+    return text, images
 
 @safe_extract_text
 def extract_text_from_pptx(file_path: str) -> Tuple[str, List[Image.Image]]:
     """Извлечение текста и изображений из PPTX"""
     text = ""
     images = []
-
     log_event("PPTX_PROCESS", f"Starting PPTX processing for file: {file_path}")
-    
     prs = Presentation(file_path)
     log_event("PPTX_PROCESS", f"Presentation loaded successfully. Total slides: {len(prs.slides)}")
-    
     for slide_idx, slide in enumerate(prs.slides):
         log_event("PPTX_SLIDE", f"Processing slide {slide_idx + 1}")
         slide_text = []
@@ -171,10 +156,10 @@ def extract_text_from_pptx(file_path: str) -> Tuple[str, List[Image.Image]]:
                         image_stream = io.BytesIO(shape.image.blob)
                         image = Image.open(image_stream)
                         images.append(image)
+                        log_event("INFO", f"Image size: {len(image.tobytes()) / (1024 * 1024):.2f} MB")
                         log_event("PPTX_IMAGE", f"Successfully extracted image from slide {slide_idx + 1}")
                     except Exception as e:
                         log_event("ERROR", f"Failed to process image from PPTX slide {slide_idx + 1}: {str(e)}")
-            
             except Exception as e:
                 log_event("ERROR", f"Error processing shape {shape_idx + 1} on slide {slide_idx + 1}: {str(e)}")
         # Обрабатываем заметки к слайду
@@ -189,21 +174,17 @@ def extract_text_from_pptx(file_path: str) -> Tuple[str, List[Image.Image]]:
         # Добавляем текст слайда в общий текст
         if slide_text:
             text += f"\nСлайд {slide_idx + 1}:\n" + "\n".join(slide_text) + "\n"
-
     # Очищаем текст от лишних пробелов и переносов
     text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
-    
     log_event("PPTX_PROCESS", f"PPTX processing completed. Text length: {len(text)}, Images: {len(images)}")
     log_event("PPTX_CONTENT", f"First 500 chars of extracted text: {text[:500]}")
-    
-    return text, images, []
+    return text, images
 
 def process_document(file_path: str) -> Dict[str, Union[str, bool]]:
     """Обрабатывает документ и извлекает из него текст и описания изображений"""
     file_name = os.path.basename(file_path)
     file_ext = os.path.splitext(file_name)[1].lower()  # Приводим расширение к нижнему регистру
     log_event("INFO", f"Processing document: {file_name} (extension: {file_ext})")
-    
     # Словарь соответствия расширений и функций обработки
     processors = {
         '.txt': (extract_text_from_txt, []),
@@ -211,91 +192,51 @@ def process_document(file_path: str) -> Dict[str, Union[str, bool]]:
         '.docx': extract_text_from_docx,
         '.pptx': extract_text_from_pptx
     }
-    
     try:
         if file_ext not in processors:
-            log_event("WARNING", f"Unsupported file format: {file_ext}")
+            log_event("WARNING", f"Неподдерживаемый формат файла: {file_ext}")
             return {
                 "content": f"Неподдерживаемый формат файла: {file_ext}",
                 "truncated": False
             }
-        
         # Получаем функцию обработки и дополнительные аргументы
         processor, extra_args = processors[file_ext] if isinstance(processors[file_ext], tuple) else (processors[file_ext], [])
-        log_event("INFO", f"Using processor: {processor.__name__}")
-        
+        log_event("INFO", f"Используемый процессор: {processor.__name__}")
         # Обрабатываем документ
-        text, images, image_positions = processor(file_path, *extra_args)
-        
+        text, images = processor(file_path, *extra_args)
         # Проверяем, что текст не пустой
         if not text.strip():
-            log_event("WARNING", f"Document {file_name} is empty or contains no text")
+            log_event("WARNING", f"Документ {file_name} пуст или не содержит текста")
             return {
                 "content": f"Документ {file_name} пуст или не содержит текста",
                 "truncated": False
             }
-        
-        log_event("INFO", f"Document {file_name} processed successfully. Text length: {len(text)}, Images: {len(images)}")
-        
-        # Обрабатываем изображения и вставляем их описания в текст
+        if file_ext == '.pptx':
+            text = text.split('\nСлайд')[0]
+        log_event("INFO", f"Документ {file_name} успешно обработан. Длина текста: {len(text)}, Количество изображений: {len(images)}")
+        # Обрабатываем изображения и добавляет их описания к тексту
+        new_text, descriptions = text, ''
         if images:
-            images = describe_images_sync(images)
-            log_event("INFO", f"Images descriptions: {images}, 999\n, {image_positions}, 999\n")
-            if file_ext == '.pptx':
-            # Для PPTX разбиваем на слайды
-                slides = text.split("\nСлайд")
-                # Обрабатываем каждый слайд
-                for i, slide in enumerate(slides):
-                    if i == 0:  # Первый слайд не начинается с "Слайд"
-                        continue
-                    
-                    # Получаем описание изображения для текущего слайда
-                    if i <= len(images):
-                        description = images[i-1]
-                        if description:
-                            # Вставляем описание изображения после заголовка слайда
-                            lines = slide.split("\n")
-                            if len(lines) > 1:  # Если есть заголовок
-                                lines.insert(1, f"\n<text from image {i}>\n{description}\n</text from image {i}>")
-                                slides[i] = "\n".join(lines)
-                            else:  # Если нет заголовка
-                                slides[i] = f"\n<text from image {i}>\n{description}\n</text from image {i}>" + slide
-                # Собираем текст обратно
-                text = "Слайд".join(slides)
-            else:
-                text_lines = text.splitlines()
-                for i, (img, pos) in enumerate(zip(images, image_positions)):
-                    description = images[i-1]
-                    if description:
-                        # Вставляем описание в позицию изображения
-                        if pos < len(text_lines):
-                            text_lines.insert(pos, f"\n<text from image {i+1}>\n{description}\n</text from image {i+1}>")
-                        else:
-                            text += f"\n<text from image {i+1}>\n{description}\n</text from image {i+1}>"
-                
-                text = "\n".join(text_lines)
-        
+            max_weight_images = sorted(images, key=lambda x: x.size[0] * x.size[1])[-20:]
+            descriptions = '\n\n'.join(f'<text_to_image>{i2t}</text_to_image>\n' for i2t in describe_images_sync(max_weight_images) if i2t != '')
+            log_event("INFO", f"Описание изображений: {descriptions}")
+            new_text= text + '\n\n' + descriptions
         # Проверяем длину и при необходимости обрезаем
-        if len(text) > MAX_CHARS:
-            text = text[:MAX_CHARS]
-            log_event("WARNING", f"Document {file_name} was truncated (exceeds {MAX_CHARS} chars)")
+        if len(new_text) > MAX_CHARS:
+            new_text = text[:MAX_CHARS - len(descriptions) - 2] + '\n\n' + descriptions
+            log_event("WARNING", f"Документ {file_name} был обрезан (превышает {MAX_CHARS} символов)")
             return {
-                "content": text,
+                "content": new_text,
                 "truncated": True
             }
-        
-        log_event("INFO", f"Final document content length: {len(text)}")
+        log_event("INFO", f"Длина конечного содержимого документа: {len(text)}")
         return {
-            "content": text,
+            "content": new_text,
             "truncated": False
         }
     except Exception as e:
-        log_event("ERROR", f"Failed to process document {file_path}: {str(e)}")
+        log_event("ERROR", f"Ошибка при обработке документа {file_path}: {str(e)}")
         return {
             "content": f"Ошибка при обработке файла: {str(e)}",
             "truncated": False
         }
-
-def get_formatted_documents_for_prompt(documents: Dict[str, str]) -> str:
-    """Форматирует содержимое документов для вставки в промпт"""
-    return "\n\n".join(f"<{doc_name}>\n{content}\n</{doc_name}>" for doc_name, content in documents.items())
