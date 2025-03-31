@@ -58,6 +58,9 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
                             history + [[msg, chat_response(msg, history)]])[1],
         [msg, chatbot],
         chatbot
+    ).then(
+        lambda: "",
+        outputs=msg
     )
     
     msg.submit(
@@ -73,6 +76,9 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
     clear_chat.click(
         lambda: (log_event("CLEAR_CHAT"), [])[1],
         outputs=chatbot
+    ).then(
+        lambda: ([], []),
+        outputs=[chatbot, msg]
     )
 
 clear_logs()

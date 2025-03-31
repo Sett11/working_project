@@ -1,5 +1,4 @@
 from typing import List
-import requests
 import asyncio
 import aiohttp
 from hand_files import get_formatted_documents_for_prompt

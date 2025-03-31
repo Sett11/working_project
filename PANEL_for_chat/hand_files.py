@@ -21,13 +21,6 @@ def check_total_context_size(new_content: str) -> bool:
     current_total = sum(len(content) for content in processed_documents.values())
     return (current_total + len(new_content)) <= MAX_CHARS
 
-def get_documents_status() -> str:
-    """Статус обработки документов"""
-    if not processed_documents:
-        return mes
-    total_chars = sum(len(content) for content in processed_documents.values())
-    return f"Обработано документов: {len(processed_documents)}, символов: {total_chars}"
-
 def get_file_hash(file_path: str) -> str:
     """Вычисляет MD5 хеш файла"""
     hasher = hashlib.md5()
@@ -92,29 +85,25 @@ def handle_file_delete(files: List[str]) -> str:
     if not files:
         clear_files_from_memory()
         return mes
+    files = list(map(lambda x:os.path.basename(x), files))
     for file_name in list(uploaded_files.keys()):
         if file_name not in files:
             uploaded_files.pop(file_name, None)
             processed_documents.pop(file_name, None)
             file_hashes.pop(file_name, None)
             log_event("FILE_DELETE", f"Удалён файл: {file_name}")
-    return update_file_display()
-
-def update_file_display() -> str:
-    """Обновлённый вывод списка файлов (без доступа к UPLOADS_DIR)"""
-    file_info = []
-    for file_name in uploaded_files:
-        content_len = len(processed_documents.get(file_name, ""))
-        file_info.append(f"{file_name} ({content_len} символов)")
-    return "\n".join(file_info) if file_info else mes
-
-def get_documents_content() -> Dict[str, str]:
-    """Возвращает обработанные документы"""
-    return processed_documents
+    return get_documents_status()
 
 def get_formatted_documents_for_prompt() -> str:
     """Форматирует содержимое документов для вставки в промпт"""
     return "\n\n".join(f"<{doc_name}>\n{content}\n</{doc_name}>" for doc_name, content in processed_documents.items())
+
+def get_documents_status() -> str:
+    """Статус обработки документов"""
+    if not processed_documents:
+        return mes
+    total_chars = sum(len(content) for content in processed_documents.values())
+    return f"Обработано документов: {len(processed_documents)}, символов: {total_chars}"
 
 def upload_and_update_status(files: List[str]) -> str:
     """Обёртка для загрузки с обновлением статуса"""

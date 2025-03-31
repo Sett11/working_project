@@ -14,8 +14,7 @@ MAX_FILE_SIZE = 104857600  # 100MB по умолчанию
 # Настройки логирования
 LOG_FILE = 'app.log'
 LOG_LEVEL = 'INFO'
-MAX_LOG_SIZE = 1048576  # 1MB
+MAX_LOG_SIZE = 10485760  # 10MB
 
 # Настройки безопасности
 ALLOWED_EXTENSIONS = {'.txt', '.pdf', '.docx', '.pptx'}
-MAX_HISTORY_LENGTH = 5

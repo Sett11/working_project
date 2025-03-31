@@ -67,7 +67,7 @@ def extract_text_from_docx(file_path: str) -> Tuple[str, List[Image.Image]]:
         # Добавляем текст параграфа
         para_text = para.text.strip()
         if para_text:  # Логируем только непустые параграфы
-            log_event("DOCX_PARAGRAPH", f"Paragraph {i+1}: {para_text[:100]}...")
+            # log_event("DOCX_PARAGRAPH", f"Paragraph {i+1}: {para_text[:100]}...")
             text += para_text + "\n"
         # Проверяем стиль параграфа
         if para.style.name.startswith('Heading'):
@@ -92,7 +92,7 @@ def extract_text_from_docx(file_path: str) -> Tuple[str, List[Image.Image]]:
             if row_text.strip():
                 text += row_text.strip() + "\n"
         text += "\n"  # Добавляем перенос между таблицами
-    # Извлекаем изображения и их позиции
+    # Извлекаем изображения
     image_count = 0
     for rel in doc.part.rels.values():
         if "image" in rel.target_ref:
@@ -201,7 +201,6 @@ def process_document(file_path: str) -> Dict[str, Union[str, bool]]:
             }
         # Получаем функцию обработки и дополнительные аргументы
         processor, extra_args = processors[file_ext] if isinstance(processors[file_ext], tuple) else (processors[file_ext], [])
-        log_event("INFO", f"Используемый процессор: {processor.__name__}")
         # Обрабатываем документ
         text, images = processor(file_path, *extra_args)
         # Проверяем, что текст не пустой
