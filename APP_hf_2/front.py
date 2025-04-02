@@ -108,6 +108,8 @@ with gr.Blocks(title="Обработка чатов") as app:
     temp_file_state = gr.State()
     participants_state = gr.State()
     participants_list_state = gr.State()
+    # Глобальные переменные для чекбоксов
+    checkboxes = []
     # Экран 1: Загрузка файла
     with gr.Column(visible=True) as upload_screen:
         gr.Markdown("## Загрузите файл для обработки")
@@ -141,24 +143,29 @@ with gr.Blocks(title="Обработка чатов") as app:
         )
         date_display = gr.Markdown("Дата: -")
         # Участники
-        participants_container = gr.Column(value = "Участники:")
+        participants_container = gr.Column()
+        participants_title = gr.Markdown("### Выберите участников для исключения:", visible=False)
+        # Создаем чекбоксы заранее
+        max_participants = 20  # Максимальное количество участников
         participant_checkboxes = []
-    
+        for i in range(max_participants):
+            cb = gr.Checkbox(label="", visible=False)
+            participant_checkboxes.append(cb)
+            participants_container.add(cb)
         # Кнопки
         with gr.Row():
             skip_button = gr.Button("Пропустить детальную обработку", variant="secondary")
             process_button = gr.Button("Применить обработку", variant="primary")
-    
         # Результат
         result_message = gr.Markdown(visible=False)
         download_output = gr.File(visible=False, label="Скачать обработанный файл")
-        participants_output = gr.Markdown(visible=False)
+        participants_output = gr.Markdown(visible=False,value="Участники:")
     # Обработчики событий
 
     # Загрузка файла и первичная обработка
     @upload_button.click(
         inputs=file_input,
-        outputs=[upload_screen, loading_screen, detail_screen, temp_file_state, tokens_slider, date_slider, participants_container, participants_list_state]
+        outputs=[upload_screen, loading_screen, detail_screen, temp_file_state, tokens_slider, date_slider, participants_container, participants_output, participants_list_state, participants_title] + participant_checkboxes
     )
     def start_processing(file_content: bytes):
         temp_file, params = initial_processing(file_content)
@@ -171,19 +178,29 @@ with gr.Blocks(title="Обработка чатов") as app:
                 gr.update(),
                 gr.update(),
                 gr.update(),
-                None
-            ]
-        # Создаём контейнер с чекбоксами
-        with participants_container:
-            participant_checkboxes.clear()
-            for name in params["participants"]:
-                cb = gr.Checkbox(label=f"Исключить {name}", value=False)
-                participant_checkboxes.append(cb)
+                gr.update(visible=True),
+                None,
+                gr.update(visible=False)
+            ] + [gr.update(visible=False) for _ in range(max_participants)]
+        
+        # Сохраняем список участников в состояние
+        participants = [name for name in params["participants"] if name.strip()]
+        
+        # Обновляем чекбоксы
+        checkbox_updates = []
+        for i, name in enumerate(participants):
+            if i < max_participants:
+                checkbox_updates.append(gr.update(label=f"Исключить {name}", visible=True, value=False))
+        
+        # Заполняем оставшиеся чекбоксы как невидимые
+        for _ in range(max_participants - len(participants)):
+            checkbox_updates.append(gr.update(visible=False))
+        
         # Обновляем даты
         min_date_ts = parse_date(params["start_data"])
         max_date_ts = parse_date(params["end_data"])
-
-        log_event(f"участники: {params['participants']}")
+        
+        log_event(f"участники: {participants}")
         return [
             gr.update(visible=False),  # upload_screen
             gr.update(visible=False),  # loading_screen
@@ -192,8 +209,10 @@ with gr.Blocks(title="Обработка чатов") as app:
             gr.update(maximum=params["len_tokens"], value=[0, params["len_tokens"]]),  # tokens_slider
             gr.update(minimum=min_date_ts, maximum=max_date_ts, value=[min_date_ts, max_date_ts]),  # date_slider
             gr.update(visible=True),  # participants_container
-            params["participants"]    # participants_list_state
-        ]
+            gr.update(visible=True),  # participants_output
+            participants,  # participants_list_state
+            gr.update(visible=True)  # participants_title
+        ] + checkbox_updates
     
     # Обновление отображения даты
     @date_slider.change(
