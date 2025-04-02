@@ -3,7 +3,9 @@ import aiohttp
 import asyncio
 from datetime import datetime
 from typing import Tuple, Optional, List, Dict, Any
-from logs import log_event as log_event_hf
+from fastapi import File
+from logs import log_event as log_event_hf, clear_logs
+from delete_files import delete_files
 
 def log_event(message):
     log_event_hf(f"FROM FRONT: {message}")
@@ -26,12 +28,16 @@ async def async_initial_processing(file_content: bytes) -> Tuple[str, Dict[str, 
                 temp_file = "result.txt"
                 with open(temp_file, "w", encoding="utf8") as result_file:
                     result_file.write(r)
-                params = {key: out.get(key) for key in ["code_name", "start_data", "end_data", "len_tokens"]}
+                params = {key: out.get(key) for key in ["result", "participants", "start_data", "end_data", "len_tokens"]}
     return temp_file, params
 
+def initial_processing(file_content: bytes):
+    return asyncio.run(async_initial_processing(file_content))
+
 async def async_detailed_processing(
-    file_path: str,
+    file_path: str,  # Изменено с File на str
     anonymize: bool,
+    keep_dates: bool,
     start_data: str,
     result_token: int,
     excluded_participants: List[str]
@@ -43,11 +49,20 @@ async def async_detailed_processing(
     log_event(f"Детальная обработка файла {file_path}...")
     result_file, names = None, None
     data = aiohttp.FormData()
-    data.add_field("file", file_path)
+    # Открываем файл и добавляем его в FormData
+    with open(file_path, "rb") as f:
+        data.add_field(
+            "file", 
+            f.read(),
+            filename=file_path
+        )
+    
     data.add_field("anonymize_names", str(anonymize))
+    data.add_field("keep_dates", str(keep_dates))
     data.add_field("start_data", start_data)
-    data.add_field("result_token", result_token)
+    data.add_field("result_token", str(result_token))  # Преобразуем int в str
     data.add_field("excluded_participants", ",".join(excluded_participants))
+    
     async with aiohttp.ClientSession() as session:
         async with session.post(
             "http://localhost:8000/detail_processing_file/",
@@ -56,16 +71,28 @@ async def async_detailed_processing(
             out = await response.json()
             if response.status == 200 and (r := out.get("result")): 
                 result_file = "final_processed_chat.txt"
-                with open(result_file, "w", encoding="utf8") as result_file:
-                    result_file.write(r)
+                with open(result_file, "w", encoding="utf8") as f:
+                    f.write(r)
                 names = out.get("code_name", {})
+    log_event("Детальная обработка завершена")
     return result_file, names
 
-def initial_processing(file_content: bytes):
-    return asyncio.run(async_initial_processing(file_content))
-
-def detailed_processing(file_path: str, anonymize: bool, start_data: str, result_token: int, excluded_participants: List[str]):
-    return asyncio.run(async_detailed_processing(file_path, anonymize, start_data, result_token, excluded_participants))
+def detailed_processing(
+    file_path: str,  # Изменено с File на str
+    anonymize: bool, 
+    keep_dates: bool,
+    start_data: str, 
+    result_token: int, 
+    excluded_participants: List[str]
+):
+    return asyncio.run(async_detailed_processing(
+        file_path, 
+        anonymize, 
+        keep_dates,
+        start_data, 
+        result_token, 
+        excluded_participants
+    ))
 
 def parse_date(date_str: str) -> float:
     """Преобразует строку даты в timestamp для слайдера"""
@@ -80,9 +107,10 @@ with gr.Blocks(title="Обработка чатов") as app:
     # Состояния
     temp_file_state = gr.State()
     participants_state = gr.State()
+    participants_list_state = gr.State()
     # Экран 1: Загрузка файла
     with gr.Column(visible=True) as upload_screen:
-        gr.Markdown("## Загрузите файл")
+        gr.Markdown("## Загрузите файл для обработки")
         file_input = gr.File(label="Файл", file_types=[".txt", ".json", ".html"], type="binary")
         upload_button = gr.Button("Начать обработку", variant="primary")
     # Экран 2: Индикатор загрузки
@@ -108,12 +136,12 @@ with gr.Blocks(title="Обработка чатов") as app:
             minimum=0,
             maximum=1,
             value=[0, 1],
-            label="Диапазон дат",step=3600  # Шаг в 1 час
+            label="Диапазон дат",
+            step=60
         )
         date_display = gr.Markdown("Дата: -")
-    
         # Участники
-        participants_container = gr.Column()
+        participants_container = gr.Column(value = "Участники:")
         participant_checkboxes = []
     
         # Кнопки
@@ -130,42 +158,42 @@ with gr.Blocks(title="Обработка чатов") as app:
     # Загрузка файла и первичная обработка
     @upload_button.click(
         inputs=file_input,
-        outputs=[upload_screen, loading_screen, temp_file_state]
+        outputs=[upload_screen, loading_screen, detail_screen, temp_file_state, tokens_slider, date_slider, participants_container, participants_list_state]
     )
     def start_processing(file_content: bytes):
-        log_event("Начинаем первичную обработку файла...")
         temp_file, params = initial_processing(file_content)
-        log_event(f"Полученные параметры: {params}")
-        # Проверяем наличие необходимых данных
-        if params["start_data"] is None or params["end_data"] is None:
-            log_event("Ошибка: start_data или end_data отсутствуют в ответе сервера.")
-            return (
-                gr.update(visible=False),  # Скрываем экран загрузки
-                gr.update(visible=False),   # Скрываем экран детальной обработки
-                gr.update(value=""),        # temp_file_state
-                gr.update(value=[0, 0]),    # tokens_slider
-                gr.update(value=[0, 1]),    # date_slider
-                participants_container        # participants_container
-            )
-
-        min_date_ts = parse_date(params["start_data"])
-        max_date_ts = parse_date(params["end_data"])
-        log_event(f"Минимальная дата: {min_date_ts}, Максимальная дата: {max_date_ts}")
-        # Создаем чекбоксы для участников
+        if not temp_file or not params:
+            return [
+                gr.update(visible=True),
+                gr.update(visible=False),
+                gr.update(visible=False),
+                None,
+                gr.update(),
+                gr.update(),
+                gr.update(),
+                None
+            ]
+        # Создаём контейнер с чекбоксами
         with participants_container:
             participant_checkboxes.clear()
-            for participant in params["code_name"]:
-                cb = gr.Checkbox(label=f"Исключить {participant}", value=False)
+            for name in params["participants"]:
+                cb = gr.Checkbox(label=f"Исключить {name}", value=False)
                 participant_checkboxes.append(cb)
-        log_event("Обработка завершена, возвращаем значения.9")
-        return (
-            gr.update(visible=False),  # Скрываем экран загрузки
-            gr.update(visible=True),   # Показываем экран детальной обработки
-            temp_file,                 # Возвращаем путь к временному файлу
-            gr.update(maximum=params["len_tokens"], value=[0, params["len_tokens"]]),  # Обновляем слайдер токенов
-            gr.update(minimum=min_date_ts, maximum=max_date_ts, value=[min_date_ts, max_date_ts]),  # Обновляем слайдер дат
-            participants_container       # Возвращаем контейнер участников
-        )
+        # Обновляем даты
+        min_date_ts = parse_date(params["start_data"])
+        max_date_ts = parse_date(params["end_data"])
+
+        log_event(f"участники: {params['participants']}")
+        return [
+            gr.update(visible=False),  # upload_screen
+            gr.update(visible=False),  # loading_screen
+            gr.update(visible=True),   # detail_screen
+            temp_file,                # temp_file_state
+            gr.update(maximum=params["len_tokens"], value=[0, params["len_tokens"]]),  # tokens_slider
+            gr.update(minimum=min_date_ts, maximum=max_date_ts, value=[min_date_ts, max_date_ts]),  # date_slider
+            gr.update(visible=True),  # participants_container
+            params["participants"]    # participants_list_state
+        ]
     
     # Обновление отображения даты
     @date_slider.change(
@@ -173,50 +201,75 @@ with gr.Blocks(title="Обработка чатов") as app:
         outputs=date_display
     )
     def update_date_display(date_range):
+        log_event(f"Дата: {date_range}")
         return f"Дата: {format_timestamp(date_range[0])} — {format_timestamp(date_range[1])}"
     
     # Детальная обработка
     @process_button.click(
-        inputs=[
-            temp_file_state,
-            anonymize,
-            date_slider,
-            tokens_slider,
-            *participant_checkboxes
-        ],
-        outputs=[result_message, download_output, participants_output]
-    )
+    inputs=[
+        temp_file_state,    # Путь к временному файлу
+        anonymize,         # Флаг анонимизации (Checkbox)
+        keep_dates,        # Флаг сохранения дат (Checkbox)
+        date_slider,       # Слайдер с диапазоном дат
+        tokens_slider,     # Слайдер с диапазоном токенов
+        participants_list_state,  # Список всех участников (gr.State)
+        *participant_checkboxes   # Все чекбоксы для исключения участников
+    ],
+    outputs=[result_message, download_output, participants_output]
+)
+
     def process_detailed(
         file_path: str,
         anonymize: bool,
+        keep_dates: bool,
         date_range: List[float],
-        tokens_range: List[int],
+        len_tokens: int,
         *excluded_participants: bool
     ):
-        # Преобразуем timestamp обратно в строки
-        log_event(f"date_range: {date_range}")
+        # 1. Преобразуем timestamp в строки дат
         start_date = format_timestamp(date_range[0]) + ":00"
         end_date = format_timestamp(date_range[1]) + ":00"
-        # Получаем список исключенных участников
-        excluded = [p.label.replace("Исключить ", "") for p, excl in zip(participant_checkboxes, excluded_participants) if excl]
-        # Вызываем детальную обработку
-        result_file, participants = detailed_processing(
-            file_path,
-            anonymize,
-            start_date,
-            tokens_range[1],
-            excluded
+        
+        # 2. Получаем список исключённых участников
+        excluded_names = [
+            name 
+            for name, is_excluded in zip(participants_list_state, excluded_participants) 
+            if is_excluded
+        ]
+        
+        log_event(f"Исключаемые участники: {excluded_names}")
+        
+        # 3. Получаем максимальное количество токенов (берём верхнюю границу слайдера)
+        max_tokens = len_tokens[1]
+        
+        # 4. Вызываем детальную обработку
+        result_file, code_names = detailed_processing(
+            file_path=file_path,
+            anonymize=anonymize,
+            keep_dates=keep_dates,
+            start_data=start_date,
+            result_token=max_tokens,
+            excluded_participants=excluded_names
         )
-        # Формируем результат
-        outputs = [
-            gr.update(visible=True, value="Файл успешно обработан!"),
-            gr.update(value=result_file, visible=True)]
-        if participants:
-            parts_text = "Анонимизированные участники:\n" + "\n".join(f"- {p}" for p in participants)
-            outputs.append(gr.update(value=parts_text, visible=True))
+        
+        # 5. Формируем результат
+        result_msg = "Файл успешно обработан!"
+        download_file = gr.update(value=result_file, visible=True)
+        
+        # 6. Если была анонимизация, показываем соответствие имён
+        if anonymize and code_names:
+            participants_text = "Анонимизированные имена:\n" + "\n".join(
+                f"{code} = {name}" for code, name in code_names.items()
+            )
+            participants_output = gr.update(value=participants_text, visible=True)
         else:
-            outputs.append(gr.update(visible=False))
-        return outputs
+            participants_output = gr.update(visible=False)
+        
+        return (
+            gr.update(value=result_msg, visible=True),
+            download_file,
+            participants_output
+        )
     
     # Пропуск детальной обработки
     @skip_button.click(
@@ -229,7 +282,10 @@ with gr.Blocks(title="Обработка чатов") as app:
             gr.update(value=file_path, visible=True),
             gr.update(visible=False)
         )
-
+    
+delete_files("result.txt", "final_processed_chat.txt")
+clear_logs()
 log_event("Запуск приложения...")
+
 if __name__ == "__main__":
     app.launch(server_name="0.0.0.0", server_port=7862)

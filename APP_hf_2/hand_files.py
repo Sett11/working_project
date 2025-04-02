@@ -124,7 +124,9 @@ def content_pre_process(file_obj):
             content.appendleft(new_content)
             len_tokens += new_len
         log_event(f"Всего сообщений {df.shape[0]}, попало в контент {df.shape[0] - index}")
-        return ''.join(content), code_name, pd.to_datetime(start_data).strftime('%Y-%m-%d %H:%M:%S'), pd.to_datetime(end_data).strftime('%Y-%m-%d %H:%M:%S'), len_tokens
+        unique_names = df.Name.unique().tolist()  # Получаем список оригинальных имен
+        return ''.join(content), unique_names, pd.to_datetime(start_data).strftime('%Y-%m-%d %H:%M:%S'), pd.to_datetime(end_data).strftime('%Y-%m-%d %H:%M:%S'), len_tokens
+    
     except FileNotFoundError:
         log_event(f"Файл не найден.")
     except UnicodeDecodeError:
@@ -139,16 +141,17 @@ def content_pre_process(file_obj):
         log_event(f"FROM HAND_FILES: Произошла ошибка: {e}")
     return None, None
 
-def detail_content_pre_process(file_path, anonymize_names=True, start_data=None, result_token=None, excluded_participants=None):
+def detail_content_pre_process(file_path, anonymize_names=True, keep_dates=False, start_data=None, result_token=None, excluded_participants=None):
     """
     Accepts a file_path object and optionally the maximum length of the context.
     Returns a cleaned string of the required length and a dictionary of chat participant name IDs
     """
     anonymize_names = str(anonymize_names).lower() == 'true'
+    keep_dates = str(keep_dates).lower() == 'true'
     start_data = pd.to_datetime(start_data) if start_data else None
     result_token = int(result_token)
     excluded_participants = excluded_participants.split(',') if excluded_participants else None
     res = ''
     with open(file_path, 'r', encoding='utf-8') as file:
         res = file.read()
-    return res
+    return res, excluded_participants
