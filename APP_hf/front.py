@@ -1,37 +1,18 @@
 import gradio as gr
-import requests
+import aiohttp
 import datetime
-from custom_print import custom_print
+import asyncio
+from logs import log_event as log_event_hf
 from delete_files import delete_files
 
-
-def detect_file_type(file_content):
-    """
-    Определяет тип файла по его содержимому
-    Возвращает: "json", "html", "txt" или None если тип не определен
-    """
-    try:
-        # Пробуем декодировать как JSON
-        content_str = file_content.decode("utf-8")
-        if content_str.strip().startswith("{") or content_str.strip().startswith("["):
-            return "json"
-        
-        # Проверяем на HTML
-        if "<html" in content_str.lower() or "<!DOCTYPE html" in content_str.lower():
-            return "html"
-        
-        # Если не JSON и не HTML, считаем текстовым файлом
-        return "txt"
-    except UnicodeDecodeError:
-        return
-
+def log_event(message):
+    log_event_hf(f"FROM FRONT: {message}")
 
 def format_timestamp(timestamp):
     """
     returns a timestamp formatted as a string
     """
     return datetime.datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
-
 
 def get_timestamp():
     """
@@ -45,48 +26,43 @@ def update_slider():
     """
     return get_timestamp()
 
+async def async_get_resp(file_bytes, anonymize_names, save_datetime, max_len_context, time_choise):
+    """
+    processes the user"s request and returns a response
+    """
+    if file_bytes is None:
+        log_event("Пользовательский файл не был загружен")
+        return None, None
+    log_event(f"Размер загружаемого файла: {len(file_bytes)} байт")
+    # URL = "http://backend:8000/upload_file/" # для запуска в Docker
+    URL = "http://localhost:8000/upload_file/" # для запуска на локальной машине
+    data = aiohttp.FormData()  # Создаем объект FormData
+    data.add_field("anonymize_names", str(anonymize_names))
+    data.add_field("save_datetime", str(save_datetime))
+    data.add_field("max_len_context", str(max_len_context))
+    data.add_field("time_choise", format_timestamp(time_choise))
+    data.add_field("file", file_bytes) # Добавляем файл в FormData
+    async with aiohttp.ClientSession() as session:
+        async with session.post(URL, data=data) as response:
+            out = await response.json()  # Получаем JSON-ответ
+            if response.status == 200 and (r := out.get("result")):  # Проверяем статус ответа
+                with open("result.txt", "w", encoding="utf8") as result_file:
+                    result_file.write(r)
+                code_name = out.get("code_name", {})  # получаем словарь code_name из ответа
+                return "result.txt", "\n".join(f"{id}->{name}" for id, name in code_name.items()) if code_name else ""  # возвращаем также code_name
+            else:
+                log_event("FROM FRONT: Ошибка обработки файла")
+                return None, None
 
 def get_resp(file_bytes, anonymize_names, save_datetime, max_len_context, time_choise):
     """
     processes the user"s request and returns a response
     """
-    delete_files("result.txt") # удаляем старый файл результата обработки при любом новом запросе - даже некорректном
-
-    if file_bytes is None:
-        custom_print("Пользовательский файл не был загружен")
-        return None, None
-    
-    # URL = "http://backend:8000/upload_file/" # для запуска в Docker
-    URL = "http://localhost:8000/upload_file/" # для запуска на локальной машине
-
-    # Определяем тип файла по содержимому
-    file_type = detect_file_type(file_bytes)
-    if file_type is None:
-        custom_print("Не удалось определить тип файла")
-        return None, None
-    
-    # Формируем имя файла с правильным расширением
-    filename = f"uploaded_file.{file_type}"
-    
-    files = {"file": (filename, file_bytes)}
-    data = {"anonymize_names": anonymize_names, "save_datetime": save_datetime, "max_len_context": max_len_context, "time_choise": format_timestamp(time_choise)}
-    out = requests.post(URL, files=files, data=data)
-        
-    if out.status_code == 200 and (r:=out.json().get("result")): # может вернуть пустую строку
-        with open("result.txt", "w", encoding="utf8") as result_file:
-            result_file.write(r)
-
-        code_name = out.json().get("code_name", "")  # получаем словарь code_name из ответа
-        return "result.txt", "\n".join(f"{id}->{name}" for id, name in code_name.items()) if code_name else ""  # возвращаем также code_name
-    else:
-        custom_print("Ошибка обработки файла")
-        return None, None
+    return asyncio.run(async_get_resp(file_bytes, anonymize_names, save_datetime, max_len_context, time_choise))
 
 
 with gr.Blocks() as app:
-    delete_files("app_logs.txt", "result.txt") # удаляем все старые файлы перед запуском приложения
     gr.Markdown("## ЗАГРУЗКА ФАЙЛА ДЛЯ ОБРАБОТКИ", elem_id="title")
-
     current_time = round(get_timestamp())
     file_input = gr.File(label="загрузите файл", type="binary")
     anonymize_checkbox = gr.Checkbox(label="Анонимизировать имена", value=False)
@@ -110,5 +86,6 @@ with gr.Blocks() as app:
         outputs=[output_get, output_code_name]
     )
 
-
+delete_files("result.txt", "app.log")
+log_event("===Запуск приложения===")
 app.launch(server_name="0.0.0.0", server_port=7861)

@@ -3,6 +3,7 @@ import tiktoken
 import re
 from collections import deque
 import pandas as pd
+import datetime
 import io
 from readWAtxt import readWAtxt
 from readTGjson import readTGjson
@@ -70,15 +71,11 @@ def detect_file_type(file_content):
     except UnicodeDecodeError:
         return
 
-def content_pre_process(file_obj, anonymize_names=True, save_datetime=False, max_len_context=15200, time_choise=None):
+def content_pre_process(file_obj):
     """
     Accepts a BytesIO object and optionally the maximum length of the context.
     Returns a cleaned string of the required length and a dictionary of chat participant name IDs
     """
-    anonymize_names = str(anonymize_names).lower() == 'true'
-    save_datetime = str(save_datetime).lower() == 'true'
-    max_len_context = int(max_len_context)
-    time_choise = pd.to_datetime(time_choise) if time_choise else None
     try:
         df = None
         # Читаем содержимое файла, если это UploadFile
@@ -113,27 +110,21 @@ def content_pre_process(file_obj, anonymize_names=True, save_datetime=False, max
         log_event(f"Успешно прочитан файл. Количество строк: {len(df)}")
         df['Name'] = df['Name'].apply(lambda x: remove_special_chars(x))
         df['Text'] = df['Text'].apply(lambda x: clearText(x))
-        name_code, code_name = hand_names(df.Name.unique()) if anonymize_names else (None, None)
+        start_data = df.loc[df['Date'] == df['Date'].min(), 'Date'].values[0]
+        end_data = df.loc[df['Date'] == df['Date'].max(), 'Date'].values[0]
+        name_code, code_name = hand_names(df.Name.unique())
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
         content = deque() # использование двусвязного списка лучше конкатенации строк с точки зрения асимптотики - на больших файлах скажется
         len_tokens = 0
-        date = pd.to_datetime(time_choise) if time_choise else None
         for index in df.index[::-1]:
-            # если анонимизация установлена в True, то добавляем идентификатор имени к контенту, если нет - то просто имя
-            # то же самое по сохранению даты/времени в контенте - добавляем к выводу, если установлено в True
-            # на лету выбираем форматирование выходного контента - в зависимости от установленных пользователем параметров
-            new_content = (name_code[df.loc[index, 'Name']] if anonymize_names else df.loc[index, 'Name']) +\
-            (('&' + str(df.loc[index, 'Date'])) if save_datetime else '') +\
-            (': ' if not save_datetime else '> ') + re.sub('\n', ' ', df.loc[index, 'Text']) + '\n'
+            new_content = df.loc[index, 'Name'] + (('&' + str(df.loc[index, 'Date']))) + '> ' + re.sub('\n', ' ', df.loc[index, 'Text']) + '\n'
             if not re.sub(r'[ \n]', '' ,new_content.split(': ')[-1]): # убираем пустые сообщения, которые "съедают" контекст за счёт добавления имён и переносов без payload
                 continue
             new_len = len(enc.encode(new_content))
-            if new_len + len_tokens > max_len_context or (date and date > df.loc[index, 'Date']): # если превышена установленная длина контекста или при итерации достигнута установленная дата начала отсчёта сообщений
-                break
             content.appendleft(new_content)
             len_tokens += new_len
         log_event(f"Всего сообщений {df.shape[0]}, попало в контент {df.shape[0] - index}")
-        return ''.join(content), code_name
+        return ''.join(content), code_name, pd.to_datetime(start_data).strftime('%Y-%m-%d %H:%M:%S'), pd.to_datetime(end_data).strftime('%Y-%m-%d %H:%M:%S'), len_tokens
     except FileNotFoundError:
         log_event(f"Файл не найден.")
     except UnicodeDecodeError:
@@ -147,3 +138,17 @@ def content_pre_process(file_obj, anonymize_names=True, save_datetime=False, max
     except Exception as e:
         log_event(f"FROM HAND_FILES: Произошла ошибка: {e}")
     return None, None
+
+def detail_content_pre_process(file_path, anonymize_names=True, start_data=None, result_token=None, excluded_participants=None):
+    """
+    Accepts a file_path object and optionally the maximum length of the context.
+    Returns a cleaned string of the required length and a dictionary of chat participant name IDs
+    """
+    anonymize_names = str(anonymize_names).lower() == 'true'
+    start_data = pd.to_datetime(start_data) if start_data else None
+    result_token = int(result_token)
+    excluded_participants = excluded_participants.split(',') if excluded_participants else None
+    res = ''
+    with open(file_path, 'r', encoding='utf-8') as file:
+        res = file.read()
+    return res
