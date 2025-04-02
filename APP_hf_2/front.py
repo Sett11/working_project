@@ -40,7 +40,8 @@ async def async_detailed_processing(
     keep_dates: bool,
     start_data: str,
     result_token: int,
-    excluded_participants: List[str]
+    excluded_participants: List[str],
+    users_list: List[str]
 ) -> Tuple[str, Optional[List[str]]]:
     """
     Детальная обработка файла.
@@ -62,7 +63,8 @@ async def async_detailed_processing(
     data.add_field("start_data", start_data)
     data.add_field("result_token", str(result_token))  # Преобразуем int в str
     data.add_field("excluded_participants", ",".join(excluded_participants))
-    
+    data.add_field("users_list", ",".join(users_list))
+
     async with aiohttp.ClientSession() as session:
         async with session.post(
             "http://localhost:8000/detail_processing_file/",
@@ -83,7 +85,8 @@ def detailed_processing(
     keep_dates: bool,
     start_data: str, 
     result_token: int, 
-    excluded_participants: List[str]
+    excluded_participants: List[str],
+    users_list: List[str]
 ):
     return asyncio.run(async_detailed_processing(
         file_path, 
@@ -91,7 +94,8 @@ def detailed_processing(
         keep_dates,
         start_data, 
         result_token, 
-        excluded_participants
+        excluded_participants,
+        users_list
     ))
 
 def parse_date(date_str: str) -> float:
@@ -148,6 +152,7 @@ with gr.Blocks(title="Обработка чатов") as app:
         # Создаем чекбоксы заранее
         max_participants = 20  # Максимальное количество участников
         participant_checkboxes = []
+        users_list = []
         for i in range(max_participants):
             cb = gr.Checkbox(label="", visible=False)
             participant_checkboxes.append(cb)
@@ -166,6 +171,7 @@ with gr.Blocks(title="Обработка чатов") as app:
         outputs=[upload_screen, loading_screen, detail_screen, temp_file_state, tokens_slider, date_slider, participants_container, participants_list_state, participants_title] + participant_checkboxes
     )
     def start_processing(file_content: bytes):
+        global users_list
         temp_file, params = initial_processing(file_content)
         if not temp_file or not params:
             return [
@@ -182,7 +188,7 @@ with gr.Blocks(title="Обработка чатов") as app:
         
         # Сохраняем список участников в состояние
         participants = [name for name in params["participants"] if name.strip()]
-        
+        users_list = participants
         # Обновляем чекбоксы
         checkbox_updates = []
         for i, name in enumerate(participants):
@@ -216,8 +222,10 @@ with gr.Blocks(title="Обработка чатов") as app:
         outputs=date_display
     )
     def update_date_display(date_range):
-        log_event(f"Дата: {date_range}")
-        return f"Дата: {format_timestamp(date_range[0])} — {format_timestamp(date_range[1])}"
+        if isinstance(date_range, list):
+            return f"Дата: {format_timestamp(date_range[0])} — {format_timestamp(date_range[1])}"
+        else:
+            return f"Дата: {format_timestamp(date_range)}"
     
     # Детальная обработка
     @process_button.click(
@@ -240,19 +248,17 @@ with gr.Blocks(title="Обработка чатов") as app:
         len_tokens: int,
         *excluded_participants: bool
     ):
+        log_event(f"Аргументы: {file_path}, {anonymize}, {keep_dates}, {date_range}, {len_tokens}, {excluded_participants}")
         # 1. Преобразуем timestamp в строки дат
         start_date = format_timestamp(date_range[0]) + ":00"
         end_date = format_timestamp(date_range[1]) + ":00"
-        
         # 2. Получаем список исключённых участников
         excluded_names = [
             name 
-            for name, is_excluded in zip(participants_list_state, excluded_participants) 
+            for name, is_excluded in zip(users_list, [*excluded_participants]) 
             if is_excluded
         ]
-        
-        log_event(f"Исключаемые участники: {excluded_names}")
-        
+        log_event(f"excluded_names: {excluded_names}")
         # 3. Получаем максимальное количество токенов (берём верхнюю границу слайдера)
         max_tokens = len_tokens[1]
         
@@ -263,7 +269,8 @@ with gr.Blocks(title="Обработка чатов") as app:
             keep_dates=keep_dates,
             start_data=start_date,
             result_token=max_tokens,
-            excluded_participants=excluded_names
+            excluded_participants=excluded_names,
+            users_list=users_list
         )
         
         # 5. Формируем результат

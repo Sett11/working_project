@@ -33,7 +33,8 @@ async def detail_processing_file(
     keep_dates: str = Form(...),
     start_data: str = Form(...),
     result_token: str = Form(...),
-    excluded_participants: str = Form(...)
+    excluded_participants: str = Form(...),
+    users_list: str = Form(...)
 ):
     """
     receives the request data and returns the result of the file handler
@@ -41,7 +42,7 @@ async def detail_processing_file(
     log_event(f"FROM BACK: Получены параметры: {file}, {anonymize_names}, {keep_dates}, {start_data}, {result_token}, {excluded_participants}")
     try:
         result_token = int(result_token)
-        text, code_name = detail_content_pre_process(file.filename, anonymize_names, keep_dates, start_data, result_token, excluded_participants)
+        text, code_name = detail_content_pre_process(file.filename, anonymize_names, keep_dates, start_data, result_token, excluded_participants, users_list.split(','))
         if text is None:
             log_event("Ошибка обработки файла: результат пустой")
             return {"error": "Error processing file"}   

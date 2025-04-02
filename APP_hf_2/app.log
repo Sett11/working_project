@@ -1,8 +1,15 @@
-2025-04-02 14:34:16,957 - INFO - === Логи приложения ===
-2025-04-02 14:34:16,958 - INFO - FROM FRONT: Запуск приложения...: 
-2025-04-02 14:34:26,693 - INFO - FROM FRONT: Начата первичная обработка файла...: 
-2025-04-02 14:34:26,703 - INFO - FROM HAND_FILES: Определен тип файла: JSON: 
-2025-04-02 14:34:27,375 - INFO - FROM HAND_FILES: Успешно прочитан файл. Количество строк: 140: 
-2025-04-02 14:34:27,878 - INFO - FROM HAND_FILES: Всего сообщений 140, попало в контент 140: 
-2025-04-02 14:34:27,930 - INFO - FROM FRONT: участники: ['Maksem', 'ETM', 'Alex', 'Простой Математик', 'Kompilainenn', 'Denis Pobedrya', 'Zart', 'Богдан', 'Pavel Chaika', 'Kirill Shikhalev', 'Tishka17', 'Владимир', 'Алиса КассельКоролёва']: 
-2025-04-02 14:34:28,418 - INFO - FROM FRONT: Дата: [1742328063, 1742334594]: 
+2025-04-02 16:17:55,855 - INFO - === Логи приложения ===
+2025-04-02 16:17:55,855 - INFO - FROM FRONT: Запуск приложения...: 
+2025-04-02 16:18:08,616 - INFO - FROM FRONT: Начата первичная обработка файла...: 
+2025-04-02 16:18:08,630 - INFO - FROM HAND_FILES: Определен тип файла: TXT: 
+2025-04-02 16:18:08,637 - INFO - FROM READWATXT: Некорректная структура строки: 24.10.2021, 18:29 - Сообщения и звонки защищены сквозным шифрованием. Третьи лица, включая WhatsApp, не могут прочитать или прослушать их. Нажмите, чтобы узнать больше....: 
+2025-04-02 16:18:12,528 - INFO - FROM HAND_FILES: Успешно прочитан файл. Количество строк: 2158: 
+2025-04-02 16:18:13,299 - INFO - FROM HAND_FILES: Всего сообщений 2158, попало в контент 2158: 
+2025-04-02 16:18:13,315 - INFO - FROM FRONT: участники: ['Настуся', 'Лелик']: 
+2025-04-02 16:18:23,509 - INFO - FROM FRONT: Аргументы: result.txt, True, False, [1635089340, 1727798340], [0, 60381], (['Настуся', 'Лелик'], True, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False): 
+2025-04-02 16:18:23,510 - INFO - FROM FRONT: excluded_names: ['Настуся', 'Лелик']: 
+2025-04-02 16:18:23,515 - INFO - FROM FRONT: Детальная обработка файла result.txt...: 
+2025-04-02 16:18:23,532 - INFO - FROM BACK: FROM BACK: Получены параметры: UploadFile(filename='result.txt', size=150546, headers=Headers({'content-type': 'application/octet-stream', 'content-disposition': 'form-data; name="file"; filename="result.txt"', 'content-length': '150546'})), True, False, 2021-10-24 18:29:00, 60381, Настуся,Лелик: 
+2025-04-02 16:18:23,542 - INFO - FROM BACK: Файл успешно обработан
+: 
+2025-04-02 16:18:23,551 - INFO - FROM FRONT: Детальная обработка завершена: 

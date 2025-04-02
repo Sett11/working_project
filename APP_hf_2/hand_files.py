@@ -141,7 +141,7 @@ def content_pre_process(file_obj):
         log_event(f"FROM HAND_FILES: Произошла ошибка: {e}")
     return None, None
 
-def detail_content_pre_process(file_path, anonymize_names=True, keep_dates=False, start_data=None, result_token=None, excluded_participants=None):
+def detail_content_pre_process(file_path, anonymize_names=True, keep_dates=False, start_data=None, result_token=None, excluded_participants=None, users_list=None):
     """
     Accepts a file_path object and optionally the maximum length of the context.
     Returns a cleaned string of the required length and a dictionary of chat participant name IDs
@@ -150,8 +150,39 @@ def detail_content_pre_process(file_path, anonymize_names=True, keep_dates=False
     keep_dates = str(keep_dates).lower() == 'true'
     start_data = pd.to_datetime(start_data) if start_data else None
     result_token = int(result_token)
-    excluded_participants = excluded_participants.split(',') if excluded_participants else None
+    code_names = {i:j for i, j in zip(users_list, [f'У{i}' for i in range(100)])}
     res = ''
     with open(file_path, 'r', encoding='utf-8') as file:
         res = file.read()
-    return res, excluded_participants
+    res = res.split('\n')
+
+    for i in range(len(res)):
+        data_mes = res[i].split('> ')
+        if data_mes[0] != '':
+            try:
+                if len(data_mes) == 1:
+                    data = data_mes[0]
+                    mes = ''
+                else:
+                    data = data_mes[0]
+                    mes = data_mes[1]
+                name_date = data.split('&')
+                if len(name_date) == 1:
+                    name = ''
+                    date = data[0]
+                else:
+                    name = name_date[0]
+                    date = name_date[1]
+                if name in excluded_participants:
+                    continue
+                if pd.to_datetime(date) < start_data:
+                    break
+                if anonymize_names and name in excluded_participants:
+                    name = code_names[name]
+                if keep_dates:
+                    res[i] = name + '> ' + date + '> ' + mes
+                else:
+                        res[i] = name + '> ' + mes
+            except Exception as e:
+                log_event(f"Ошибка в строке {i}: {e}")
+    return '\n'.join(res), code_names
