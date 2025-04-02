@@ -151,7 +151,6 @@ with gr.Blocks(title="Обработка чатов") as app:
         for i in range(max_participants):
             cb = gr.Checkbox(label="", visible=False)
             participant_checkboxes.append(cb)
-            participants_container.add(cb)
         # Кнопки
         with gr.Row():
             skip_button = gr.Button("Пропустить детальную обработку", variant="secondary")
@@ -159,13 +158,12 @@ with gr.Blocks(title="Обработка чатов") as app:
         # Результат
         result_message = gr.Markdown(visible=False)
         download_output = gr.File(visible=False, label="Скачать обработанный файл")
-        participants_output = gr.Markdown(visible=False,value="Участники:")
     # Обработчики событий
 
     # Загрузка файла и первичная обработка
     @upload_button.click(
         inputs=file_input,
-        outputs=[upload_screen, loading_screen, detail_screen, temp_file_state, tokens_slider, date_slider, participants_container, participants_output, participants_list_state, participants_title] + participant_checkboxes
+        outputs=[upload_screen, loading_screen, detail_screen, temp_file_state, tokens_slider, date_slider, participants_container, participants_list_state, participants_title] + participant_checkboxes
     )
     def start_processing(file_content: bytes):
         temp_file, params = initial_processing(file_content)
@@ -177,8 +175,7 @@ with gr.Blocks(title="Обработка чатов") as app:
                 None,
                 gr.update(),
                 gr.update(),
-                gr.update(),
-                gr.update(visible=True),
+                gr.update(visible=False),
                 None,
                 gr.update(visible=False)
             ] + [gr.update(visible=False) for _ in range(max_participants)]
@@ -209,7 +206,6 @@ with gr.Blocks(title="Обработка чатов") as app:
             gr.update(maximum=params["len_tokens"], value=[0, params["len_tokens"]]),  # tokens_slider
             gr.update(minimum=min_date_ts, maximum=max_date_ts, value=[min_date_ts, max_date_ts]),  # date_slider
             gr.update(visible=True),  # participants_container
-            gr.update(visible=True),  # participants_output
             participants,  # participants_list_state
             gr.update(visible=True)  # participants_title
         ] + checkbox_updates
@@ -234,9 +230,8 @@ with gr.Blocks(title="Обработка чатов") as app:
         participants_list_state,  # Список всех участников (gr.State)
         *participant_checkboxes   # Все чекбоксы для исключения участников
     ],
-    outputs=[result_message, download_output, participants_output]
-)
-
+    outputs=[result_message, download_output]
+    )
     def process_detailed(
         file_path: str,
         anonymize: bool,
@@ -275,31 +270,20 @@ with gr.Blocks(title="Обработка чатов") as app:
         result_msg = "Файл успешно обработан!"
         download_file = gr.update(value=result_file, visible=True)
         
-        # 6. Если была анонимизация, показываем соответствие имён
-        if anonymize and code_names:
-            participants_text = "Анонимизированные имена:\n" + "\n".join(
-                f"{code} = {name}" for code, name in code_names.items()
-            )
-            participants_output = gr.update(value=participants_text, visible=True)
-        else:
-            participants_output = gr.update(visible=False)
-        
         return (
             gr.update(value=result_msg, visible=True),
-            download_file,
-            participants_output
+            download_file
         )
     
     # Пропуск детальной обработки
     @skip_button.click(
         inputs=temp_file_state,
-        outputs=[result_message, download_output, participants_output]
+        outputs=[result_message, download_output]
     )
     def skip_processing(file_path: str):
         return (
             gr.update(visible=True, value="Файл готов после первичной обработки"),
-            gr.update(value=file_path, visible=True),
-            gr.update(visible=False)
+            gr.update(value=file_path, visible=True)
         )
     
 delete_files("result.txt", "final_processed_chat.txt")
