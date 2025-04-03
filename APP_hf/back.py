@@ -16,9 +16,6 @@ async def upload_file(
     max_len_context: str = Form(...), 
     time_choise: str = Form(...)
 ):
-    """
-    receives the request data and returns the result of the file handler
-    """
     try:
         # Сначала читаем файл асинхронно
         file_content = await file.read()

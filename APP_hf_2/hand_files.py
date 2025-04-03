@@ -151,38 +151,49 @@ def detail_content_pre_process(file_path, anonymize_names=True, keep_dates=False
     start_data = pd.to_datetime(start_data) if start_data else None
     result_token = int(result_token)
     code_names = {i:j for i, j in zip(users_list, [f'У{i}' for i in range(100)])}
+    log_event(f"Получены параметры: {file_path}, {anonymize_names}, {keep_dates}, {start_data}, {result_token}, {excluded_participants}, {users_list}")
     res = ''
     with open(file_path, 'r', encoding='utf-8') as file:
-        res = file.read()
-    res = res.split('\n')
-
+        res = file.read().strip().split('\n')
+    enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
+    len_tokens = 0
     for i in range(len(res)):
         data_mes = res[i].split('> ')
         if data_mes[0] != '':
             try:
                 if len(data_mes) == 1:
-                    data = data_mes[0]
+                    data = data_mes[0].strip()
                     mes = ''
                 else:
-                    data = data_mes[0]
-                    mes = data_mes[1]
+                    data = data_mes[0].strip()
+                    mes = data_mes[1].strip()
                 name_date = data.split('&')
                 if len(name_date) == 1:
                     name = ''
-                    date = data[0]
+                    date = name_date[0].strip()
                 else:
-                    name = name_date[0]
-                    date = name_date[1]
-                if name in excluded_participants:
+                    name = name_date[0].strip()
+                    date = name_date[1].strip()
+                if name in excluded_participants:   
+                    res[i] = ''
                     continue
                 if pd.to_datetime(date) < start_data:
+                    res[i] = ''
                     break
-                if anonymize_names and name in excluded_participants:
+                if anonymize_names:
                     name = code_names[name]
                 if keep_dates:
                     res[i] = name + '> ' + date + '> ' + mes
                 else:
-                        res[i] = name + '> ' + mes
+                    res[i] = name + '> ' + mes
+                if len_tokens + (l:=len(enc.encode(res[i]))) > result_token:
+                    break
+                len_tokens += l
             except Exception as e:
+                res[i] = ''
                 log_event(f"Ошибка в строке {i}: {e}")
-    return '\n'.join(res), code_names
+        else:
+            res[i] = ''
+    return res#, code_names
+
+print(detail_content_pre_process('result.txt', anonymize_names=True, keep_dates=False, start_data='2025-01-01', result_token=10000, excluded_participants=['Настуся'], users_list=['Настуся','Лелик']))

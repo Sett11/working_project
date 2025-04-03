@@ -39,10 +39,10 @@ async def detail_processing_file(
     """
     receives the request data and returns the result of the file handler
     """
-    log_event(f"FROM BACK: Получены параметры: {file}, {anonymize_names}, {keep_dates}, {start_data}, {result_token}, {excluded_participants}")
+    log_event(f"FROM BACK: Получены параметры: {file}, {anonymize_names}, {keep_dates}, {start_data}, {result_token}, {excluded_participants}, {users_list}")
     try:
         result_token = int(result_token)
-        text, code_name = detail_content_pre_process(file.filename, anonymize_names, keep_dates, start_data, result_token, excluded_participants, users_list.split(','))
+        text, code_name = detail_content_pre_process(file.filename, anonymize_names, keep_dates, start_data, result_token, excluded_participants.split(','), users_list.split(','))
         if text is None:
             log_event("Ошибка обработки файла: результат пустой")
             return {"error": "Error processing file"}   

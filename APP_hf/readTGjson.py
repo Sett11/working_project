@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+import tiktoken
 from logs import log_event as log_event_hf
 from jsonschema import validate, ValidationError
 
@@ -45,9 +46,6 @@ schema = {
 }
 
 def validate_json(file):
-    """
-    Проверка структуры JSON файла
-    """
     try:
         validate(instance=file, schema=schema)
     except ValidationError as e:
@@ -56,12 +54,10 @@ def validate_json(file):
     return True
         
 def readTGjson(file, encoding='utf8'):
-    """
-    Чтение JSON Telegram и извлечение только сообщений
-    Возвращает DataFrame
-    """
     df = pd.DataFrame()
     jdata = None
+    len_tokens = 0
+    enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
     try:
         jdata = json.loads(file.getvalue().decode(encoding))
     except json.JSONDecodeError:
@@ -83,12 +79,14 @@ def readTGjson(file, encoding='utf8'):
         Name_id = one['from_id']
         id_mess = one['id']
         dN = pd.to_datetime(one['date'], format='%Y-%m-%dT%H:%M:%S')
+        len_tokens += len(enc.encode(str(Name))) + len(enc.encode(str(one['date'])))
         if isinstance(one['text'], str):
             Text = one['text']
+            len_tokens += len(enc.encode(Text))
         else:
             Text = ' '.join(i if isinstance(i, str) else i['text'] for i in one['text'])
+            len_tokens += len(enc.encode(Text))
         df = pd.concat([df,
                         pd.DataFrame([{'id': id_mess, 'Date': dN, 'Name': Name, 'Name_id': Name_id, 'Text': Text}])],
                        ignore_index=True)
-        
-    return df
+    return df, len_tokens

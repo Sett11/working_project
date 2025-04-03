@@ -13,37 +13,22 @@ def log_event(message):
     log_event_hf(f"FROM HAND_FILES: {message}")
 
 def hand_names(names):
-    """
-    The function receives a numpy.ndarray with unique names and returns 2 dictionaries: 1. name -> name_id; 2. name_id -> name
-    """
     name_code = {}
     code_name = {}
     indexes = iter(range(100))
-
     for on in names:
         tname = 'У' + str(next(indexes))
         name_code[on] = tname
         code_name[tname] = on
-    
     return name_code, code_name
 
-
 def remove_special_chars(text):
-    """
-    Removes special characters from a string
-    """
     arr_text = text.split(' ')
-
     for i in range(len(arr_text)):
         arr_text[i] = ''.join(c for c in arr_text[i] if unicodedata.category(c).startswith(('L', 'N')))
-    
     return ' '.join(arr_text)
 
-
 def clearText(content):
-    """
-    Clears text from unnecessary characters
-    """
     content = remove_special_chars(content) # удаляем спец символы
     content = re.sub('<.*?>', ' ', content).strip() # html code
     content = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', content) # ссылки
@@ -53,10 +38,6 @@ def clearText(content):
     return content
 
 def detect_file_type(file_content):
-    """
-    Определяет тип файла по его содержимому
-    Возвращает: "json", "html", "txt" или None если тип не определен
-    """
     try:
         # Пробуем декодировать как JSON
         content_str = file_content.decode("utf-8").strip().lower()
@@ -70,23 +51,18 @@ def detect_file_type(file_content):
     except UnicodeDecodeError:
         return
 
-def content_pre_process(file_obj, anonymize_names=True, save_datetime=False, max_len_context=15200, time_choise=None):
-    """
-    Accepts a BytesIO object and optionally the maximum length of the context.
-    Returns a cleaned string of the required length and a dictionary of chat participant name IDs
-    """
+def content_pre_process(file_obj, anonymize_names=True, save_datetime=False, max_len_context="100", time_choise=None):
     anonymize_names = str(anonymize_names).lower() == 'true'
     save_datetime = str(save_datetime).lower() == 'true'
     max_len_context = int(max_len_context)
-    time_choise = pd.to_datetime(time_choise) if time_choise else None
+    time_choise = int(time_choise)
+    log_event(f"Параметры обрабтки: {anonymize_names}, {save_datetime}, {max_len_context}, {time_choise}")
     try:
         df = None
-        # Читаем содержимое файла, если это UploadFile
         if hasattr(file_obj, 'read'):
             file_content = file_obj.read()
         else:
             file_content = file_obj
-        # Определяем расширение файла
         file_ext = detect_file_type(file_content)
         file_obj = io.BytesIO(file_content)
         if file_ext is None:
@@ -94,17 +70,17 @@ def content_pre_process(file_obj, anonymize_names=True, save_datetime=False, max
             return None, None
         if file_ext == "json":
             log_event("Определен тип файла: JSON")
-            df = readTGjson(file_obj)
+            df, all_tokens_len = readTGjson(file_obj)
         elif file_ext == "html":
             log_event("Определен тип файла: HTML")
-            df = readTGhtml(file_obj)
+            df, all_tokens_len = readTGhtml(file_obj)
         elif file_ext == "txt":
             log_event("Определен тип файла: TXT")
-            df = readWAtxt(file_obj)
+            df, all_tokens_len = readWAtxt(file_obj)
         else:
             log_event('Ожидается объект BytesIO')
             return None, None
-        if df is None or df.empty:
+        if df is None or df.empty or all_tokens_len is None:
             log_event('Не удалось прочитать файл')
             return None, None
         if 'Name' not in df.columns:
@@ -115,20 +91,18 @@ def content_pre_process(file_obj, anonymize_names=True, save_datetime=False, max
         df['Text'] = df['Text'].apply(lambda x: clearText(x))
         name_code, code_name = hand_names(df.Name.unique()) if anonymize_names else (None, None)
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-        content = deque() # использование двусвязного списка лучше конкатенации строк с точки зрения асимптотики - на больших файлах скажется
+        content = deque()
         len_tokens = 0
-        date = pd.to_datetime(time_choise) if time_choise else None
+        res_len_tokens = all_tokens_len // 100 * max_len_context
+        start_date = df['Date'].iloc[-1] - pd.Timedelta(hours=time_choise)
         for index in df.index[::-1]:
-            # если анонимизация установлена в True, то добавляем идентификатор имени к контенту, если нет - то просто имя
-            # то же самое по сохранению даты/времени в контенте - добавляем к выводу, если установлено в True
-            # на лету выбираем форматирование выходного контента - в зависимости от установленных пользователем параметров
             new_content = (name_code[df.loc[index, 'Name']] if anonymize_names else df.loc[index, 'Name']) +\
             (('&' + str(df.loc[index, 'Date'])) if save_datetime else '') +\
             (': ' if not save_datetime else '> ') + re.sub('\n', ' ', df.loc[index, 'Text']) + '\n'
-            if not re.sub(r'[ \n]', '' ,new_content.split(': ')[-1]): # убираем пустые сообщения, которые "съедают" контекст за счёт добавления имён и переносов без payload
+            if not re.sub(r'[ \n]', '' ,new_content.split(': ')[-1]):
                 continue
             new_len = len(enc.encode(new_content))
-            if new_len + len_tokens > max_len_context or (date and date > df.loc[index, 'Date']): # если превышена установленная длина контекста или при итерации достигнута установленная дата начала отсчёта сообщений
+            if (new_len + len_tokens > res_len_tokens) or (df.loc[index, 'Date'] < start_date):
                 break
             content.appendleft(new_content)
             len_tokens += new_len
