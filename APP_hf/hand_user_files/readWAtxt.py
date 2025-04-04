@@ -1,10 +1,13 @@
 import pandas as pd
 import re
 import tiktoken
-from logs import log_event as log_event_hf
+from hand_logs.mylogger import Logger, LOG_FILE
+import logging
+
+logger = Logger('app_logger', LOG_FILE, level=logging.INFO)
 
 def log_event(message):
-    log_event_hf(f"FROM READWATXT: {message}")
+    logger.info(f"FROM READWATXT: {message}")
 
 def validate_txt(line):
     return re.match(r'^\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2} - [^:]+: .+$', line.strip()) is not None
@@ -26,7 +29,6 @@ def readWAtxt(file, encoding='utf8'):
     # Разбиваем текст на сообщения, сохраняя первую строку
     text = re.split(r'\n(?=\d\d.\d\d.\d\d\d\d)', text)
     enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
-    len_tokens = 0
     for one in text:
         # Пропускаем пустые строки и системные сообщения
         if not one.strip() or re.search('‎', one):
@@ -40,7 +42,6 @@ def readWAtxt(file, encoding='utf8'):
             if len(tone) < 3:
                 log_event(f'Некорректный формат сообщения: {mes[:50]}...')
                 continue
-            len_tokens += len(enc.encode(mes))
             df = pd.concat([df,
                             pd.DataFrame([{'Date': pd.to_datetime(tone[0], format='%d.%m.%Y, %H:%M'), 
                                          'Name': tone[1],
@@ -52,5 +53,5 @@ def readWAtxt(file, encoding='utf8'):
             continue
     if df.empty:
         log_event("Не удалось извлечь сообщения из файла")
-        return None, None
-    return df, len_tokens
+        return None
+    return df

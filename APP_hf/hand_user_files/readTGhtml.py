@@ -1,10 +1,13 @@
 from bs4 import BeautifulSoup
 import pandas as pd
 import tiktoken
-from logs import log_event as log_event_hf
+from hand_logs.mylogger import Logger, LOG_FILE
+import logging
+
+logger = Logger('app_logger', LOG_FILE, level=logging.INFO)
 
 def log_event(message):
-    log_event_hf(f"FROM READTGHTML: {message}")
+    logger.info(f"FROM READTGHTML: {message}")
 
 def validate_html(block):
     try:
@@ -22,7 +25,6 @@ def validate_html(block):
 def readTGhtml(file, encoding='utf8'):
     df = pd.DataFrame()
     messages = None
-    len_tokens = 0
     enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
     try:
         content = file.getvalue().decode(encoding)
@@ -57,7 +59,6 @@ def readTGhtml(file, encoding='utf8'):
             if not date or not name or not text:
                 log_event("Пропущено сообщение с пустыми полями")
                 continue 
-            len_tokens += len(enc.encode(text)) + len(enc.encode(name)) + len(enc.encode(date))
             valid_messages.append({
                 'Date': pd.to_datetime(date),
                 'Name': name,
@@ -71,4 +72,4 @@ def readTGhtml(file, encoding='utf8'):
         return None
     df = pd.DataFrame(valid_messages)
     log_event(f"Успешно обработано {len(valid_messages)} сообщений")
-    return df, len_tokens
+    return df

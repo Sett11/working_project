@@ -1,11 +1,14 @@
 import json
 import pandas as pd
 import tiktoken
-from logs import log_event as log_event_hf
 from jsonschema import validate, ValidationError
+from hand_logs.mylogger import Logger, LOG_FILE
+import logging
+
+logger = Logger('app_logger', LOG_FILE, level=logging.INFO)
 
 def log_event(message):
-    log_event_hf(f"FROM READTGJSON: {message}")
+    logger.info(f"FROM READTGJSON: {message}")
 
 # Определение схемы для валидации
 schema = {
@@ -56,7 +59,6 @@ def validate_json(file):
 def readTGjson(file, encoding='utf8'):
     df = pd.DataFrame()
     jdata = None
-    len_tokens = 0
     enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
     try:
         jdata = json.loads(file.getvalue().decode(encoding))
@@ -79,14 +81,11 @@ def readTGjson(file, encoding='utf8'):
         Name_id = one['from_id']
         id_mess = one['id']
         dN = pd.to_datetime(one['date'], format='%Y-%m-%dT%H:%M:%S')
-        len_tokens += len(enc.encode(str(Name))) + len(enc.encode(str(one['date'])))
         if isinstance(one['text'], str):
             Text = one['text']
-            len_tokens += len(enc.encode(Text))
         else:
             Text = ' '.join(i if isinstance(i, str) else i['text'] for i in one['text'])
-            len_tokens += len(enc.encode(Text))
         df = pd.concat([df,
                         pd.DataFrame([{'id': id_mess, 'Date': dN, 'Name': Name, 'Name_id': Name_id, 'Text': Text}])],
                        ignore_index=True)
-    return df, len_tokens
+    return df

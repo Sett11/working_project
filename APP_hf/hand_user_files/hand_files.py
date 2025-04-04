@@ -4,13 +4,16 @@ import re
 from collections import deque
 import pandas as pd
 import io
-from readWAtxt import readWAtxt
-from readTGjson import readTGjson
-from readTGhtml import readTGhtml
-from logs import log_event as log_event_hf
+from hand_user_files.readWAtxt import readWAtxt
+from hand_user_files.readTGjson import readTGjson
+from hand_user_files.readTGhtml import readTGhtml
+from hand_logs.mylogger import Logger, LOG_FILE
+import logging
+
+logger = Logger('app_logger', LOG_FILE, level=logging.INFO)
 
 def log_event(message):
-    log_event_hf(f"FROM HAND_FILES: {message}")
+    logger.info(f"FROM HAND_FILES: {message}")
 
 def hand_names(names):
     name_code = {}
@@ -70,17 +73,17 @@ def content_pre_process(file_obj, anonymize_names=True, save_datetime=False, max
             return None, None
         if file_ext == "json":
             log_event("Определен тип файла: JSON")
-            df, all_tokens_len = readTGjson(file_obj)
+            df = readTGjson(file_obj)
         elif file_ext == "html":
             log_event("Определен тип файла: HTML")
-            df, all_tokens_len = readTGhtml(file_obj)
+            df = readTGhtml(file_obj)
         elif file_ext == "txt":
             log_event("Определен тип файла: TXT")
-            df, all_tokens_len = readWAtxt(file_obj)
+            df = readWAtxt(file_obj)
         else:
             log_event('Ожидается объект BytesIO')
             return None, None
-        if df is None or df.empty or all_tokens_len is None:
+        if df is None or df.empty:
             log_event('Не удалось прочитать файл')
             return None, None
         if 'Name' not in df.columns:
@@ -93,7 +96,6 @@ def content_pre_process(file_obj, anonymize_names=True, save_datetime=False, max
         enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
         content = deque()
         len_tokens = 0
-        res_len_tokens = all_tokens_len // 100 * max_len_context
         start_date = df['Date'].iloc[-1] - pd.Timedelta(hours=time_choise)
         for index in df.index[::-1]:
             new_content = (name_code[df.loc[index, 'Name']] if anonymize_names else df.loc[index, 'Name']) +\
@@ -102,7 +104,7 @@ def content_pre_process(file_obj, anonymize_names=True, save_datetime=False, max
             if not re.sub(r'[ \n]', '' ,new_content.split(': ')[-1]):
                 continue
             new_len = len(enc.encode(new_content))
-            if (new_len + len_tokens > res_len_tokens) or (df.loc[index, 'Date'] < start_date):
+            if (new_len + len_tokens > max_len_context) or (df.loc[index, 'Date'] < start_date):
                 break
             content.appendleft(new_content)
             len_tokens += new_len

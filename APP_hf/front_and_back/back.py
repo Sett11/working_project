@@ -1,10 +1,13 @@
 from fastapi import FastAPI, Form, File, UploadFile
-from hand_files import content_pre_process
+from hand_user_files.hand_files import content_pre_process
 import uvicorn
-from logs import log_event as log_event_hf
+from hand_logs.mylogger import Logger, LOG_FILE
+import logging
+
+logger = Logger('app_logger', LOG_FILE, level=logging.INFO)
 
 def log_event(message):
-    log_event_hf(f"FROM BACK: {message}")
+    logger.info(f"FROM BACK: {message}")
 
 app = FastAPI()
 
@@ -17,7 +20,6 @@ async def upload_file(
     time_choise: str = Form(...)
 ):
     try:
-        # Сначала читаем файл асинхронно
         file_content = await file.read()
         text, code_name = content_pre_process(file_content, anonymize_names, save_datetime, max_len_context, time_choise)
         if text is None:
