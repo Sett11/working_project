@@ -12,7 +12,7 @@ def ensure_log_directory(log_file):
     # Проверяем, существует ли директория для логов
     if not os.path.exists(log_dir):
         # Если директории нет — создаём её
-        os.makedirs(log_dir)
+        os.makedirs(log_dir, exist_ok=True)
 
 class Logger(logging.Logger):
     """

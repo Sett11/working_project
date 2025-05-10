@@ -17,11 +17,11 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf ~/.cache/pip/*
 
-# Создание непривилегированного пользователя
+# Создание непривилегированного пользователя и настройка прав
 RUN useradd -m -u 1000 botuser && \
     mkdir -p /app/logs /app/user_data /app/utils /app/steps /app/db /app/prompts && \
     chown -R botuser:botuser /app && \
-    chmod -R 755 /app
+    chmod -R 777 /app/logs /app/user_data /app/db
 
 # Копирование кода приложения
 COPY --chown=botuser:botuser . .

@@ -1,25 +1,44 @@
-# Игнорируем виртуальные окружения
-.venv/
-.venv1/
-venv2/
-user_data/
-
-# Игнорируем файлы конфигурации IDE
-.idea/
-*.iml
-
-# Игнорируем файлы логов
-.logs/
-
-# Игнорируем файлы данных пользователей
-user_data/
-user_data.json
-
-# Игнорируем временные файлы
-*.pyc
+# Python
 __pycache__/
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Игнорируем файлы окружения
+# Environments
 .env
+.venv
+venv/
+ENV/
+
+# Logs
+logs/
+*.log
+
+# Database
+db/*.db
+db/*.sqlite3
+
+# User data
+user_data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo 

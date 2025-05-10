@@ -1,4 +1,4 @@
-version: '3.9'
+version: '3.7'
 
 services:
   bot:
@@ -19,14 +19,8 @@ services:
       - BASE_URL=${BASE_URL}
       - MAX_REQUESTS_PER_DAY=${MAX_REQUESTS_PER_DAY}
       - MAX_REQUESTS_PER_USER=${MAX_REQUESTS_PER_USER}
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
+    mem_limit: 512M
+    cpus: 0.5
     security_opt:
       - no-new-privileges:true
     tmpfs:
@@ -48,6 +42,3 @@ services:
 networks:
   bot_net:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
