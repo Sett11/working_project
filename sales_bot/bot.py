@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from utils.mylogger import Logger
-from utils.llm import OpenAIClient
+from utils.llm import AsyncOpenAIClient
 from db.database import Database
 
 load_dotenv()
@@ -48,7 +48,7 @@ class BotHandler:
         self.prompts = {}
         self.user_sessions = {}
         self.db = Database()
-        self.llm_client = OpenAIClient(
+        self.llm_client = AsyncOpenAIClient(
             model_name=GPT_MODEL,
             api_key=OPENAI_API_KEY,
             base_url=BASE_URL
@@ -96,7 +96,7 @@ class BotHandler:
             await update.message.reply_text("⚠️ Произошла ошибка при отправке сообщения. Попробуйте позже.")
 
     async def ask_gpt(self, system_prompt: str, user_prompt: str, request_type: str, user_id: int):
-        """Асинхронный запрос к OpenAI через OpenAIClient"""
+        """Асинхронный запрос к OpenAI через AsyncOpenAIClient"""
         try:
             # Проверка лимитов
             daily_ok, total_ok = await self.db.check_rate_limit(user_id)
@@ -121,15 +121,13 @@ class BotHandler:
                 {"role": "user", "content": user_prompt}
             ]
             
-            # Выполнение запроса через OpenAIClient
-            result = await asyncio.to_thread(
-                self.llm_client.generate,
+            # Выполнение запроса через AsyncOpenAIClient
+            content, input_tokens, output_tokens = await self.llm_client.generate(
                 messages=messages,
                 temperature=0.7,
                 max_tokens=2048
             )
             
-            content, input_tokens, output_tokens = result
             processing_time = (datetime.now() - start_time).total_seconds()
             
             # Если получили сообщение об ошибке (начинается с ⚠️)

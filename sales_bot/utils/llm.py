@@ -1,13 +1,12 @@
-import openai
-import time
-from openai import RateLimitError, APIError, OpenAIError
+import asyncio
+from openai import RateLimitError, APIError, OpenAIError, AsyncOpenAI
 from utils.mylogger import Logger
 
 logger = Logger('LLM_OPENAI', 'llmcall.log')
 
-class OpenAIClient:
+class AsyncOpenAIClient:
     def __init__(self, model_name: str, api_key: str, base_url: str):
-        self.client = openai.OpenAI(
+        self.client = AsyncOpenAI(
             base_url=base_url,
             api_key=api_key,
             default_headers={
@@ -20,7 +19,7 @@ class OpenAIClient:
         )
         self.model_name = model_name
 
-    def generate(
+    async def generate(
         self,
         messages: list,
         max_retries: int = 3,
@@ -30,7 +29,7 @@ class OpenAIClient:
         idop: int = 0
     ):
         """
-        Вызывает OpenAI API с обработкой исключений.
+        Асинхронно вызывает OpenAI API с обработкой исключений.
         
         :param messages: Список сообщений в формате OpenAI
         :param max_retries: Максимальное количество попыток
@@ -43,7 +42,7 @@ class OpenAIClient:
         
         while retries < max_retries:
             try:
-                response = self.client.chat.completions.create(
+                response = await self.client.chat.completions.create(
                     model=self.model_name,
                     messages=messages,
                     max_tokens=max_tokens,
@@ -104,12 +103,12 @@ class OpenAIClient:
 
                 logger.info(f"Final content: {content}")
                 logger.info(f"Tokens: prompt={prompt_tokens}, completion={completion_tokens}")
-                return (content, prompt_tokens, completion_tokens)
+                return content, prompt_tokens, completion_tokens
             
             except RateLimitError as e:
                 logger.warning(f"Rate limit exceeded. Retrying in {delay} seconds...")
                 retries += 1
-                time.sleep(delay)
+                await asyncio.sleep(delay)
             
             except (APIError, OpenAIError) as e:
                 logger.error(f"API Error: {e}")
