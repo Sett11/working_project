@@ -4,7 +4,7 @@ from utils.mylogger import Logger
 
 logger = Logger('LLM_OPENAI', 'llmcall.log')
 
-class AsyncOpenAIClient:
+class OpenAIClient:
     def __init__(self, model_name: str, api_key: str, base_url: str):
         self.client = AsyncOpenAI(
             base_url=base_url,
@@ -23,7 +23,7 @@ class AsyncOpenAIClient:
         self,
         messages: list,
         max_retries: int = 3,
-        delay: int = 600,
+        delay: int = 10,
         temperature: float = 0.3,
         max_tokens: int = 2048,
         idop: int = 0
