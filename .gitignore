@@ -1,24 +1,59 @@
-# Игнорируем виртуальные окружения
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py.class
+
+# Environments
+.env
+.venv
+env/
 venv/
+
+# Logs
+*.log
+
+# Документы
+*.pdf
+*.txt
+*.docx
+*.pptx
+*.xlsx
+*.xls
+*.csv
+*.json
+*.yaml
+
+# Игнорируем файлы окружения
+.env
 
 # Игнорируем файлы конфигурации IDE
 .idea/
 *.iml
 
 # Игнорируем файлы логов
-.logs/
+*.log
 
 # Игнорируем файлы данных пользователей
 user_data/
 user_data.json
 
 # Игнорируем временные файлы
-*.pyc
-__pycache__/
-*.pyo
-*.pyd
-*.log
-*.pdf
+*.tmp
+*.tmp.*
+*.tmp_*
+*.tmp_*.*
 
-# Игнорируем файлы окружения
-.env
+# Игнорируем файлы конфигурации
+config.py
+
+# Игнорируем изображения
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+
+
