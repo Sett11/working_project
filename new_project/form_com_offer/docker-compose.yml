@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    ports:
+      - "7860:7860"  # Порт Gradio
+    depends_on:
+      - db
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+volumes:
+  postgres_data:
