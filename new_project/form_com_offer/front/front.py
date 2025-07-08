@@ -1,11 +1,13 @@
 import gradio as gr
-from selection.aircon_selector import get_filtered_aircons
-from selection.materials_calculator import get_complectations_for_cond
-from utils.pdf_generator import create_kp_pdf
+import requests  # Импортируем requests для HTTP-запросов
+import json
 from utils.mylogger import Logger
-from db.crud import save_client_data
 
-logger = Logger("app", "logs")
+# Инициализация логгера для фронтенда
+logger = Logger("front", "logs/front.log")
+
+# Адрес нашего FastAPI бэкенда
+BACKEND_URL = "http://localhost:8000"
 
 
 def generate_kp(name,
@@ -18,22 +20,62 @@ def generate_kp(name,
                 discount,
                 wifi,
                 inverter,
+                price, # Добавил price, так как он был в интерфейсе
                 x1,
                 x2,
                 x3,
                 brand):
-    """Основная функция: сбор данных, подбор кондиционеров, генерация КП."""
-    # Сохраняем данные клиента в БД
-    client_id = save_client_data(name, phone, mail, address, date, area, type_room, discount)
+    """
+    Отправляет запрос на бэкенд для генерации КП и возвращает результат.
+    """
+    logger.info(f"Получен запрос на генерацию КП для клиента: {name}")
     
-    # Подбираем кондиционеры по параметрам
-    aircons = get_filtered_aircons(area, type_room, wifi, inverter, x1, x2, x3, brand)
-    aircons_list = "\n".join([f"{item['model']} ({item['price']} руб.)" for item in aircons])
+    # Формируем данные для отправки на бэкенд
+    payload = {
+        "client_data": {
+            "name": name,
+            "phone": phone,
+            "mail": mail,
+            "address": address,
+            "date": date
+        },
+        "order_params": {
+            "area": area,
+            "type_room": type_room,
+            "discount": discount
+        },
+        "aircon_params": {
+            "wifi": wifi,
+            "inverter": inverter,
+            "price_limit": price,
+            "brand": brand
+        }
+    }
     
-    # Генерация PDF
-    pdf_path = create_kp_pdf(client_id, aircons)
-    logger.info("КП сгенерировано")
-    return aircons_list, pdf_path
+    try:
+        # Вместо прямого вызова делаем запрос к API
+        # TODO: Реализовать этот эндпоинт на бэкенде
+        # response = requests.post(f"{BACKEND_URL}/generate_commercial_offer/", json=payload)
+        # response.raise_for_status()  # Проверка на ошибки HTTP
+        
+        # data = response.json()
+        # aircons_list = data.get("aircons_list", "")
+        # pdf_path = data.get("pdf_path", None)
+
+        # ВРЕМЕННАЯ ЗАГЛУШКА, пока нет эндпоинта
+        logger.warning("Используется временная заглушка! API эндпоинт не реализован.")
+        aircons_list = "Тут будут кондиционеры (API не готово)"
+        pdf_path = None # Нужно будет получать путь к файлу от бэкенда
+
+        logger.info(f"КП для клиента {name} успешно сформировано (заглушка).")
+        return aircons_list, pdf_path
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ошибка при обращении к бэкенду: {e}", exc_info=True)
+        return f"Ошибка сервера: {e}", None
+    except Exception as e:
+        logger.error(f"Непредвиденная ошибка при генерации КП: {e}", exc_info=True)
+        return f"Внутренняя ошибка: {e}", None
 
 
 with gr.Blocks(title="Автоматизация продаж кондиционеров", theme="ocean") as app:
@@ -52,7 +94,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     with gr.Tab("Кондиционер"):
         wifi = gr.Checkbox(label="Wi-Fi управление")
         inverter = gr.Checkbox(label="Инверторный компрессор")
-        price = gr.Textbox(label="Верхний п��рог стоимости")
+        price = gr.Textbox(label="Верхний порог стоимости")
         x1 = gr.Textbox(label="Параметр Х1")
         x2 = gr.Textbox(label="Параметр Х2")
         x3 = gr.Textbox(label="Параметр Х3")
@@ -76,6 +118,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 discount,
                 wifi,
                 inverter,
+                price, # Добавил price
                 x1,
                 x2,
                 x3,
@@ -86,5 +129,5 @@ with gr.Blocks(title="Автоматизация продаж кондицион
 
 
 if __name__ == "__main__":
-    logger.info("Приложение запущено")
+    logger.info("Gradio интерфейс запускается")
     app.launch(server_port=7860, server_name="localhost",auth=("admin","123password"))
