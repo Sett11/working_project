@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Text
+from sqlalchemy import (Column, Integer, String, Float, ForeignKey, DateTime,
+                        Text, Table)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -7,49 +8,97 @@ from utils.mylogger import Logger
 # Инициализация логгера
 logger = Logger(name=__name__, log_file="db.log")
 
+# --- Таблицы связей (Мно��ие-ко-многим) ---
+
+order_air_conditioner_association = Table(
+    'order_air_conditioner', Base.metadata,
+    Column('order_id', Integer, ForeignKey('orders.id'), primary_key=True),
+    Column('air_conditioner_id', Integer, ForeignKey('air_conditioners.id'), primary_key=True)
+)
+
+order_component_association = Table(
+    'order_component', Base.metadata,
+    Column('order_id', Integer, ForeignKey('orders.id'), primary_key=True),
+    Column('component_id', Integer, ForeignKey('components.id'), primary_key=True)
+)
+
+
+# --- Основные модели ---
+
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    role = Column(String)  # Например, 'manager', 'installer'
+    orders = relationship("Order", back_populates="manager")
+
+
+class Client(Base):
+    __tablename__ = 'clients'
+    id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String, index=True)
+    phone = Column(String, unique=True, index=True)
+    email = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    orders = relationship("Order", back_populates="client")
+
+
 class Order(Base):
     __tablename__ = 'orders'
     id = Column(Integer, primary_key=True, index=True)
-    customer_name = Column(String, index=True)
-    customer_address = Column(String)
-    customer_phone = Column(String)
-    customer_email = Column(String)
-    customer_telegram = Column(String)
-    room_type = Column(String)
-    area = Column(Float)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    visit_date = Column(DateTime(timezone=True))
     status = Column(String, default='forming')
-    discount = Column(Float, default=0.0)
-    # Связь с коммерческим предложением (если оно хранится отдельно)
-    # commercial_offer_id = Column(Integer, ForeignKey('commercial_offers.id'))
-    # commercial_offer = relationship("CommercialOffer")
+    discount = Column(Integer, default=0)
+    room_type = Column(String, nullable=True)
+    room_area = Column(Float, nullable=True)
+    installer_data = Column(Text, nullable=True)  # Можно хранить JSON как текст
+    pdf_path = Column(String, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    visit_date = Column(DateTime(timezone=True), nullable=True)
+
+    # --- Связи ---
+    client_id = Column(Integer, ForeignKey('clients.id'))
+    client = relationship("Client", back_populates="orders")
+
+    manager_id = Column(Integer, ForeignKey('users.id'))
+    manager = relationship("User", back_populates="orders")
+
+    air_conditioners = relationship("AirConditioner", secondary=order_air_conditioner_association)
+    components = relationship("Component", secondary=order_component_association)
+
 
 class AirConditioner(Base):
     __tablename__ = 'air_conditioners'
     id = Column(Integer, primary_key=True, index=True)
-    brand = Column(String, index=True)
-    model = Column(String, unique=True, index=True)
-    power_consumption = Column(String)
-    cooling_capacity_btu = Column(Integer)
-    cooling_capacity_kw = Column(Float)
-    heating_capacity_btu = Column(Integer)
-    heating_capacity_kw = Column(Float)
-    inverter = Column(String)
-    noise_level_indoor = Column(String)
-    noise_level_outdoor = Column(String)
-    price = Column(Float)
-    image_url = Column(String)
-    description = Column(Text)
+    model_name = Column(String, unique=True, index=True)
+    brand = Column(String, index=True, nullable=True)
+    series = Column(String, nullable=True)
+    cooling_power_kw = Column(Float, nullable=True)
+    heating_power_kw = Column(Float, nullable=True)
+    pipe_diameter = Column(String, nullable=True)
+    energy_efficiency_class = Column(String, nullable=True)
+    retail_price_byn = Column(Float, nullable=True)
+    description = Column(Text, nullable=True)
+    air_description = Column(Text, nullable=True)
+    representative_image = Column(String, nullable=True)
+
 
 class Component(Base):
     __tablename__ = 'components'
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    type = Column(String, index=True)
-    characteristics = Column(String)
-    price = Column(Float)
-    image_url = Column(String)
-    description = Column(Text)
+    category = Column(String, index=True)
+    price = Column(Float, nullable=True)
+    size = Column(String, nullable=True)
+    material = Column(String, nullable=True)
+    characteristics = Column(String, nullable=True)
+    currency = Column(String, default="BYN")
+    standard = Column(String, nullable=True)
+    manufacturer = Column(String, nullable=True)
+    in_stock = Column(String, default=True)
+    description = Column(Text, nullable=True)
+    image_url = Column(String, nullable=True)
 
-logger.info("Модели базы данных (Order, AirConditioner, Component) успешно определены.")
+
+logger.info("Все модели базы данных (User, Client, Order, AirConditioner, Component) успешно определены.")
