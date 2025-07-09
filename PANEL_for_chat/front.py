@@ -83,4 +83,4 @@ with gr.Blocks(title="Chat with File Upload", theme=gr.themes.Soft()) as demo:
 
 clear_logs()
 log_event("APP_START", "Application started")
-demo.launch(server_name="0.0.0.0", server_port=7860, share=False, auth=("admin", "password123"))
+demo.launch(server_name="localhost", server_port=7860, share=False, auth=("admin", "password123"))
