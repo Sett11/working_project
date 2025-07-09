@@ -71,7 +71,7 @@ def generate_kp(name, phone, mail, address, date, area, type_room, discount, wif
 
         logger.info(f"КП для клиента {name} успешно сформировано.")
         return formatted_list, pdf_path
-
+        
     except requests.exceptions.RequestException as e:
         error_message = f"Не удалось связаться с бэкендом: {e}"
         logger.error(error_message, exc_info=True)
@@ -80,6 +80,56 @@ def generate_kp(name, phone, mail, address, date, area, type_room, discount, wif
         error_message = f"Произошла внутренняя ошибка: {e}"
         logger.error(error_message, exc_info=True)
         return error_message, None
+
+def select_components(category, price_limit):
+    """
+    Подбирает комплектующие по заданным параметрам.
+    """
+    logger.info(f"Подбор комплектующих: категория={category}, цена до {price_limit} BYN")
+    
+    try:
+        # Формируем параметры для запроса
+        params = {
+            "category": category if category != "Все категории" else None,
+            "price_limit": price_limit
+        }
+        
+        # Отправляем запрос на бэкенд
+        response = requests.post(f"{BACKEND_URL}/api/select_components/", json=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Проверяем на ошибки
+        if "error" in data:
+            logger.error(f"Ошибка от бэкенда: {data['error']}")
+            return f"Ошибка: {data['error']}"
+        
+        components_list = data.get("components_list", [])
+        
+        # Форматируем список комплектующих для отображения
+        if isinstance(components_list, list) and components_list:
+            formatted_list = f"Найдено {data.get('total_count', len(components_list))} подходящих комплектующих:\n\n"
+            for i, component in enumerate(components_list, 1):
+                formatted_list += f"{i}. {component.get('name', 'N/A')}\n"
+                formatted_list += f"   Категория: {component.get('category', 'N/A')}\n"
+                formatted_list += f"   Размер: {component.get('size', 'N/A')}\n"
+                formatted_list += f"   Материал: {component.get('material', 'N/A')}\n"
+                formatted_list += f"   Цена: {component.get('price', 'N/A')} {component.get('currency', 'BYN')}\n"
+                formatted_list += f"   Характеристики: {component.get('characteristics', 'N/A')}\n\n"
+        else:
+            formatted_list = "Подходящих комплектующих не найдено."
+
+        logger.info(f"Подбор комплектующих завершен успешно.")
+        return formatted_list
+        
+    except requests.exceptions.RequestException as e:
+        error_message = f"Не удалось связаться с бэкендом: {e}"
+        logger.error(error_message, exc_info=True)
+        return error_message
+    except Exception as e:
+        error_message = f"Произошла внутренняя ошибка: {e}"
+        logger.error(error_message, exc_info=True)
+        return error_message
 
 # Определяем интерфейс Gradio
 # Мы не запускаем его здесь, а просто создаем объект `app`
@@ -123,6 +173,20 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             num_tvs = gr.Slider(0, 5, value=0, step=1, label="Количество телевизоров")
             other_power = gr.Slider(0, 2000, value=0, step=50, label="Мощность прочей техники (Вт)")
 
+    with gr.Tab("Комплектующие"):
+        gr.Markdown("### Подбор комплектующих для монтажа")
+        with gr.Row():
+            components_category = gr.Dropdown([
+                "Все категории", "Воздуховоды", "Гибкие соединения", "Клапаны", 
+                "Материалы", "Оборудование", "Отводы и повороты", "Переходы", 
+                "Регулирующие элементы", "Соединительные элементы", "Тройники"
+            ], label="Категория комплектующих", value="Все категории")
+            components_price_limit = gr.Slider(100, 10000, value=2000, label="Максимальная цена (BYN)")
+        
+        with gr.Row():
+            components_output = gr.Textbox(label="Подходящие комплектующие", interactive=False, lines=10, max_lines=20)
+            select_components_btn = gr.Button("Подобрать комплектующие", variant="secondary")
+    
     with gr.Tab("Результат"):
         aircons_output = gr.Textbox(label="Подходящие модели", interactive=False, lines=15, max_lines=30)
         pdf_output = gr.File(label="Скачать коммерческое предложение")
@@ -133,4 +197,10 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
                 ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand],
         outputs=[aircons_output, pdf_output]
+    )
+    
+    select_components_btn.click(
+        fn=select_components,
+        inputs=[components_category, components_price_limit],
+        outputs=[components_output]
     )

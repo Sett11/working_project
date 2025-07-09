@@ -98,3 +98,65 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
     except Exception as e:
         logger.error(f"Ошибка при формировании КП: {str(e)}", exc_info=True)
         return {"error": f"Ошибка при формировании КП: {str(e)}"}
+
+# --- Эндпоинт для подбора комплектующих ---
+@app.post("/api/select_components/")
+def select_components_endpoint(payload: dict, db: Session = Depends(get_session)):
+    """
+    Эндпоинт для подбора комплектующих по параметрам.
+    """
+    logger.info("Получен запрос на эндпоинт /api/select_components/")
+    logger.debug(f"Содержимое запроса: {payload}")
+
+    try:
+        # Извлекаем параметры из payload
+        category = payload.get("category")
+        price_limit = payload.get("price_limit", 10000)
+        
+        logger.info(f"Подбор комплектующих: категория={category}, цена до {price_limit} BYN")
+        
+        # Формируем фильтр для запроса
+        filters = {}
+        if category and category != "Все категории":
+            filters["category"] = category
+        if price_limit:
+            filters["price_limit"] = price_limit
+        
+        # Получаем комплектующие из БД
+        components = crud.get_components_by_filters(db, filters)
+        
+        logger.info(f"Найдено {len(components)} подходящих комплектующих")
+        
+        # Формируем список комплектующих для ответа
+        components_list = []
+        for component in components:
+            component_info = {
+                "id": component.id,
+                "name": component.name,
+                "category": component.category,
+                "size": component.size,
+                "material": component.material,
+                "characteristics": component.characteristics,
+                "price": component.price,
+                "currency": component.currency,
+                "standard": component.standard,
+                "manufacturer": component.manufacturer,
+                "in_stock": component.in_stock,
+                "description": component.description
+            }
+            components_list.append(component_info)
+        
+        # Формируем ответ
+        response_data = {
+            "components_list": components_list,
+            "total_count": len(components),
+            "category": category,
+            "price_limit": price_limit
+        }
+        
+        logger.info(f"Подбор комплектующих завершен успешно")
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"Ошибка при подборе комплектующих: {str(e)}", exc_info=True)
+        return {"error": f"Ошибка при подборе комплектующих: {str(e)}"}

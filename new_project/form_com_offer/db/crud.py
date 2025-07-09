@@ -55,6 +55,29 @@ def get_components(db: Session, skip: int = 0, limit: int = 100):
     logger.debug(f"Запрос на получение списка комплектующих (skip={skip}, limit={limit})")
     return db.query(models.Component).offset(skip).limit(limit).all()
 
+def get_components_by_filters(db: Session, filters: dict):
+    """Получение комплектующих по фильтрам."""
+    logger.debug(f"Запрос на получение комплектующих с фильтрами: {filters}")
+    
+    query = db.query(models.Component)
+    
+    # Применяем фильтры
+    if filters.get("category"):
+        query = query.filter(models.Component.category == filters["category"])
+    
+    if filters.get("price_limit"):
+        query = query.filter(models.Component.price <= filters["price_limit"])
+    
+    # Фильтруем только товары в наличии
+    query = query.filter(models.Component.in_stock == True)
+    
+    # Сортируем по цене (от дешевых к дорогим)
+    query = query.order_by(models.Component.price.asc())
+    
+    components = query.all()
+    logger.info(f"Найдено {len(components)} комплектующих по заданным фильтрам")
+    return components
+
 # --- Order CRUD ---
 
 def create_order(db: Session, order: schemas.OrderCreate) -> models.Order:
