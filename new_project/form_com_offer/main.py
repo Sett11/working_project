@@ -1,14 +1,13 @@
-import uvicorn
-from back.back import app
-from utils.mylogger import Logger
-from db import models
-from db.database import engine
+from front.front import interface, logger
 
-# Создаем все таблицы в базе данных
-models.Base.metadata.create_all(bind=engine)
-
-logger = Logger("main", "logs/main.log")
+# Основная точка входа в приложение фронтенда.
+# Мы импортируем готовый интерфейс из front.py и запускаем его.
 
 if __name__ == "__main__":
-    logger.info("Запуск FastAPI-сервера")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    logger.info("Запуск Gradio интерфейса...")
+    
+    # Запускаем сервер Gradio, чтобы он был доступен извне контейнера.
+    # Убрана аутентификация для простоты на время разработки.
+    interface.launch(server_name="0.0.0.0", server_port=7860)
+    
+    logger.info("Gradio интерфейс остановлен.")

@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from db import models
 from utils.mylogger import Logger
 
-logger = Logger("materials_calculator", "logs/materials_calculator.log")
+logger = Logger("materials_calculator", "materials_calculator.log")
 
 def calculate_materials(db: Session, order: models.Order, selected_aircons: list[models.AirConditioner]) -> list[models.Component]:
     """

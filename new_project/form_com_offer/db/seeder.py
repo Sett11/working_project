@@ -4,10 +4,18 @@ from . import models, schemas
 from .database import SessionLocal, engine
 from utils.mylogger import Logger
 
-logger = Logger("seeder", "logs/seeder.log")
+logger = Logger(name=__name__, log_file="db.log")
 
 # Создаем все таблицы (на всякий случай, если еще не созданы)
-models.Base.metadata.create_all(bind=engine)
+logger.info("Проверка и создание таблиц в базе данных...")
+try:
+    models.Base.metadata.create_all(bind=engine)
+    logger.info("Проверка и создание таблиц завершены.")
+except Exception as e:
+    logger.error(f"Ошибка при создании таблиц: {e}", exc_info=True)
+    # Выход, если таблицы не могут быть созданы
+    exit()
+
 
 def seed_data():
     """
@@ -21,14 +29,15 @@ def seed_data():
             logger.info("База данных уже содержит данные. Наполнение не требуется.")
             return
 
-        logger.info("Начинается наполнение базы данных...")
+        logger.info("Начинается процесс наполнения базы данных...")
 
         # 1. Наполнение таблицы кондиционеров
-        logger.info("Загрузка данных из airs_catalog.json...")
+        logger.info("Загрузка данных из 'docs/airs_catalog.json'...")
         with open('docs/airs_catalog.json', 'r', encoding='utf-8') as f:
             airs_data = json.load(f)
         
-        for air_con_data in airs_data.get("air_conditioners", []):
+        air_conditioners_to_add = airs_data.get("air_conditioners", [])
+        for air_con_data in air_conditioners_to_add:
             # Создаем объект Pydantic для валидации
             air_con_schema = schemas.AirConditionerCreate(
                 model_name=air_con_data.get("model_name"),
@@ -47,21 +56,22 @@ def seed_data():
             db_air_con = models.AirConditioner(**air_con_schema.model_dump())
             db.add(db_air_con)
         
-        logger.info(f"Добавлено {len(airs_data.get('air_conditioners', []))} кондиционеров.")
         db.commit()
+        logger.info(f"Добавлено {len(air_conditioners_to_add)} кондиционеров.")
 
         # 2. Наполнение таблицы комплектующих
-        logger.info("Загрузка данных из components_catalog.json...")
+        logger.info("Загрузка данных из 'docs/components_catalog.json'...")
         with open('docs/components_catalog.json', 'r', encoding='utf-8') as f:
             components_data = json.load(f)
 
-        for comp_data in components_data.get("components", []):
+        components_to_add = components_data.get("components", [])
+        for comp_data in components_to_add:
             comp_schema = schemas.ComponentCreate(**comp_data)
             db_comp = models.Component(**comp_schema.model_dump())
             db.add(db_comp)
             
-        logger.info(f"Добавлено {len(components_data.get('components', []))} комплектующих.")
         db.commit()
+        logger.info(f"Добавлено {len(components_to_add)} комплектующих.")
 
         logger.info("Наполнение базы данных успешно завершено.")
 
@@ -69,6 +79,7 @@ def seed_data():
         logger.error(f"Произошла ошибка во время наполнения БД: {e}", exc_info=True)
         db.rollback()
     finally:
+        logger.debug("Закрытие сессии базы данных.")
         db.close()
 
 if __name__ == "__main__":

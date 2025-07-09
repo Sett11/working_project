@@ -1,6 +1,10 @@
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional, Any
 from datetime import date
+from utils.mylogger import Logger
+
+# Инициализация логгера
+logger = Logger(name=__name__, log_file="db.log")
 
 # --- Base Schemas ---
 # Общая конфигурация для всех схем, которые читают данные из БД
@@ -101,3 +105,5 @@ class CommercialOfferPayload(BaseModel):
     client_data: ClientCreate
     order_params: dict # area, type_room, discount
     aircon_params: dict # wifi, inverter, price_limit, brand
+
+logger.info("Pydantic-схемы успешно определены.")

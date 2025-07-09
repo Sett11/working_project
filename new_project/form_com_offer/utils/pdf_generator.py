@@ -9,7 +9,7 @@ from reportlab.lib.units import inch
 from db import models
 from utils.mylogger import Logger
 
-logger = Logger("pdf_generator", "logs/pdf_generator.log")
+logger = Logger("pdf_generator", "pdf_generator.log")
 
 def create_kp_pdf(order: models.Order, aircons: list[models.AirConditioner], components: list[models.Component]) -> str:
     """
