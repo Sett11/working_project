@@ -1,5 +1,5 @@
 from sqlalchemy import (Column, Integer, String, Float, ForeignKey, DateTime,
-                        Text, Table)
+                        Text, Table, Boolean)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -82,6 +82,9 @@ class AirConditioner(Base):
     description = Column(Text, nullable=True)
     air_description = Column(Text, nullable=True)
     representative_image = Column(String, nullable=True)
+    is_inverter = Column(Boolean, default=False)
+    has_wifi = Column(Boolean, default=False)
+    mount_type = Column(String, nullable=True)
 
 
 class Component(Base):

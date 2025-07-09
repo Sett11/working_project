@@ -38,6 +38,30 @@ def seed_data():
         
         air_conditioners_to_add = airs_data.get("air_conditioners", [])
         for air_con_data in air_conditioners_to_add:
+            # Анализируем описание для извлечения дополнительной информации
+            air_description = air_con_data.get("air_description", "").lower()
+            
+            # Определяем наличие инвертора
+            is_inverter = False
+            if "инвертор" in air_description or "inverter" in air_description:
+                is_inverter = True
+                logger.debug(f"Обнаружен инвертор в модели: {air_con_data.get('model_name')}")
+            
+            # Определяем наличие Wi-Fi
+            has_wifi = False
+            if "wi-fi" in air_description or "wifi" in air_description:
+                has_wifi = True
+                logger.debug(f"Обнаружен Wi-Fi в модели: {air_con_data.get('model_name')}")
+            
+            # Извлекаем тип монтажа
+            mount_type = None
+            mount_types = ["настенный", "кассетный", "потолочный", "напольный", "колонный"]
+            for mount in mount_types:
+                if mount in air_description:
+                    mount_type = mount
+                    logger.debug(f"Определен тип монтажа '{mount}' для модели: {air_con_data.get('model_name')}")
+                    break
+            
             # Создаем объект Pydantic для валидации
             air_con_schema = schemas.AirConditionerCreate(
                 model_name=air_con_data.get("model_name"),
@@ -50,7 +74,10 @@ def seed_data():
                 retail_price_byn=air_con_data.get("pricing", {}).get("retail_price_byn"),
                 description=air_con_data.get("description"),
                 air_description=air_con_data.get("air_description"),
-                representative_image=air_con_data.get("representative_image")
+                representative_image=air_con_data.get("representative_image"),
+                is_inverter=is_inverter,
+                has_wifi=has_wifi,
+                mount_type=mount_type
             )
             # Создаем объект модели SQLAlchemy
             db_air_con = models.AirConditioner(**air_con_schema.model_dump())

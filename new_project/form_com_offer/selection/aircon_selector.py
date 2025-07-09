@@ -126,17 +126,20 @@ def select_aircons(db: Session, params: dict) -> List[models.AirConditioner]:
             query = query.filter(models.AirConditioner.brand == params["brand"])
             logger.info(f"Применен фильтр по бренду: {params['brand']}")
         
-        # Фильтр по инвертору (если есть в модели)
+        # Фильтр по инвертору
         if "inverter" in params and params["inverter"] is not None:
-            # Предположим, что в модели есть поле 'has_inverter'
-            # query = query.filter(models.AirConditioner.has_inverter == params["inverter"])
-            logger.info(f"Фильтр по инвертору: {params['inverter']} (заглушка)")
+            query = query.filter(models.AirConditioner.is_inverter == params["inverter"])
+            logger.info(f"Применен фильтр по инвертору: {params['inverter']}")
         
-        # Фильтр по Wi-Fi (если есть в модели)
+        # Фильтр по Wi-Fi
         if "wifi" in params and params["wifi"] is not None:
-            # Предположим, что в модели есть поле 'has_wifi'
-            # query = query.filter(models.AirConditioner.has_wifi == params["wifi"])
-            logger.info(f"Фильтр по Wi-Fi: {params['wifi']} (заглушка)")
+            query = query.filter(models.AirConditioner.has_wifi == params["wifi"])
+            logger.info(f"Применен фильтр по Wi-Fi: {params['wifi']}")
+        
+        # Фильтр по типу монтажа
+        if "mount_type" in params and params["mount_type"] and params["mount_type"] != "Любой":
+            query = query.filter(models.AirConditioner.mount_type == params["mount_type"])
+            logger.info(f"Применен фильтр по типу монтажа: {params['mount_type']}")
         
         selected = query.all()
         logger.info(f"Подбор завершен. Найдено {len(selected)} моделей.")

@@ -9,7 +9,7 @@ logger = Logger(name=__name__, log_file="frontend.log")
 # Теперь он указывает на контейнер бэкенда, а не на localhost
 BACKEND_URL = "http://backend:8000"
 
-def generate_kp(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, x1, x2, x3, brand):
+def generate_kp(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, x1, x2, brand):
     """
     Отправляет запрос на бэкенд для генерации КП и возвращает результат.
     """
@@ -18,7 +18,7 @@ def generate_kp(name, phone, mail, address, date, area, type_room, discount, wif
     payload = {
         "client_data": {"full_name": name, "phone": phone, "email": mail, "address": address},
         "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": date},
-        "aircon_params": {"wifi": wifi, "inverter": inverter, "price_limit": price, "brand": brand}
+        "aircon_params": {"wifi": wifi, "inverter": inverter, "price_limit": price, "brand": brand, "mount_type": mount_type}
     }
     
     try:
@@ -74,9 +74,10 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             inverter = gr.Checkbox(label="Инверторный компрессор")
             wifi = gr.Checkbox(label="Wi-Fi управление")
         with gr.Row():
+            mount_type = gr.Dropdown(["Любой", "настенный", "кассетный", "потолочный", "напольный", "колонный"], 
+                                   label="Тип монтажа", value="Любой")
             x1 = gr.Textbox(label="Доп. параметр 1 (не используется)")
             x2 = gr.Textbox(label="Доп. параметр 2 (не используется)")
-            x3 = gr.Textbox(label="Доп. параметр 3 (не используется)")
 
     with gr.Tab("Результат"):
         aircons_output = gr.Textbox(label="Подходящие модели", interactive=False)
@@ -85,6 +86,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     
     generate_btn.click(
         fn=generate_kp,
-        inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, x1, x2, x3, brand],
+        inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, x1, x2, brand],
         outputs=[aircons_output, pdf_output]
     )
