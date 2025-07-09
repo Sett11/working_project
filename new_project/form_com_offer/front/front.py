@@ -9,34 +9,68 @@ logger = Logger(name=__name__, log_file="frontend.log")
 # Теперь он указывает на контейнер бэкенда, а не на localhost
 BACKEND_URL = "http://backend:8000"
 
-def generate_kp(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, x1, x2, brand):
+def generate_kp(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
+                ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand):
     """
     Отправляет запрос на бэкенд для генерации КП и возвращает результат.
     """
     logger.info(f"Получен запрос на генерацию КП для клиента: {name}")
     
+    # Преобразуем значения для расчета мощности
+    illumination_map = {"Слабая": 0, "Средняя": 1, "Сильная": 2}
+    activity_map = {"Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
+    
     payload = {
         "client_data": {"full_name": name, "phone": phone, "email": mail, "address": address},
         "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": date},
-        "aircon_params": {"wifi": wifi, "inverter": inverter, "price_limit": price, "brand": brand, "mount_type": mount_type}
+        "aircon_params": {
+            "wifi": wifi, 
+            "inverter": inverter, 
+            "price_limit": price, 
+            "brand": brand, 
+            "mount_type": mount_type,
+            # Параметры для расчета мощности
+            "area": area,
+            "ceiling_height": ceiling_height,
+            "illumination": illumination_map.get(illumination, 1),
+            "num_people": num_people,
+            "activity": activity_map.get(activity, 0),
+            "num_computers": num_computers,
+            "num_tvs": num_tvs,
+            "other_power": other_power
+        }
     }
     
     try:
         logger.info(f"Отправка запроса на эндпоинт /api/generate_offer/ на бэкенде.")
-        # TODO: Реализовать этот эндпоинт на бэкенде
-        # response = requests.post(f"{BACKEND_URL}/api/generate_offer/", json=payload)
-        # response.raise_for_status()
-        # data = response.json()
-        # aircons_list = data.get("aircons_list", "")
-        # pdf_path = data.get("pdf_path", None)
+        response = requests.post(f"{BACKEND_URL}/api/generate_offer/", json=payload)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Проверяем на ошибки
+        if "error" in data:
+            logger.error(f"Ошибка от бэкенда: {data['error']}")
+            return f"Ошибка: {data['error']}", None
+        
+        aircons_list = data.get("aircons_list", [])
+        pdf_path = data.get("pdf_path", None)
+        
+        # Форматируем список кондиционеров для отображения
+        if isinstance(aircons_list, list) and aircons_list:
+            formatted_list = f"Найдено {data.get('total_count', len(aircons_list))} подходящих кондиционеров:\n\n"
+            for i, aircon in enumerate(aircons_list, 1):
+                formatted_list += f"{i}. {aircon.get('brand', 'N/A')} {aircon.get('model_name', 'N/A')}\n"
+                formatted_list += f"   Мощность охлаждения: {aircon.get('cooling_power_kw', 'N/A')} кВт\n"
+                formatted_list += f"   Мощность обогрева: {aircon.get('heating_power_kw', 'N/A')} кВт\n"
+                formatted_list += f"   Цена: {aircon.get('retail_price_byn', 'N/A')} BYN\n"
+                formatted_list += f"   Инвертор: {'Да' if aircon.get('is_inverter') else 'Нет'}\n"
+                formatted_list += f"   Wi-Fi: {'Да' if aircon.get('has_wifi') else 'Нет'}\n"
+                formatted_list += f"   Тип монтажа: {aircon.get('mount_type', 'N/A')}\n\n"
+        else:
+            formatted_list = "Подходящих кондиционеров не найдено."
 
-        # ВРЕМЕННАЯ ЗАГЛУШКА
-        logger.warning("Используется временная заглушка! API эндпоинт /api/generate_offer/ не реализован.")
-        aircons_list = "Здесь будет список подходящих кондиционеров (API эндпоинт не готов)."
-        pdf_path = None
-
-        logger.info(f"КП для клиента {name} успешно сформировано (использована заглушка).")
-        return aircons_list, pdf_path
+        logger.info(f"КП для клиента {name} успешно сформировано.")
+        return formatted_list, pdf_path
 
     except requests.exceptions.RequestException as e:
         error_message = f"Не удалось связаться с бэкендом: {e}"
@@ -69,23 +103,34 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         
         gr.Markdown("### 3. Требования к кондиционеру")
         with gr.Row():
-            brand = gr.Dropdown(["Любой", "Mitsubishi", "Ballu", "Toshiba"], label="Бренд")
+            brand = gr.Dropdown(["Любой", "DANTEX", "VARIOUS"], label="Бренд")
             price = gr.Slider(1000, 10000, value=3000, label="Верхний порог стоимости (BYN)")
             inverter = gr.Checkbox(label="Инверторный компрессор")
             wifi = gr.Checkbox(label="Wi-Fi управление")
         with gr.Row():
             mount_type = gr.Dropdown(["Любой", "настенный", "кассетный", "потолочный", "напольный", "колонный"], 
                                    label="Тип монтажа", value="Любой")
-            x1 = gr.Textbox(label="Доп. параметр 1 (не используется)")
-            x2 = gr.Textbox(label="Доп. параметр 2 (не используется)")
+        
+        gr.Markdown("### 4. Дополнительные параметры для расчета мощности")
+        with gr.Row():
+            ceiling_height = gr.Slider(2.0, 5.0, value=2.7, step=0.1, label="Высота потолков (м)")
+            illumination = gr.Dropdown(["Слабая", "Средняя", "Сильная"], value="Средняя", label="Освещенность")
+            num_people = gr.Slider(1, 10, value=1, step=1, label="Количество людей")
+            activity = gr.Dropdown(["Сидячая работа", "Легкая работа", "Средняя работа", "Тяжелая работа", "Спорт"], 
+                                 value="Сидячая работа", label="Активность людей")
+        with gr.Row():
+            num_computers = gr.Slider(0, 10, value=0, step=1, label="Количество компьютеров")
+            num_tvs = gr.Slider(0, 5, value=0, step=1, label="Количество телевизоров")
+            other_power = gr.Slider(0, 2000, value=0, step=50, label="Мощность прочей техники (Вт)")
 
     with gr.Tab("Результат"):
-        aircons_output = gr.Textbox(label="Подходящие модели", interactive=False)
+        aircons_output = gr.Textbox(label="Подходящие модели", interactive=False, lines=15, max_lines=30)
         pdf_output = gr.File(label="Скачать коммерческое предложение")
         generate_btn = gr.Button("Сформировать КП", variant="primary")
     
     generate_btn.click(
         fn=generate_kp,
-        inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, x1, x2, brand],
+        inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
+                ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand],
         outputs=[aircons_output, pdf_output]
     )

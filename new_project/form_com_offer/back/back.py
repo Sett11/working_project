@@ -38,28 +38,63 @@ def get_all_air_conditioners(skip: int = 0, limit: int = 100, db: Session = Depe
 
 # --- Эндпоинт для генерации КП ---
 @app.post("/api/generate_offer/")
-def generate_offer_endpoint(payload: dict):
+def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
     """
     Эндпоинт для генерации коммерческого предложения.
-    ПОКА ЧТО ЯВЛЯЕТСЯ ЗАГЛУШКОЙ.
     """
     logger.info("Получен запрос на эндпоинт /api/generate_offer/")
     logger.debug(f"Содержимое запроса: {payload}")
 
-    # Здесь будет основная бизнес-логика:
-    # 1. Создание/поиск клиента в БД (crud.get_or_create_client)
-    # 2. Подбор кондиционеров по параметрам (selection.select_air_conditioner)
-    # 3. Расчет комплектующих (selection.materials_calculator)
-    # 4. Создание заказа в БД (crud.create_order)
-    # 5. Генерация PDF (utils.pdf_generator)
-    # 6. Сохранение PDF и привязка к заказу
-
-    logger.warning("Используется временная заглушка! Бизнес-логика не реализована.")
-    
-    # Возвращаем заглушечный ответ
-    response_data = {
-        "aircons_list": "Список кондиционеров из заглушки бэкенда.",
-        "pdf_path": None # Путь к сгенерированному PDF-файлу
-    }
-    
-    return response_data
+    try:
+        # Извлекаем данные из payload
+        client_data = payload.get("client_data", {})
+        order_params = payload.get("order_params", {})
+        aircon_params = payload.get("aircon_params", {})
+        
+        logger.info(f"Обработка запроса для клиента: {client_data.get('full_name', 'N/A')}")
+        
+        # 1. Создание/поиск клиента в БД
+        client = crud.get_client_by_phone(db, client_data.get("phone", ""))
+        if not client:
+            client_create = schemas.ClientCreate(**client_data)
+            client = crud.create_client(db, client_create)
+            logger.info(f"Создан новый клиент: {client.full_name}")
+        else:
+            logger.info(f"Найден существующий клиент: {client.full_name}")
+        
+        # 2. Подбор кондиционеров по параметрам
+        from selection.aircon_selector import select_aircons
+        selected_aircons = select_aircons(db, aircon_params)
+        
+        logger.info(f"Подобрано {len(selected_aircons)} кондиционеров")
+        
+        # 3. Формируем список кондиционеров для ответа
+        aircons_list = []
+        for aircon in selected_aircons:
+            aircon_info = {
+                "model_name": aircon.model_name,
+                "brand": aircon.brand,
+                "cooling_power_kw": aircon.cooling_power_kw,
+                "heating_power_kw": aircon.heating_power_kw,
+                "retail_price_byn": aircon.retail_price_byn,
+                "is_inverter": aircon.is_inverter,
+                "has_wifi": aircon.has_wifi,
+                "mount_type": aircon.mount_type,
+                "description": aircon.description
+            }
+            aircons_list.append(aircon_info)
+        
+        # 4. Формируем ответ
+        response_data = {
+            "aircons_list": aircons_list,
+            "total_count": len(selected_aircons),
+            "client_name": client.full_name,
+            "pdf_path": None  # Пока без PDF
+        }
+        
+        logger.info(f"КП успешно сформировано для клиента {client.full_name}")
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"Ошибка при формировании КП: {str(e)}", exc_info=True)
+        return {"error": f"Ошибка при формировании КП: {str(e)}"}
