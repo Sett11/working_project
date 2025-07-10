@@ -278,91 +278,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
 
     with gr.Tab("Комплектующие"):
         gr.Markdown("### Подбор комплектующих для монтажа")
-        catalog = load_components_catalog()
-        categories = catalog['categories']
-        components = catalog['components']
-        MAX_ROWS = 5
-        category_blocks = []
-        for cat in categories:
-            cat_components = [c for c in components if c['category'] == cat]
-            if not cat_components:
-                continue
-            comp_names = [c['name'] for c in cat_components]
-            comp_images = {}
-            for c in cat_components:
-                if c.get('has_image') and c.get('image_url'):
-                    abs_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', c['image_url']))
-                    comp_images[c['name']] = abs_path
-                else:
-                    comp_images[c['name']] = PLACEHOLDER_IMAGE
-            # Определяем тип поля: длина или количество
-            cat_lower = cat.lower()
-            if any(x in cat_lower for x in ['воздуховод', 'труба', 'гибкие соединения']):
-                value_label = 'Длина (м)'
-                value_precision = 0
-                value_min = 1
-            else:
-                value_label = 'Количество (шт)'
-                value_precision = 0
-                value_min = 1
-            with gr.Group() as cat_block:
-                gr.Markdown(f'#### {cat}')
-                row_name = []
-                row_image = []
-                row_value = []
-                row_remove = []
-                row_rows = []
-                for i in range(MAX_ROWS):
-                    with gr.Row(visible=(i==0)) as row:
-                        name = gr.Dropdown(comp_names, value=comp_names[0], label=f'Позиция {i+1}')
-                        image = gr.Image(value=comp_images[comp_names[0]], label='Фото', height=100, width=100)
-                        value = gr.Number(value=1, label=value_label, precision=value_precision, minimum=value_min)
-                        remove = gr.Button('Удалить', variant='stop', visible=(i!=0))
-                        row_name.append(name)
-                        row_image.append(image)
-                        row_value.append(value)
-                        row_remove.append(remove)
-                        row_rows.append(row)
-                add_btn = gr.Button('Ещё', variant='primary', visible=True)
-                # Обработчики событий
-                for i in range(MAX_ROWS):
-                    def dropdown_change(value, idx=i):
-                        img_path = comp_images.get(value, PLACEHOLDER_IMAGE)
-                        return gr.update(value=value), gr.update(value=img_path)
-                    row_name[i].change(dropdown_change, inputs=[row_name[i]], outputs=[row_name[i], row_image[i]])
-                    def value_change(value):
-                        return gr.update(value=int(value) if value else 1)
-                    row_value[i].change(value_change, inputs=[row_value[i]], outputs=[row_value[i]])
-                def on_add_click(*vis):
-                    for idx, v in enumerate(vis):
-                        if not v:
-                            updates = [gr.update(visible=vis[j] or j==idx) for j in range(MAX_ROWS)]
-                            btn_vis = not all([vis[j] or j==idx for j in range(MAX_ROWS)])
-                            return (*updates, gr.update(visible=btn_vis))
-                    return (*[gr.update(visible=True) for _ in range(MAX_ROWS)], gr.update(visible=False))
-                add_btn.click(on_add_click, inputs=row_rows, outputs=row_rows + [add_btn])
-                for i in range(1, MAX_ROWS):
-                    def make_on_remove(idx):
-                        def on_remove(*vis):
-                            updates = [gr.update(visible=(vis[j] and j != idx)) for j in range(MAX_ROWS)]
-                            btn_vis = True
-                            return (*updates, gr.update(visible=btn_vis))
-                        return on_remove
-                    row_remove[i].click(functools.partial(make_on_remove(i)), inputs=row_rows, outputs=row_rows+[add_btn])
-            category_blocks.append(cat_block)
-        # --- Конец универсального блока комплектующих ---
-        
-        with gr.Row():
-            components_category = gr.Dropdown([
-                "Все категории", "Воздуховоды", "Гибкие соединения", "Клапаны", 
-                "Материалы", "Оборудование", "Отводы и повороты", "Переходы", 
-                "Регулирующие элементы", "Соединительные элементы", "Тройники"
-            ], label="Категория комплектующих", value="Все категории")
-            # Удаляю поле components_price_limit и все его упоминания
-        
-        # Кнопка для подбора комплектующих
-        select_components_btn = gr.Button("Подобрать комплектующие", variant="primary")
-        components_output = gr.Textbox(label="Результат подбора", interactive=False, lines=10)
         
         # Блок 1: Воздуховоды
         with gr.Group():
@@ -796,10 +711,4 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
                 ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand],
         outputs=[aircons_output, pdf_output]
-    )
-    
-    select_components_btn.click(
-        fn=select_components,
-        inputs=[components_category], # Удаляю components_price_limit
-        outputs=[components_output]
     )
