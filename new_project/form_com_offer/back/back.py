@@ -160,3 +160,53 @@ def select_components_endpoint(payload: dict, db: Session = Depends(get_session)
     except Exception as e:
         logger.error(f"Ошибка при подборе комплектующих: {str(e)}", exc_info=True)
         return {"error": f"Ошибка при подборе комплектующих: {str(e)}"}
+
+# --- Эндпоинт для получения всех компонентов по категориям ---
+@app.get("/api/components_by_categories/")
+def get_components_by_categories(db: Session = Depends(get_session)):
+    """
+    Эндпоинт для получения всех компонентов, сгруппированных по категориям.
+    """
+    logger.info("Получен запрос на эндпоинт /api/components_by_categories/")
+
+    try:
+        # Получаем все компоненты из БД
+        components = crud.get_all_components(db)
+        
+        # Группируем по категориям
+        categories_dict = {}
+        for component in components:
+            category = component.category
+            if category not in categories_dict:
+                categories_dict[category] = []
+            
+            component_info = {
+                "id": component.id,
+                "name": component.name,
+                "category": component.category,
+                "size": component.size,
+                "material": component.material,
+                "characteristics": component.characteristics,
+                "price": component.price,
+                "currency": component.currency,
+                "standard": component.standard,
+                "manufacturer": component.manufacturer,
+                "in_stock": component.in_stock,
+                "description": component.description,
+                "image_url": component.image_url
+            }
+            categories_dict[category].append(component_info)
+        
+        # Формируем ответ
+        response_data = {
+            "categories": categories_dict,
+            "total_categories": len(categories_dict),
+            "total_components": len(components)
+        }
+        
+        logger.info(f"Получено {len(components)} компонентов в {len(categories_dict)} категориях")
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"Ошибка при получении компонентов по категориям: {str(e)}", exc_info=True)
+        return {"error": f"Ошибка при получении компонентов: {str(e)}"}

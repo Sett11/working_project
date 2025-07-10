@@ -78,6 +78,22 @@ def get_components_by_filters(db: Session, filters: dict):
     logger.info(f"Найдено {len(components)} комплектующих по заданным фильтрам")
     return components
 
+def get_all_components(db: Session):
+    """Получение всех комплектующих."""
+    logger.debug("Запрос на получение всех комплектующих")
+    
+    query = db.query(models.Component)
+    
+    # Фильтруем только товары в наличии
+    query = query.filter(models.Component.in_stock == True)
+    
+    # Сортируем по категории и цене
+    query = query.order_by(models.Component.category.asc(), models.Component.price.asc())
+    
+    components = query.all()
+    logger.info(f"Получено {len(components)} комплектующих")
+    return components
+
 # --- Order CRUD ---
 
 def create_order(db: Session, order: schemas.OrderCreate) -> models.Order:
