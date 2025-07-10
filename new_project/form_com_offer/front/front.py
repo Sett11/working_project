@@ -1,6 +1,9 @@
 import gradio as gr
 import requests
 from utils.mylogger import Logger
+import json
+import os
+import functools
 
 # Инициализация логгера для фронтенда
 logger = Logger(name=__name__, log_file="frontend.log")
@@ -8,6 +11,54 @@ logger = Logger(name=__name__, log_file="frontend.log")
 # Адрес нашего FastAPI бэкенда (имя сервиса из docker-compose)
 # Теперь он указывает на контейнер бэкенда, а не на localhost
 BACKEND_URL = "http://backend:8000"
+
+# Путь к каталогу комплектующих
+COMPONENTS_CATALOG_PATH = os.path.join(os.path.dirname(__file__), '../docs/components_catalog.json')
+PLACEHOLDER_IMAGE = os.path.abspath(os.path.join(os.path.dirname(__file__), '../docs/images_comp/placeholder.jpg'))
+
+def load_components_catalog():
+    with open(COMPONENTS_CATALOG_PATH, encoding='utf-8') as f:
+        data = json.load(f)
+    return data
+
+def get_vozduhovody_options():
+    data = load_components_catalog()
+    vozduhovody = [c for c in data['components'] if c['category'] == 'Воздуховоды']
+    options = []
+    for c in vozduhovody:
+        options.append({
+            'id': c['id'],
+            'name': c['name'],
+            'image_url': c.get('image_url') if c.get('has_image') else PLACEHOLDER_IMAGE
+        })
+    return options
+
+def get_vozduhovod_image(name):
+    options = get_vozduhovody_options()
+    for c in options:
+        if c['name'] == name:
+            return c['image_url']
+    return PLACEHOLDER_IMAGE
+
+def vozduhovody_ui(selected_names, lengths):
+    options = get_vozduhovody_options()
+    names = [c['name'] for c in options]
+    with gr.Column():
+        gr.Markdown('#### Воздуховоды:')
+        new_selected = gr.Dropdown(names, value=selected_names, multiselect=True, label='Выберите воздуховоды')
+        images = []
+        length_inputs = []
+        remove_buttons = []
+        for i, name in enumerate(selected_names):
+            with gr.Row():
+                img = gr.Image(get_vozduhovod_image(name), shape=(100,100), label=name)
+                images.append(img)
+                length = gr.Number(value=lengths[i] if i < len(lengths) else 1, label='Длина (м)', precision=0, minimum=1)
+                length_inputs.append(length)
+                remove_btn = gr.Button('Удалить', variant='stop')
+                remove_buttons.append(remove_btn)
+        add_btn = gr.Button('Добавить воздуховод', variant='primary')
+    return new_selected, images, length_inputs, remove_buttons, add_btn
 
 def generate_kp(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
                 ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand):
@@ -175,13 +226,87 @@ with gr.Blocks(title="Автоматизация продаж кондицион
 
     with gr.Tab("Комплектующие"):
         gr.Markdown("### Подбор комплектующих для монтажа")
+        catalog = load_components_catalog()
+        categories = catalog['categories']
+        components = catalog['components']
+        MAX_ROWS = 5
+        category_blocks = []
+        for cat in categories:
+            cat_components = [c for c in components if c['category'] == cat]
+            if not cat_components:
+                continue
+            comp_names = [c['name'] for c in cat_components]
+            comp_images = {}
+            for c in cat_components:
+                if c.get('has_image') and c.get('image_url'):
+                    abs_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', c['image_url']))
+                    comp_images[c['name']] = abs_path
+                else:
+                    comp_images[c['name']] = PLACEHOLDER_IMAGE
+            # Определяем тип поля: длина или количество
+            cat_lower = cat.lower()
+            if any(x in cat_lower for x in ['воздуховод', 'труба', 'гибкие соединения']):
+                value_label = 'Длина (м)'
+                value_precision = 0
+                value_min = 1
+            else:
+                value_label = 'Количество (шт)'
+                value_precision = 0
+                value_min = 1
+            with gr.Group() as cat_block:
+                gr.Markdown(f'#### {cat}')
+                row_name = []
+                row_image = []
+                row_value = []
+                row_remove = []
+                row_rows = []
+                for i in range(MAX_ROWS):
+                    with gr.Row(visible=(i==0)) as row:
+                        name = gr.Dropdown(comp_names, value=comp_names[0], label=f'Позиция {i+1}')
+                        image = gr.Image(value=comp_images[comp_names[0]], label='Фото', height=100, width=100)
+                        value = gr.Number(value=1, label=value_label, precision=value_precision, minimum=value_min)
+                        remove = gr.Button('Удалить', variant='stop', visible=(i!=0))
+                        row_name.append(name)
+                        row_image.append(image)
+                        row_value.append(value)
+                        row_remove.append(remove)
+                        row_rows.append(row)
+                add_btn = gr.Button('Ещё', variant='primary', visible=True)
+                # Обработчики событий
+                for i in range(MAX_ROWS):
+                    def dropdown_change(value, idx=i):
+                        img_path = comp_images.get(value, PLACEHOLDER_IMAGE)
+                        return gr.update(value=value), gr.update(value=img_path)
+                    row_name[i].change(dropdown_change, inputs=[row_name[i]], outputs=[row_name[i], row_image[i]])
+                    def value_change(value):
+                        return gr.update(value=int(value) if value else 1)
+                    row_value[i].change(value_change, inputs=[row_value[i]], outputs=[row_value[i]])
+                def on_add_click(*vis):
+                    for idx, v in enumerate(vis):
+                        if not v:
+                            updates = [gr.update(visible=vis[j] or j==idx) for j in range(MAX_ROWS)]
+                            btn_vis = not all([vis[j] or j==idx for j in range(MAX_ROWS)])
+                            return (*updates, gr.update(visible=btn_vis))
+                    return (*[gr.update(visible=True) for _ in range(MAX_ROWS)], gr.update(visible=False))
+                add_btn.click(on_add_click, inputs=row_rows, outputs=row_rows + [add_btn])
+                for i in range(1, MAX_ROWS):
+                    def make_on_remove(idx):
+                        def on_remove(*vis):
+                            updates = [gr.update(visible=(vis[j] and j != idx)) for j in range(MAX_ROWS)]
+                            btn_vis = True
+                            return (*updates, gr.update(visible=btn_vis))
+                        return on_remove
+                    row_remove[i].click(functools.partial(make_on_remove(i)), inputs=row_rows, outputs=row_rows+[add_btn])
+            category_blocks.append(cat_block)
+        # --- Конец универсального блока комплектующих ---
+        
         with gr.Row():
             components_category = gr.Dropdown([
                 "Все категории", "Воздуховоды", "Гибкие соединения", "Клапаны", 
                 "Материалы", "Оборудование", "Отводы и повороты", "Переходы", 
                 "Регулирующие элементы", "Соединительные элементы", "Тройники"
             ], label="Категория комплектующих", value="Все категории")
-            components_price_limit = gr.Slider(100, 10000, value=2000, label="Максимальная цена (BYN)")
+            # Удаляю поле components_price_limit и все его упоминания
         
         with gr.Row():
             components_output = gr.Textbox(label="Подходящие комплектующие", interactive=False, lines=10, max_lines=20)
@@ -201,6 +326,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     
     select_components_btn.click(
         fn=select_components,
-        inputs=[components_category, components_price_limit],
+        inputs=[components_category], # Удаляю components_price_limit
         outputs=[components_output]
     )
