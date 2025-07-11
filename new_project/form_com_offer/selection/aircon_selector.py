@@ -95,7 +95,7 @@ def select_aircons(db: Session, params: dict) -> list[models.AirConditioner]:
             - brand: бренд
             - inverter: наличие инвертора (bool)
             - wifi: наличие Wi-Fi (bool)
-            - Дополнительные для расчёта мощности:
+                - Дополнительные для расчёта мощности:
                 ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power
 
     Returns:

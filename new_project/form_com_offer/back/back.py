@@ -13,6 +13,7 @@ from db import crud, schemas
 from db.database import get_session
 from utils.mylogger import Logger
 from selection.aircon_selector import select_aircons
+from utils.pdf_generator import generate_commercial_offer_pdf
 
 # Инициализация логгера для бэкенда.
 # log_file указывается без папки logs, чтобы использовать дефолтную директорию логов.
@@ -144,12 +145,13 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
     try:
         # Извлекаем данные из тела запроса.
         client_data = payload.get("client_data", {})
+        order_params = payload.get("order_params", {})
         aircon_params = payload.get("aircon_params", {})
         components = payload.get("components", [])
-        
+        discount = order_params.get("discount", 0)
         client_full_name = client_data.get('full_name', 'N/A')
         logger.info(f"Обработка запроса на генерацию КП для клиента: {client_full_name}")
-        
+
         # 1. Создание или поиск клиента в БД.
         client_phone = client_data.get("phone")
         if not client_phone:
@@ -164,27 +166,41 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
             logger.info(f"Создан новый клиент: {client.full_name} (ID: {client.id})")
         else:
             logger.info(f"Найден существующий клиент: {client.full_name} (ID: {client.id})")
-        
+
         # 2. Подбор кондиционеров по параметрам.
         logger.info("Начат подбор кондиционеров...")
         selected_aircons = select_aircons(db, aircon_params)
         logger.info(f"Подобрано {len(selected_aircons)} кондиционеров.")
-        
+
         # 3. Формируем список кондиционеров для ответа.
         aircons_list = [schemas.AirConditioner.from_orm(ac).dict() for ac in selected_aircons]
-        
-        # 4. Формируем успешный ответ.
+
+        # 4. Генерируем PDF коммерческого предложения
+        try:
+            pdf_path = generate_commercial_offer_pdf(
+                client_data=client_data,
+                order_params=order_params,
+                aircons=aircons_list,
+                components=components,
+                discount_percent=discount
+            )
+            logger.info(f"PDF успешно сгенерирован: {pdf_path}")
+        except Exception as e:
+            logger.error(f"Ошибка при генерации PDF: {e}", exc_info=True)
+            pdf_path = None
+
+        # 5. Формируем успешный ответ.
         response_data = {
             "aircons_list": aircons_list,
             "total_count": len(selected_aircons),
             "client_name": client.full_name,
             "components": components,
-            "pdf_path": None  # Генерация PDF на данном этапе не реализована.
+            "pdf_path": pdf_path
         }
-        
+
         logger.info(f"Данные для КП успешно сформированы для клиента {client.full_name}")
         return response_data
-        
+
     except HTTPException as http_exc:
         # Перехватываем и пробрасываем HTTP исключения, чтобы FastAPI их обработал.
         raise http_exc

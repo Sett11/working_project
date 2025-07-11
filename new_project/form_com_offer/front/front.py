@@ -894,7 +894,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         collect_btn.click(
             fn=collect_selected_components,
             inputs=[
-                # Воздуховоды
                 airduct_500x800, airduct_500x800_qty, airduct_500x800_length,
                 airduct_600x300, airduct_600x300_qty, airduct_600x300_length,
                 airduct_800x500, airduct_800x500_qty, airduct_800x500_length,
@@ -902,31 +901,24 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 airduct_d560, airduct_d560_qty, airduct_d560_length,
                 airduct_d630, airduct_d630_qty, airduct_d630_length,
                 airduct_d710, airduct_d710_qty, airduct_d710_length,
-                # Отводы
                 bend_90_500x800, bend_90_500x800_qty,
                 bend_90_d630, bend_90_d630_qty,
                 bend_90_d560, bend_90_d560_qty,
                 bend_90_d450, bend_90_d450_qty,
                 bend_90_d710, bend_90_d710_qty,
-                # Переходы
                 transition_500x800_d630, transition_500x800_d630_qty,
                 transition_600x300_d560, transition_600x300_d560_qty,
                 transition_500x800_d450, transition_500x800_d450_qty,
-                # Тройники
                 tee_500x800, tee_500x800_qty,
-                # Клапаны
                 valve_800x500, valve_800x500_qty,
                 valve_600x300, valve_600x300_qty,
                 valve_d450, valve_d450_qty,
-                # Соединительные элементы
                 nipple, nipple_qty,
                 coupling, coupling_qty,
                 cap, cap_qty,
-                # Регулирующие элементы
                 damper, damper_qty,
                 umbrella, umbrella_qty,
                 deflector, deflector_qty,
-                # Материалы
                 steel_sheet, steel_sheet_qty, steel_sheet_length,
                 insulation, insulation_qty, insulation_length
             ],
@@ -955,7 +947,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         fn=generate_kp,
         inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
                 ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand,
-                # Добавляем все параметры комплектующих
                 airduct_500x800, airduct_500x800_qty, airduct_500x800_length,
                 airduct_600x300, airduct_600x300_qty, airduct_600x300_length,
                 airduct_800x500, airduct_800x500_qty, airduct_800x500_length,
@@ -963,31 +954,24 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 airduct_d560, airduct_d560_qty, airduct_d560_length,
                 airduct_d630, airduct_d630_qty, airduct_d630_length,
                 airduct_d710, airduct_d710_qty, airduct_d710_length,
-                # Отводы
                 bend_90_500x800, bend_90_500x800_qty,
                 bend_90_d630, bend_90_d630_qty,
                 bend_90_d560, bend_90_d560_qty,
                 bend_90_d450, bend_90_d450_qty,
                 bend_90_d710, bend_90_d710_qty,
-                # Переходы
                 transition_500x800_d630, transition_500x800_d630_qty,
                 transition_600x300_d560, transition_600x300_d560_qty,
                 transition_500x800_d450, transition_500x800_d450_qty,
-                # Тройники
                 tee_500x800, tee_500x800_qty,
-                # Клапаны
                 valve_800x500, valve_800x500_qty,
                 valve_600x300, valve_600x300_qty,
                 valve_d450, valve_d450_qty,
-                # Соединительные элементы
                 nipple, nipple_qty,
                 coupling, coupling_qty,
                 cap, cap_qty,
-                # Регулирующие элементы
                 damper, damper_qty,
                 umbrella, umbrella_qty,
                 deflector, deflector_qty,
-                # Материалы
                 steel_sheet, steel_sheet_qty, steel_sheet_length,
                 insulation, insulation_qty, insulation_length],
         outputs=[aircons_output, pdf_output]

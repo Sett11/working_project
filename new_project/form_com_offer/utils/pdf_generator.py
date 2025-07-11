@@ -4,92 +4,170 @@
 Использует библиотеку reportlab для создания PDF-документов с таблицами товаров и комплектующих.
 """
 import datetime
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from reportlab.lib.styles import getSampleStyleSheet
+import os
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import inch
-
-from db import models
+from reportlab.lib.units import mm
 from utils.mylogger import Logger
 
 logger = Logger("pdf_generator", "pdf_generator.log")
 
-def create_kp_pdf(order: models.Order, aircons: list[models.AirConditioner], components: list[models.Component]) -> str:
+
+def generate_commercial_offer_pdf(
+    client_data: dict,
+    order_params: dict,
+    aircons: list,
+    components: list,
+    discount_percent: float,
+    offer_number: str = None,
+    save_dir: str = "commercial_offer_pdf"
+) -> str:
     """
-    Создаёт PDF-файл коммерческого предложения.
+    Генерирует PDF-файл коммерческого предложения по заданным данным.
+
     Args:
-        order (models.Order): Объект заказа.
-        aircons (list[models.AirConditioner]): Список кондиционеров.
-        components (list[models.Component]): Список комплектующих.
+        client_data (dict): Данные клиента (full_name, phone, address, email).
+        order_params (dict): Параметры заказа (дата, площадь, тип помещения и др.).
+        aircons (list): Список кондиционеров (dict: name, description, price, qty).
+        components (list): Список комплектующих (dict: name, price, qty).
+        discount_percent (float): Скидка в процентах (0-100).
+        offer_number (str): Номер КП (если None — генерируется автоматически).
+        save_dir (str): Папка для сохранения PDF (относительно корня проекта).
+
     Returns:
-        str: Путь к сгенерированному PDF-файлу или пустая строка при ошибке.
+        str: Абсолютный путь к сгенерированному PDF-файлу.
     """
-    # Уникальное имя файла для сохранения PDF
-    file_name = f"user_data/KP_{order.client.full_name.replace(' ', '_')}_{datetime.date.today()}.pdf"
-    
-    doc = SimpleDocTemplate(file_name, pagesize=letter)
+    # Создаём директорию для сохранения, если не существует
+    abs_save_dir = os.path.abspath(save_dir)
+    os.makedirs(abs_save_dir, exist_ok=True)
+
+    # Формируем имя файла
+    today = datetime.date.today().strftime("%d-%m-%Y")
+    offer_number = offer_number or f"{today}_{client_data.get('full_name','').replace(' ', '_')}"
+    file_name = f"КП_{offer_number}.pdf"
+    file_path = os.path.join(abs_save_dir, file_name)
+
+    # Стили
     styles = getSampleStyleSheet()
+    styleH = styles['Heading1']
+    styleN = styles['Normal']
+    styleTableHeader = ParagraphStyle('TableHeader', parent=styles['Normal'], alignment=1, fontSize=10, fontName='Helvetica-Bold')
+    styleTableCell = ParagraphStyle('TableCell', parent=styles['Normal'], fontSize=10)
+
+    doc = SimpleDocTemplate(file_path, pagesize=A4, rightMargin=20*mm, leftMargin=20*mm, topMargin=20*mm, bottomMargin=20*mm)
     story = []
 
-    logger.info(f"Начало генерации PDF для заказа ID: {order.id}")
+    # --- Шапка ---
+    story.append(Paragraph("<b>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ</b>", styleH))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(f"<b>Номер КП:</b> {offer_number}", styleN))
+    story.append(Paragraph(f"<b>Дата:</b> {today}", styleN))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("<b>ООО 'Эвериз Сервис'</b>", styleN))
+    story.append(Paragraph("г. Минск, ул. Орловская, 40, пом. 256, 220030", styleN))
+    story.append(Spacer(1, 12))
 
-    # 1. Шапка документа
-    # TODO: Добавить логотип
-    story.append(Paragraph("ООО 'Эвериз Сервис'", styles['h1']))
-    story.append(Paragraph("г. Минск, ул. Орловская, 40, пом. 256, 220030", styles['Normal']))
-    story.append(Spacer(1, 0.2*inch))
-    
-    # 2. Информация о предложении
-    story.append(Paragraph(f"КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ № {order.id} от {datetime.date.today()}", styles['h2']))
-    story.append(Spacer(1, 0.1*inch))
-    story.append(Paragraph(f"Заказчик: {order.client.full_name}, {order.client.phone}", styles['Normal']))
-    story.append(Paragraph(f"Адрес объекта: {order.client.address}", styles['Normal']))
-    story.append(Spacer(1, 0.2*inch))
+    # --- Данные клиента ---
+    story.append(Paragraph(f"<b>Клиент:</b> {client_data.get('full_name','')}", styleN))
+    story.append(Paragraph(f"<b>Телефон:</b> {client_data.get('phone','')}", styleN))
+    if client_data.get('email'):
+        story.append(Paragraph(f"<b>Email:</b> {client_data.get('email')}", styleN))
+    if client_data.get('address'):
+        story.append(Paragraph(f"<b>Адрес объекта:</b> {client_data.get('address')}", styleN))
+    story.append(Spacer(1, 12))
 
-    # 3. Таблица с товарами
-    data = [['Наименование', 'Бренд', 'Цена (BYN)', 'Кол-во', 'Сумма (BYN)']]
-    
-    # Добавляем кондиционеры
+    # --- Параметры заказа ---
+    if order_params:
+        params_str = ", ".join([f"{k}: {v}" for k, v in order_params.items() if v])
+        story.append(Paragraph(f"<b>Параметры заказа:</b> {params_str}", styleN))
+        story.append(Spacer(1, 12))
+
+    # --- Таблица кондиционеров ---
+    if aircons:
+        story.append(Paragraph("<b>Подобранные кондиционеры:</b>", styleN))
+        ac_table_data = [[
+            Paragraph("Наименование", styleTableHeader),
+            Paragraph("Описание", styleTableHeader),
+            Paragraph("Цена за шт., BYN", styleTableHeader),
+            Paragraph("Кол-во", styleTableHeader),
+            Paragraph("Сумма, BYN", styleTableHeader)
+        ]]
+        ac_total = 0
     for ac in aircons:
-        price = ac.retail_price_byn or 0
-        quantity = 1 # Пока условно 1
-        total = price * quantity
-        data.append([ac.model_name, ac.brand, f"{price:.2f}", str(quantity), f"{total:.2f}"])
-        
-    # Добавляем комплектующие
+            price = float(ac.get('price', 0))
+            qty = int(ac.get('qty', 1))
+            price_with_discount = round(price * (1 - discount_percent/100), 2)
+            total = round(price_with_discount * qty, 2)
+            ac_total += total
+            ac_table_data.append([
+                Paragraph(str(ac.get('name','')), styleTableCell),
+                Paragraph(str(ac.get('description','')), styleTableCell),
+                Paragraph(f"{price_with_discount:.2f}", styleTableCell),
+                Paragraph(str(qty), styleTableCell),
+                Paragraph(f"{total:.2f}", styleTableCell)
+            ])
+            ac_table = Table(ac_table_data, colWidths=[60*mm, 60*mm, 30*mm, 20*mm, 30*mm])
+            ac_table.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+                ('ALIGN', (2,1), (-1,-1), 'RIGHT'),
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ]))
+            story.append(ac_table)
+            story.append(Spacer(1, 12))
+    else:
+        ac_total = 0
+
+    # --- Таблица комплектующих ---
+    if components:
+        story.append(Paragraph("<b>Комплектующие:</b>", styleN))
+        comp_table_data = [[
+            Paragraph("Наименование", styleTableHeader),
+            Paragraph("Кол-во", styleTableHeader),
+            Paragraph("Цена за шт., BYN", styleTableHeader),
+            Paragraph("Сумма, BYN", styleTableHeader)
+        ]]
+        comp_total = 0
     for comp in components:
-        price = comp.price or 0
-        quantity = 1 # TODO: рассчитывать количество
-        total = price * quantity
-        data.append([comp.name, comp.manufacturer or '', f"{price:.2f}", str(quantity), f"{total:.2f}"])
+            price = float(comp.get('price', 0))
+            qty = int(comp.get('qty', 1))
+            price_with_discount = round(price * (1 - discount_percent/100), 2)
+            total = round(price_with_discount * qty, 2)
+            comp_total += total
+            comp_table_data.append([
+                Paragraph(str(comp.get('name','')), styleTableCell),
+                Paragraph(str(qty), styleTableCell),
+                Paragraph(f"{price_with_discount:.2f}", styleTableCell),
+                Paragraph(f"{total:.2f}", styleTableCell)
+            ])
+            comp_table = Table(comp_table_data, colWidths=[80*mm, 30*mm, 30*mm, 30*mm])
+            comp_table.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+                ('ALIGN', (2,1), (-1,-1), 'RIGHT'),
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ]))
+            story.append(comp_table)
+            story.append(Spacer(1, 12))
+    else:
+        comp_total = 0
 
-    # Стиль таблицы
-    table_style = TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.grey),
-        ('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0,0), (-1,0), 12),
-        ('BACKGROUND', (0,1), (-1,-1), colors.beige),
-        ('GRID', (0,0), (-1,-1), 1, colors.black)
-    ])
-    
-    tbl = Table(data)
-    tbl.setStyle(table_style)
-    story.append(tbl)
-    story.append(Spacer(1, 0.2*inch))
+    # --- Итоги ---
+    total_sum = ac_total + comp_total
+    discount_sum = round(total_sum * discount_percent/100, 2)
+    to_pay = round(total_sum, 2)
+    story.append(Paragraph(f"<b>Сумма без скидки:</b> {total_sum + discount_sum:.2f} BYN", styleN))
+    story.append(Paragraph(f"<b>Скидка:</b> {discount_sum:.2f} BYN", styleN))
+    story.append(Paragraph(f"<b>Итого к оплате:</b> {to_pay:.2f} BYN", styleN))
+    story.append(Spacer(1, 12))
 
-    # 4. Итоговая сумма
-    # TODO: Реализовать расчёт итоговой суммы с учётом скидки
-    # total_sum = ...
-    # story.append(Paragraph(f"Итого к оплате: {total_sum:.2f} BYN", styles['h3']))
-
+    # --- Сохранение PDF ---
     try:
         doc.build(story)
-        logger.info(f"PDF-файл '{file_name}' успешно сгенерирован.")
-        return file_name
+        logger.info(f"PDF-файл '{file_path}' успешно сгенерирован.")
+        return file_path
     except Exception as e:
-        logger.error(f"Ошибка при сборке PDF-документа: {e}", exc_info=True)
+        logger.error(f"Ошибка при генерации PDF: {e}", exc_info=True)
         return ""
