@@ -1,3 +1,8 @@
+"""
+Модуль генерации PDF-файлов коммерческих предложений.
+
+Использует библиотеку reportlab для создания PDF-документов с таблицами товаров и комплектующих.
+"""
 import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
@@ -13,9 +18,15 @@ logger = Logger("pdf_generator", "pdf_generator.log")
 
 def create_kp_pdf(order: models.Order, aircons: list[models.AirConditioner], components: list[models.Component]) -> str:
     """
-    Создает PDF-файл коммерческого предложения.
+    Создаёт PDF-файл коммерческого предложения.
+    Args:
+        order (models.Order): Объект заказа.
+        aircons (list[models.AirConditioner]): Список кондиционеров.
+        components (list[models.Component]): Список комплектующих.
+    Returns:
+        str: Путь к сгенерированному PDF-файлу или пустая строка при ошибке.
     """
-    # Уникальное имя файла
+    # Уникальное имя файла для сохранения PDF
     file_name = f"user_data/KP_{order.client.full_name.replace(' ', '_')}_{datetime.date.today()}.pdf"
     
     doc = SimpleDocTemplate(file_name, pagesize=letter)
@@ -27,7 +38,7 @@ def create_kp_pdf(order: models.Order, aircons: list[models.AirConditioner], com
     # 1. Шапка документа
     # TODO: Добавить логотип
     story.append(Paragraph("ООО 'Эвериз Сервис'", styles['h1']))
-    story.append(Paragraph("г. Минск, ул. Орловс��ая, 40, пом. 256, 220030", styles['Normal']))
+    story.append(Paragraph("г. Минск, ул. Орловская, 40, пом. 256, 220030", styles['Normal']))
     story.append(Spacer(1, 0.2*inch))
     
     # 2. Информация о предложении
@@ -50,7 +61,7 @@ def create_kp_pdf(order: models.Order, aircons: list[models.AirConditioner], com
     # Добавляем комплектующие
     for comp in components:
         price = comp.price or 0
-        quantity = 1 # TODO: Рассчитывать количество
+        quantity = 1 # TODO: рассчитывать количество
         total = price * quantity
         data.append([comp.name, comp.manufacturer or '', f"{price:.2f}", str(quantity), f"{total:.2f}"])
 
@@ -71,7 +82,7 @@ def create_kp_pdf(order: models.Order, aircons: list[models.AirConditioner], com
     story.append(Spacer(1, 0.2*inch))
 
     # 4. Итоговая сумма
-    # TODO: Реализовать расчет итоговой суммы с учетом скидки
+    # TODO: Реализовать расчёт итоговой суммы с учётом скидки
     # total_sum = ...
     # story.append(Paragraph(f"Итого к оплате: {total_sum:.2f} BYN", styles['h3']))
 

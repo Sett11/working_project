@@ -1,3 +1,12 @@
+"""
+Модуль для наполнения базы данных начальными данными из JSON-файлов.
+
+Этот скрипт:
+- Проверяет и создаёт таблицы в базе данных, если они ещё не созданы.
+- Загружает данные кондиционеров и комплектующих из файлов docs/airs_catalog.json и docs/components_catalog.json.
+- Добавляет их в базу данных, если она пуста.
+- Поддерживает повторный запуск без дублирования данных.
+"""
 import json
 from sqlalchemy.orm import Session
 from . import models, schemas
@@ -6,9 +15,10 @@ from utils.mylogger import Logger
 
 logger = Logger(name=__name__, log_file="db.log")
 
-# Создаем все таблицы (на всякий случай, если еще не созданы)
+# Создаём все таблицы (на всякий случай, если ещё не созданы)
 logger.info("Проверка и создание таблиц в базе данных...")
 try:
+    # Создаём таблицы по всем моделям, если они ещё не существуют
     models.Base.metadata.create_all(bind=engine)
     logger.info("Проверка и создание таблиц завершены.")
 except Exception as e:
@@ -20,6 +30,9 @@ except Exception as e:
 def seed_data():
     """
     Заполняет базу данных начальными данными из JSON-файлов.
+    - Загружает кондиционеры из docs/airs_catalog.json
+    - Загружает комплектующие из docs/components_catalog.json
+    - Добавляет их в БД, если она пуста
     """
     db: Session = SessionLocal()
     
@@ -59,10 +72,10 @@ def seed_data():
             for mount in mount_types:
                 if mount in air_description:
                     mount_type = mount
-                    logger.debug(f"Определен тип монтажа '{mount}' для модели: {air_con_data.get('model_name')}")
+                    logger.debug(f"Определён тип монтажа '{mount}' для модели: {air_con_data.get('model_name')}")
                     break
             
-            # Создаем объект Pydantic для валидации
+            # Создаём объект Pydantic для валидации
             air_con_schema = schemas.AirConditionerCreate(
                 model_name=air_con_data.get("model_name"),
                 brand=air_con_data.get("brand"),
@@ -79,7 +92,7 @@ def seed_data():
                 has_wifi=has_wifi,
                 mount_type=mount_type
             )
-            # Создаем объект модели SQLAlchemy
+            # Создаём объект модели SQLAlchemy
             db_air_con = models.AirConditioner(**air_con_schema.model_dump())
             db.add(db_air_con)
         

@@ -1,3 +1,12 @@
+"""
+Модуль фронтенда Gradio для системы формирования коммерческих предложений по кондиционерам.
+
+Содержит:
+- Загрузку и отображение каталога комплектующих
+- Визуальный интерфейс для ввода параметров клиента, заказа, комплектующих
+- Вызовы к backend API для подбора кондиционеров и генерации КП
+- Подробное логирование действий пользователя и ошибок
+"""
 import gradio as gr
 import requests
 from utils.mylogger import Logger
@@ -6,6 +15,7 @@ import os
 import functools
 
 # Инициализация логгера для фронтенда
+# log_file указывается без папки logs, чтобы использовать дефолтную директорию логов.
 logger = Logger(name=__name__, log_file="frontend.log")
 
 # Адрес нашего FastAPI бэкенда (имя сервиса из docker-compose)
@@ -17,11 +27,21 @@ COMPONENTS_CATALOG_PATH = os.path.join(os.path.dirname(__file__), '../docs/compo
 PLACEHOLDER_IMAGE = os.path.abspath(os.path.join(os.path.dirname(__file__), '../docs/images_comp/placeholder.jpg'))
 
 def load_components_catalog():
+    """
+    Загружает каталог комплектующих из JSON-файла.
+    Returns:
+        dict: Данные каталога комплектующих.
+    """
     with open(COMPONENTS_CATALOG_PATH, encoding='utf-8') as f:
         data = json.load(f)
     return data
 
 def get_vozduhovody_options():
+    """
+    Возвращает список опций для воздуховодов из каталога комплектующих.
+    Returns:
+        list: Список словарей с id, name, image_url для воздуховодов.
+    """
     data = load_components_catalog()
     vozduhovody = [c for c in data['components'] if c['category'] == 'Воздуховоды']
     options = []
@@ -34,6 +54,13 @@ def get_vozduhovody_options():
     return options
 
 def get_vozduhovod_image(name):
+    """
+    Получает путь к изображению воздуховода по его названию.
+    Args:
+        name (str): Название воздуховода.
+    Returns:
+        str: Путь к изображению.
+    """
     options = get_vozduhovody_options()
     for c in options:
         if c['name'] == name:
@@ -43,6 +70,10 @@ def get_vozduhovod_image(name):
 def get_component_image(component_name):
     """
     Получает путь к изображению компонента по его названию.
+    Args:
+        component_name (str): Название компонента.
+    Returns:
+        str: Абсолютный путь к изображению или placeholder.
     """
     try:
         catalog = load_components_catalog()
@@ -60,6 +91,14 @@ def get_component_image(component_name):
         return PLACEHOLDER_IMAGE
 
 def vozduhovody_ui(selected_names, lengths):
+    """
+    Генерирует UI-блок для выбора воздуховодов с изображениями и вводом длины.
+    Args:
+        selected_names (list): Список выбранных названий воздуховодов.
+        lengths (list): Список длин для выбранных воздуховодов.
+    Returns:
+        tuple: Gradio-элементы для UI.
+    """
     options = get_vozduhovody_options()
     names = [c['name'] for c in options]
     with gr.Column():
@@ -118,6 +157,9 @@ def generate_kp(name, phone, mail, address, date, area, type_room, discount, wif
                 insulation, insulation_qty, insulation_length):
     """
     Отправляет запрос на бэкенд для генерации КП и возвращает результат.
+    Все параметры подробно описаны в сигнатуре функции.
+    Returns:
+        tuple: (строка с результатом подбора, путь к PDF или None)
     """
     logger.info(f"Получен запрос на генерацию КП для клиента: {name}")
     
@@ -346,6 +388,9 @@ def select_aircons(name, phone, mail, address, date, area, type_room, discount, 
                    ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand):
     """
     Подбирает только кондиционеры без генерации КП.
+    Все параметры подробно описаны в сигнатуре функции.
+    Returns:
+        str: Список подходящих моделей или сообщение об ошибке.
     """
     logger.info(f"Подбор кондиционеров для клиента: {name}")
     

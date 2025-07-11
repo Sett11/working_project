@@ -1,12 +1,37 @@
+"""
+Модуль подбора кондиционеров и расчёта требуемой мощности.
+
+Содержит:
+- Функцию расчёта требуемой мощности кондиционера по методике RFClimat.ru
+- Функцию подбора кондиционеров из БД по заданным параметрам
+"""
 from sqlalchemy.orm import Session
 from db import models
 from utils.mylogger import Logger
 from typing import List, Optional
 
+# Инициализация логгера для подбора кондиционеров.
+# log_file указывается без папки logs, чтобы использовать дефолтную директорию логов.
 logger = Logger("aircon_selector", "aircon_selector.log")
 
 def calculate_required_power(params: dict) -> float:
-    """Рассчитывает требуемую мощность кондиционера по методике RFClimat.ru."""
+    """
+    Рассчитывает требуемую мощность кондиционера по методике RFClimat.ru.
+
+    Args:
+        params (dict): Словарь с параметрами помещения и нагрузки.
+            - area: площадь помещения (м²)
+            - ceiling_height: высота потолков (м)
+            - illumination: уровень освещённости (0-2)
+            - num_people: количество людей
+            - activity: уровень активности (0-4)
+            - num_computers: количество компьютеров
+            - num_tvs: количество телевизоров
+            - other_power: мощность прочей техники (Вт)
+
+    Returns:
+        float: Требуемая мощность охлаждения (кВт)
+    """
     try:
         # Извлекаем параметры с значениями по умолчанию
         area = float(params.get("area", 0))
@@ -18,15 +43,15 @@ def calculate_required_power(params: dict) -> float:
         num_tvs = int(params.get("num_tvs", 0))
         other_power = float(params.get("other_power", 0))
         
-        logger.info(f"Расчет мощности: площадь={area}м², высота={ceiling_height}м, "
-                    f"освещенность={illumination}, люди={num_people}, активность={activity}, "
+        logger.info(f"Расчёт мощности: площадь={area}м², высота={ceiling_height}м, "
+                    f"освещённость={illumination}, люди={num_people}, активность={activity}, "
                     f"компьютеры={num_computers}, ТВ={num_tvs}, прочая техника={other_power}Вт")
 
         # Валидация критических параметров
         if area <= 0 or ceiling_height <= 0:
             raise ValueError("Площадь и высота должны быть положительными значениями")
         
-        # Коэффициенты освещенности и активности
+        # Коэффициенты освещённости и активности
         illumination_coeffs = [30, 35, 40]
         activity_coeffs = [100, 125, 150, 200, 300]
         
@@ -54,42 +79,24 @@ def calculate_required_power(params: dict) -> float:
         return required_power
         
     except Exception as e:
-        logger.error(f"Ошибка расчета мощности: {str(e)}")
+        logger.error(f"Ошибка расчёта мощности: {str(e)}")
         # Резервный расчёт по упрощённой методике
         return float(params.get("area", 0)) / 10
 
-def select_aircons(db: Session, params: dict) -> List[models.AirConditioner]:
+def select_aircons(db: Session, params: dict) -> list[models.AirConditioner]:
     """
     Подбирает кондиционеры из БД по заданным параметрам.
 
     Args:
         db: Сессия SQLAlchemy.
         params: Словарь с параметрами для фильтрации.
-                - 'area': площадь помещения (кв.м.)
-                - 'price_limit': максимальная цена (BYN)
-                - 'brand': бренд
-                - 'inverter': наличие инвертора (bool)
-                - 'wifi': наличие Wi-Fi (bool)
-                - Дополнительные для расчёта мощности:
-                    'ceiling_height': высота потолков (м)
-                    'illumination': освещенность (0-2)
-                    'num_people': количество людей
-                    'activity': активность (0-4)
-                    'num_computers': компьютеры
-                    'num_tvs': телевизоры
-                    'other_power': мощность техники (Вт)
-                - пример словаря:/
-                  params = {
-                    'area': 20,
-                    'ceiling_height': 3.0,
-                    'illumination': 2,
-                    'num_people': 3,
-                    'activity': 2,
-                    'num_computers': 2,
-                    'num_tvs': 1,
-                    'other_power': 500,
-                    ... другие параметры
-                }
+            - area: площадь помещения (кв.м.)
+            - price_limit: максимальная цена (BYN)
+            - brand: бренд
+            - inverter: наличие инвертора (bool)
+            - wifi: наличие Wi-Fi (bool)
+            - Дополнительные для расчёта мощности:
+                ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power
 
     Returns:
         Список подходящих объектов models.AirConditioner.
@@ -101,6 +108,7 @@ def select_aircons(db: Session, params: dict) -> List[models.AirConditioner]:
         required_power_kw = calculate_required_power(params)
         logger.info(f"Требуемая мощность с запасом: {required_power_kw:.2f} кВт")
         
+        # Формируем запрос к БД
         query = db.query(models.AirConditioner)
         
         # Обязательный фильтр: наличие цены
@@ -117,32 +125,32 @@ def select_aircons(db: Session, params: dict) -> List[models.AirConditioner]:
             try:
                 price_limit = float(params["price_limit"])
                 query = query.filter(models.AirConditioner.retail_price_byn <= price_limit)
-                logger.info(f"Применен фильтр по цене: <= {price_limit} BYN")
+                logger.info(f"Применён фильтр по цене: <= {price_limit} BYN")
             except (ValueError, TypeError):
-                logger.warning("Некорректное значение price_limit. Фильтр не применен")
+                logger.warning("Некорректное значение price_limit. Фильтр не применён")
         
         # Фильтр по бренду
         if params.get("brand") and params["brand"] != "Любой":
             query = query.filter(models.AirConditioner.brand == params["brand"])
-            logger.info(f"Применен фильтр по бренду: {params['brand']}")
+            logger.info(f"Применён фильтр по бренду: {params['brand']}")
         
         # Фильтр по инвертору
         if "inverter" in params and params["inverter"] is not None:
             query = query.filter(models.AirConditioner.is_inverter == params["inverter"])
-            logger.info(f"Применен фильтр по инвертору: {params['inverter']}")
+            logger.info(f"Применён фильтр по инвертору: {params['inverter']}")
         
         # Фильтр по Wi-Fi
         if "wifi" in params and params["wifi"] is not None:
             query = query.filter(models.AirConditioner.has_wifi == params["wifi"])
-            logger.info(f"Применен фильтр по Wi-Fi: {params['wifi']}")
+            logger.info(f"Применён фильтр по Wi-Fi: {params['wifi']}")
         
         # Фильтр по типу монтажа
         if "mount_type" in params and params["mount_type"] and params["mount_type"] != "Любой":
             query = query.filter(models.AirConditioner.mount_type == params["mount_type"])
-            logger.info(f"Применен фильтр по типу монтажа: {params['mount_type']}")
+            logger.info(f"Применён фильтр по типу монтажа: {params['mount_type']}")
         
         selected = query.all()
-        logger.info(f"Подбор завершен. Найдено {len(selected)} моделей.")
+        logger.info(f"Подбор завершён. Найдено {len(selected)} моделей.")
         return selected
         
     except Exception as e:

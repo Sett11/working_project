@@ -1,3 +1,10 @@
+"""
+Модуль расчёта необходимых комплектующих для заказа на основе выбранных кондиционеров.
+
+Содержит:
+- Функцию calculate_materials для подбора стандартного монтажного комплекта
+- Логирование этапов расчёта
+"""
 from sqlalchemy.orm import Session
 from db import models
 from utils.mylogger import Logger
@@ -16,7 +23,7 @@ def calculate_materials(db: Session, order: models.Order, selected_aircons: list
     Returns:
         Список объектов models.Component с рассчитанным количеством.
     """
-    logger.info(f"Начат расчет комплектующих для заказа ID: {order.id}")
+    logger.info(f"Начат расчёт комплектующих для заказа ID: {order.id}")
     
     required_components = []
     
@@ -35,27 +42,27 @@ def calculate_materials(db: Session, order: models.Order, selected_aircons: list
     
     for aircon in selected_aircons:
         # 1. Медная труба (2 шт разного диаметра)
-        # Диаметр труб берем из спецификации кондиционера
+        # Диаметр труб берём из спецификации кондиционера
         if aircon.pipe_diameter:
             diameters = aircon.pipe_diameter.replace('"', '').replace("'", "").split('/')
             if len(diameters) == 2:
                 # Условно, для монтажа нужно по 5 метров каждой трубы
-                # Здесь можно будет добавить логику расчета длины трассы
+                # Здесь можно будет добавить логику расчёта длины трассы
                 pass # Пока не добавляем, чтобы не усложнять
 
         # 2. Кронштейн (1 шт)
         bracket = db.query(models.Component).filter(models.Component.name.like("%Кронштейн%")).first()
         if bracket:
-            # Здесь можно было бы добавить расчет количества, но для кронштейна это 1
+            # Здесь можно было бы добавить расчёт количества, но для кронштейна это 1
             required_components.append(bracket)
 
         # 3. Кабель (условно 5 метров)
         cable = db.query(models.Component).filter(models.Component.name.like("%Кабель%")).first()
         if cable:
-            # Здесь можно добавить расчет длины
+            # Здесь можно добавить расчёт длины
             required_components.append(cable)
 
     component_names = [c.name for c in required_components]
-    logger.info(f"Расчет завершен. Подобраны комплектующие: {component_names}")
+    logger.info(f"Расчёт завершён. Подобраны комплектующие: {component_names}")
     
     return required_components
