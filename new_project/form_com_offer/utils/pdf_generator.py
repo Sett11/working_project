@@ -1,7 +1,6 @@
 """
 Модуль генерации PDF-файлов коммерческих предложений.
-
-Использует библиотеку reportlab для создания PDF-документов с таблицами товаров и комплектующих.
+Использует библиотеку reportlab для создания PDF-документов.
 """
 import datetime
 import os
@@ -11,9 +10,24 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from utils.mylogger import Logger
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
 
 logger = Logger("pdf_generator", "pdf_generator.log")
 
+# Регистрация шрифтов
+FONT_PATH = os.path.join(os.path.dirname(__file__), 'fonts', 'arial.ttf')
+FONT_BOLD_PATH = os.path.join(os.path.dirname(__file__), 'fonts', 'arialbd.ttf')
+
+if not os.path.exists(FONT_PATH):
+    logger.error(f"Файл шрифта {FONT_PATH} не найден! Скопируйте arial.ttf из C:/Windows/Fonts.")
+else:
+    pdfmetrics.registerFont(TTFont('Arial', FONT_PATH))
+
+if not os.path.exists(FONT_BOLD_PATH):
+    logger.error(f"Файл жирного шрифта {FONT_BOLD_PATH} не найден! Скопируйте arialbd.ttf из C:/Windows/Fonts.")
+else:
+    pdfmetrics.registerFont(TTFont('Arial-Bold', FONT_BOLD_PATH))
 
 def generate_commercial_offer_pdf(
     client_data: dict,
@@ -26,20 +40,20 @@ def generate_commercial_offer_pdf(
 ) -> str:
     """
     Генерирует PDF-файл коммерческого предложения по заданным данным.
-
+    
     Args:
-        client_data (dict): Данные клиента (full_name, phone, address, email).
-        order_params (dict): Параметры заказа (дата, площадь, тип помещения и др.).
-        aircons (list): Список кондиционеров (dict: name, description, price, qty).
-        components (list): Список комплектующих (dict: name, price, qty).
-        discount_percent (float): Скидка в процентах (0-100).
-        offer_number (str): Номер КП (если None — генерируется автоматически).
-        save_dir (str): Папка для сохранения PDF (относительно корня проекта).
-
+        client_data (dict): Данные клиента (full_name, phone, address, email)
+        order_params (dict): Параметры заказа (room_type, installation_price)
+        aircons (list): Список кондиционеров (dict: name, manufacturer, price, qty, unit, delivery)
+        components (list): Список комплектующих (dict: name, price, qty, unit)
+        discount_percent (float): Скидка в процентах (0-100)
+        offer_number (str): Номер КП (если None - генерируется автоматически)
+        save_dir (str): Папка для сохранения PDF
+        
     Returns:
-        str: Абсолютный путь к сгенерированному PDF-файлу.
+        str: Абсолютный путь к сгенерированному PDF-файлу
     """
-    # Создаём директорию для сохранения, если не существует
+    # Создаем директорию для сохранения
     abs_save_dir = os.path.abspath(save_dir)
     os.makedirs(abs_save_dir, exist_ok=True)
 
@@ -49,119 +63,216 @@ def generate_commercial_offer_pdf(
     file_name = f"КП_{offer_number}.pdf"
     file_path = os.path.join(abs_save_dir, file_name)
 
-    # Стили
+    # Стили документа
     styles = getSampleStyleSheet()
-    styleH = styles['Heading1']
-    styleN = styles['Normal']
-    styleTableHeader = ParagraphStyle('TableHeader', parent=styles['Normal'], alignment=1, fontSize=10, fontName='Helvetica-Bold')
-    styleTableCell = ParagraphStyle('TableCell', parent=styles['Normal'], fontSize=10)
+    styleH = ParagraphStyle('Heading1', parent=styles['Heading1'], fontName='Arial-Bold', fontSize=16, alignment=1)
+    styleN = ParagraphStyle('Normal', parent=styles['Normal'], fontName='Arial', fontSize=11)
+    styleBold = ParagraphStyle('Bold', parent=styleN, fontName='Arial-Bold')
+    styleTableHeader = ParagraphStyle('TableHeader', parent=styles['Normal'], alignment=1, fontSize=9, fontName='Arial-Bold')
+    styleTableCell = ParagraphStyle('TableCell', parent=styles['Normal'], fontSize=9, fontName='Arial')
+    styleSmall = ParagraphStyle('Small', parent=styles['Normal'], fontSize=8, fontName='Arial')
 
-    doc = SimpleDocTemplate(file_path, pagesize=A4, rightMargin=20*mm, leftMargin=20*mm, topMargin=20*mm, bottomMargin=20*mm)
+    doc = SimpleDocTemplate(
+        file_path,
+        pagesize=A4,
+        rightMargin=15*mm,
+        leftMargin=15*mm,
+        topMargin=10*mm,
+        bottomMargin=15*mm
+    )
     story = []
 
-    # --- Шапка ---
+    # --- Шапка документа ---
+    story.append(Paragraph("ООО «Эвериз Сервис»", styleBold))
+    story.append(Paragraph("г. Минск, ул. Орловская, 40, пом. 25б, 220030", styleN))
+    story.append(Paragraph("УНП 192812488", styleN))
+    story.append(Paragraph("BY29 MTBK 3012 0001 0933 0013 0402", styleN))
+    story.append(Paragraph("в ЗАО «МТБанк», БИК MTBKBY22", styleN))
+    story.append(Spacer(1, 10))
+    
     story.append(Paragraph("<b>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ</b>", styleH))
     story.append(Spacer(1, 6))
-    story.append(Paragraph(f"<b>Номер КП:</b> {offer_number}", styleN))
-    story.append(Paragraph(f"<b>Дата:</b> {today}", styleN))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph("<b>ООО 'Эвериз Сервис'</b>", styleN))
-    story.append(Paragraph("г. Минск, ул. Орловская, 40, пом. 256, 220030", styleN))
+    
+    # Номер и дата КП
+    story.append(Table([
+        [Paragraph("<b>Номер КП:</b>", styleN), Paragraph(offer_number, styleN)],
+        [Paragraph("<b>Дата:</b>", styleN), Paragraph(today, styleN)]
+    ], colWidths=[30*mm, 100*mm]))
     story.append(Spacer(1, 12))
+    
+# --- Информация о клиенте и исполнителе ---
+    client_info_data = [
+        ["Заказчик:", client_data.get('full_name', '')],
+        ["Адрес объекта:", client_data.get('address', '')],
+        ["Телефон:", client_data.get('phone', '')],
+        ["Исполнитель:", "Бурак Дмитрий +375 44 55 123 44"],
+        ["Тип помещения:", order_params.get('room_type', '')]
+    ]
 
-    # --- Данные клиента ---
-    story.append(Paragraph(f"<b>Клиент:</b> {client_data.get('full_name','')}", styleN))
-    story.append(Paragraph(f"<b>Телефон:</b> {client_data.get('phone','')}", styleN))
+    client_info_rows = []
+    for label, value in client_info_data:
+        client_info_rows.append([
+            Paragraph(f"<b>{label}</b>", styleN), 
+            Paragraph(value, styleN)
+        ])
+
     if client_data.get('email'):
-        story.append(Paragraph(f"<b>Email:</b> {client_data.get('email')}", styleN))
-    if client_data.get('address'):
-        story.append(Paragraph(f"<b>Адрес объекта:</b> {client_data.get('address')}", styleN))
-    story.append(Spacer(1, 12))
+        client_info_rows.insert(3, [
+            Paragraph("<b>Email:</b>", styleN), 
+            Paragraph(client_data.get('email'), styleN)
+        ])
 
-    # --- Параметры заказа ---
-    if order_params:
-        params_str = ", ".join([f"{k}: {v}" for k, v in order_params.items() if v])
-        story.append(Paragraph(f"<b>Параметры заказа:</b> {params_str}", styleN))
-        story.append(Spacer(1, 12))
+    # Создаем таблицу
+    client_table = Table(client_info_rows, colWidths=[40*mm, 140*mm])
+    story.append(client_table)
+    story.append(Spacer(1, 15))
 
     # --- Таблица кондиционеров ---
+    ac_total = 0
     if aircons:
-        story.append(Paragraph("<b>Подобранные кондиционеры:</b>", styleN))
+        story.append(Paragraph("<b>Подобранные кондиционеры:</b>", styleBold))
+        # Заголовки таблицы
         ac_table_data = [[
-            Paragraph("Наименование", styleTableHeader),
-            Paragraph("Описание", styleTableHeader),
-            Paragraph("Цена за шт., BYN", styleTableHeader),
+            Paragraph("Наименование товара", styleTableHeader),
+            Paragraph("Производитель", styleTableHeader),
+            Paragraph("Ед. изм.", styleTableHeader),
             Paragraph("Кол-во", styleTableHeader),
-            Paragraph("Сумма, BYN", styleTableHeader)
+            Paragraph("Цена за ед., BYN", styleTableHeader),
+            Paragraph("Сумма, BYN", styleTableHeader),
+            Paragraph("Срок поставки", styleTableHeader)
         ]]
-        ac_total = 0
-    for ac in aircons:
+        
+        for ac in aircons:
             price = float(ac.get('price', 0))
             qty = int(ac.get('qty', 1))
-            price_with_discount = round(price * (1 - discount_percent/100), 2)
-            total = round(price_with_discount * qty, 2)
+            total = price * qty
             ac_total += total
+            
             ac_table_data.append([
-                Paragraph(str(ac.get('name','')), styleTableCell),
-                Paragraph(str(ac.get('description','')), styleTableCell),
-                Paragraph(f"{price_with_discount:.2f}", styleTableCell),
+                Paragraph(ac.get('name', ''), styleTableCell),
+                Paragraph(ac.get('manufacturer', ''), styleTableCell),
+                Paragraph(ac.get('unit', 'шт.'), styleTableCell),
                 Paragraph(str(qty), styleTableCell),
-                Paragraph(f"{total:.2f}", styleTableCell)
+                Paragraph(f"{price:.2f}", styleTableCell),
+                Paragraph(f"{total:.2f}", styleTableCell),
+                Paragraph(ac.get('delivery', 'в наличии'), styleTableCell)
             ])
-            ac_table = Table(ac_table_data, colWidths=[60*mm, 60*mm, 30*mm, 20*mm, 30*mm])
-            ac_table.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-                ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-                ('ALIGN', (2,1), (-1,-1), 'RIGHT'),
-                ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ]))
-            story.append(ac_table)
-            story.append(Spacer(1, 12))
-    else:
-        ac_total = 0
+        
+        # Итоговая строка (без скидки)
+        ac_table_data.append([
+            Paragraph("Итого", styleTableHeader),
+            '', '', '', '',
+            Paragraph(f"{ac_total:.2f}", styleTableHeader),
+            ''
+        ])
+        
+        ac_table = Table(
+            ac_table_data, 
+            colWidths=[60*mm, 30*mm, 20*mm, 15*mm, 25*mm, 25*mm, 25*mm]
+        )
+        ac_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('ALIGN', (3,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('SPAN', (0,-1), (4,-1)),  # Объединение ячеек для "Итого"
+            ('BACKGROUND', (0,-1), (-1,-1), colors.white),
+            ('FONTNAME', (0,-1), (-1,-1), 'Arial-Bold'),
+        ]))
+        story.append(ac_table)
+        story.append(Spacer(1, 15))
 
     # --- Таблица комплектующих ---
+    comp_total = 0
     if components:
-        story.append(Paragraph("<b>Комплектующие:</b>", styleN))
+        story.append(Paragraph("<b>Комплектующие и материалы:</b>", styleBold))
         comp_table_data = [[
             Paragraph("Наименование", styleTableHeader),
+            Paragraph("Ед. изм.", styleTableHeader),
             Paragraph("Кол-во", styleTableHeader),
-            Paragraph("Цена за шт., BYN", styleTableHeader),
+            Paragraph("Цена за ед., BYN", styleTableHeader),
             Paragraph("Сумма, BYN", styleTableHeader)
         ]]
-        comp_total = 0
-    for comp in components:
+        
+        for comp in components:
             price = float(comp.get('price', 0))
             qty = int(comp.get('qty', 1))
-            price_with_discount = round(price * (1 - discount_percent/100), 2)
-            total = round(price_with_discount * qty, 2)
+            total = price * qty
             comp_total += total
+            
             comp_table_data.append([
-                Paragraph(str(comp.get('name','')), styleTableCell),
+                Paragraph(comp.get('name', ''), styleTableCell),
+                Paragraph(comp.get('unit', 'шт.'), styleTableCell),
                 Paragraph(str(qty), styleTableCell),
-                Paragraph(f"{price_with_discount:.2f}", styleTableCell),
+                Paragraph(f"{price:.2f}", styleTableCell),
                 Paragraph(f"{total:.2f}", styleTableCell)
             ])
-            comp_table = Table(comp_table_data, colWidths=[80*mm, 30*mm, 30*mm, 30*mm])
-            comp_table.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-                ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-                ('ALIGN', (2,1), (-1,-1), 'RIGHT'),
-                ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ]))
-            story.append(comp_table)
-            story.append(Spacer(1, 12))
-    else:
-        comp_total = 0
+        
+        # Итоговая строка (без скидки)
+        comp_table_data.append([
+            Paragraph("Итого", styleTableHeader),
+            '', '',
+            Paragraph(f"{comp_total:.2f}", styleTableHeader),
+            ''
+        ])
+        
+        comp_table = Table(
+            comp_table_data, 
+            colWidths=[80*mm, 25*mm, 20*mm, 30*mm, 25*mm]
+        )
+        comp_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('ALIGN', (2,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('SPAN', (0,-1), (2,-1)),  # Объединение ячеек для "Итого"
+            ('BACKGROUND', (0,-1), (-1,-1), colors.white),
+            ('FONTNAME', (0,-1), (-1,-1), 'Arial-Bold'),
+        ]))
+        story.append(comp_table)
+        story.append(Spacer(1, 15))
 
-    # --- Итоги ---
-    total_sum = ac_total + comp_total
-    discount_sum = round(total_sum * discount_percent/100, 2)
-    to_pay = round(total_sum, 2)
-    story.append(Paragraph(f"<b>Сумма без скидки:</b> {total_sum + discount_sum:.2f} BYN", styleN))
-    story.append(Paragraph(f"<b>Скидка:</b> {discount_sum:.2f} BYN", styleN))
-    story.append(Paragraph(f"<b>Итого к оплате:</b> {to_pay:.2f} BYN", styleN))
-    story.append(Spacer(1, 12))
+    # --- Блок работ ---
+    installation_price = 0
+    if order_params.get('installation_price', 0) > 0:
+        installation_price = float(order_params['installation_price'])
+        work_table_data = [
+            [Paragraph("Монтажные работы", styleTableCell), Paragraph(f"{installation_price:.2f}", styleTableCell)]
+        ]
+        
+        work_table = Table(
+            work_table_data, 
+            colWidths=[140*mm, 30*mm]
+        )
+        work_table.setStyle(TableStyle([
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+        ]))
+        story.append(work_table)
+        story.append(Spacer(1, 15))
+
+    # --- Расчет итоговой суммы со скидкой ---
+    total_without_discount = ac_total + comp_total + installation_price
+    discount_value = total_without_discount * discount_percent / 100
+    total_with_discount = total_without_discount - discount_value
+    
+    # --- Итоговая сумма ---
+    total_table = Table([
+        [Paragraph(f"<b>Общая сумма:</b>", styleBold), Paragraph(f"{total_without_discount:.2f} BYN", styleN)],
+        [Paragraph(f"<b>Скидка {discount_percent}%:</b>", styleBold), Paragraph(f"-{discount_value:.2f} BYN", styleN)],
+        [Paragraph(f"<b>ИТОГО К ОПЛАТЕ:</b>", styleBold), Paragraph(f"{total_with_discount:.2f} BYN", styleBold)]
+    ], colWidths=[100*mm, 50*mm])
+    
+    story.append(total_table)
+    story.append(Spacer(1, 20))
+
+    # --- Условия и примечания ---
+    story.append(Paragraph("<b>Условия поставки и монтажа:</b>", styleBold))
+    story.append(Paragraph("• Монтаж осуществляется в течение 3-5 рабочих дней после оплаты", styleSmall))
+    story.append(Paragraph("• Гарантия на оборудование - 3 года, на монтажные работы - 2 года", styleSmall))
+    story.append(Paragraph("• Цены указаны без учета НДС", styleSmall))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(f"<b>Менеджер: </b>Бурак Д.С. +375 44 55 123 44", styleSmall))
 
     # --- Сохранение PDF ---
     try:

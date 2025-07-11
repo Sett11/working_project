@@ -118,43 +118,38 @@ def vozduhovody_ui(selected_names, lengths):
         add_btn = gr.Button('Добавить воздуховод', variant='primary')
     return new_selected, images, length_inputs, remove_buttons, add_btn
 
-def generate_kp(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
-                ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand,
-                # Параметры комплектующих
-                airduct_500x800, airduct_500x800_qty, airduct_500x800_length,
-                airduct_600x300, airduct_600x300_qty, airduct_600x300_length,
-                airduct_800x500, airduct_800x500_qty, airduct_800x500_length,
-                airduct_d450, airduct_d450_qty, airduct_d450_length,
-                airduct_d560, airduct_d560_qty, airduct_d560_length,
-                airduct_d630, airduct_d630_qty, airduct_d630_length,
-                airduct_d710, airduct_d710_qty, airduct_d710_length,
-                # Отводы
-                bend_90_500x800, bend_90_500x800_qty,
-                bend_90_d630, bend_90_d630_qty,
-                bend_90_d560, bend_90_d560_qty,
-                bend_90_d450, bend_90_d450_qty,
-                bend_90_d710, bend_90_d710_qty,
-                # Переходы
-                transition_500x800_d630, transition_500x800_d630_qty,
-                transition_600x300_d560, transition_600x300_d560_qty,
-                transition_500x800_d450, transition_500x800_d450_qty,
-                # Тройники
-                tee_500x800, tee_500x800_qty,
-                # Клапаны
-                valve_800x500, valve_800x500_qty,
-                valve_600x300, valve_600x300_qty,
-                valve_d450, valve_d450_qty,
-                # Соединительные элементы
-                nipple, nipple_qty,
-                coupling, coupling_qty,
-                cap, cap_qty,
-                # Регулирующие элементы
-                damper, damper_qty,
-                umbrella, umbrella_qty,
-                deflector, deflector_qty,
-                # Материалы
-                steel_sheet, steel_sheet_qty, steel_sheet_length,
-                insulation, insulation_qty, insulation_length):
+def generate_kp(
+    name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type,
+    ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand,
+    airduct_500x800, airduct_500x800_qty, airduct_500x800_length,
+    airduct_600x300, airduct_600x300_qty, airduct_600x300_length,
+    airduct_800x500, airduct_800x500_qty, airduct_800x500_length,
+    airduct_d450, airduct_d450_qty, airduct_d450_length,
+    airduct_d560, airduct_d560_qty, airduct_d560_length,
+    airduct_d630, airduct_d630_qty, airduct_d630_length,
+    airduct_d710, airduct_d710_qty, airduct_d710_length,
+    bend_90_500x800, bend_90_500x800_qty,
+    bend_90_d630, bend_90_d630_qty,
+    bend_90_d560, bend_90_d560_qty,
+    bend_90_d450, bend_90_d450_qty,
+    bend_90_d710, bend_90_d710_qty,
+    transition_500x800_d630, transition_500x800_d630_qty,
+    transition_600x300_d560, transition_600x300_d560_qty,
+    transition_500x800_d450, transition_500x800_d450_qty,
+    tee_500x800, tee_500x800_qty,
+    valve_800x500, valve_800x500_qty,
+    valve_600x300, valve_600x300_qty,
+    valve_d450, valve_d450_qty,
+    nipple, nipple_qty,
+    coupling, coupling_qty,
+    cap, cap_qty,
+    damper, damper_qty,
+    umbrella, umbrella_qty,
+    deflector, deflector_qty,
+    steel_sheet, steel_sheet_qty, steel_sheet_length,
+    insulation, insulation_qty, insulation_length,
+    installation_price
+):
     """
     Отправляет запрос на бэкенд для генерации КП и возвращает результат.
     Все параметры подробно описаны в сигнатуре функции.
@@ -324,7 +319,7 @@ def generate_kp(name, phone, mail, address, date, area, type_room, discount, wif
     
     payload = {
         "client_data": {"full_name": name, "phone": phone, "email": mail, "address": address},
-        "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": date},
+        "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": date, "installation_price": price},
         "aircon_params": {
             "wifi": wifi, 
             "inverter": inverter, 
@@ -341,7 +336,9 @@ def generate_kp(name, phone, mail, address, date, area, type_room, discount, wif
             "num_tvs": num_tvs,
             "other_power": other_power
         },
-        "components": selected_components
+        "components": [
+            {**comp, "unit": comp.get("unit", "шт.")} for comp in selected_components
+        ]
     }
     
     try:
@@ -475,16 +472,17 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         with gr.Row():
             with gr.Column():
                 gr.Markdown("### 1. Данные клиента")
-                name = gr.Textbox(label="Имя клиента")
-                phone = gr.Textbox(label="Телефон")
-                mail = gr.Textbox(label="Электронная почта")
-                address = gr.Textbox(label="Адрес")
-                date = gr.Textbox(label="Дата визита монтажника")
+                name = gr.Textbox(label="Имя клиента", placeholder="Например, Иванов Иван")
+                phone = gr.Textbox(label="Телефон", placeholder="+375291234567")
+                mail = gr.Textbox(label="Электронная почта", placeholder="ivan@example.com")
+                address = gr.Textbox(label="Адрес", placeholder="г. Минск, ул. Ленина, 1")
+                date = gr.Textbox(label="Дата визита монтажника", placeholder="2025-07-12")
             with gr.Column():
                 gr.Markdown("### 2. Параметры заказа")
                 type_room = gr.Dropdown(["квартира", "дом", "офис", "производство"], label="Тип помещения")
                 area = gr.Slider(10, 200, value=50, label="Площадь помещения (м²)")
                 discount = gr.Slider(0, 50, value=5, label="Индивидуальная скидка (%)")
+                installation_price = gr.Number(label="Стоимость монтажа (BYN)", minimum=0, step=1, value=0)
         
         gr.Markdown("### 3. Требования к кондиционеру")
         with gr.Row():
@@ -519,44 +517,44 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             with gr.Row():
                 airduct_500x800 = gr.Checkbox(label="500x800 мм")
                 airduct_500x800_img = gr.Image(value=get_component_image("воздуховод 500х800"), label="Фото", height=80, width=80, interactive=False)
-                airduct_500x800_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                airduct_500x800_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
                 airduct_500x800_length = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=0.0)
             
             with gr.Row():
                 airduct_600x300 = gr.Checkbox(label="600x300 мм")
                 airduct_600x300_img = gr.Image(value=get_component_image("воздуховод 600х300"), label="Фото", height=80, width=80, interactive=False)
-                airduct_600x300_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                airduct_600x300_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
                 airduct_600x300_length = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=0.0)
             
             with gr.Row():
                 airduct_800x500 = gr.Checkbox(label="800x500 мм")
                 airduct_800x500_img = gr.Image(value=get_component_image("воздуховод 800х500"), label="Фото", height=80, width=80, interactive=False)
-                airduct_800x500_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                airduct_800x500_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
                 airduct_800x500_length = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=0.0)
             
             # Круглые воздуховоды
             with gr.Row():
                 airduct_d450 = gr.Checkbox(label="ø450 мм")
                 airduct_d450_img = gr.Image(value=get_component_image("воздуховод d450"), label="Фото", height=80, width=80, interactive=False)
-                airduct_d450_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                airduct_d450_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
                 airduct_d450_length = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=0.0)
             
             with gr.Row():
                 airduct_d560 = gr.Checkbox(label="ø560 мм")
                 airduct_d560_img = gr.Image(value=get_component_image("воздуховод d560"), label="Фото", height=80, width=80, interactive=False)
-                airduct_d560_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                airduct_d560_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
                 airduct_d560_length = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=0.0)
             
             with gr.Row():
                 airduct_d630 = gr.Checkbox(label="ø630 мм")
                 airduct_d630_img = gr.Image(value=get_component_image("воздуховод d630"), label="Фото", height=80, width=80, interactive=False)
-                airduct_d630_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                airduct_d630_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
                 airduct_d630_length = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=0.0)
             
             with gr.Row():
                 airduct_d710 = gr.Checkbox(label="ø710 мм")
                 airduct_d710_img = gr.Image(value=get_component_image("воздуховод d710"), label="Фото", height=80, width=80, interactive=False)
-                airduct_d710_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                airduct_d710_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
                 airduct_d710_length = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=0.0)
         
         # Блок 2: Отводы и повороты
@@ -566,27 +564,27 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             with gr.Row():
                 bend_90_500x800 = gr.Checkbox(label="Поворот 90° 500x800 мм")
                 bend_90_500x800_img = gr.Image(value=get_component_image("поворот 90° 500х800"), label="Фото", height=80, width=80, interactive=False)
-                bend_90_500x800_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                bend_90_500x800_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 bend_90_d630 = gr.Checkbox(label="Поворот 90° ø630 мм")
                 bend_90_d630_img = gr.Image(value=get_component_image("поворот 90° d630"), label="Фото", height=80, width=80, interactive=False)
-                bend_90_d630_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                bend_90_d630_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 bend_90_d560 = gr.Checkbox(label="Поворот 90° ø560 мм")
                 bend_90_d560_img = gr.Image(value=get_component_image("поворот 90° d560"), label="Фото", height=80, width=80, interactive=False)
-                bend_90_d560_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                bend_90_d560_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 bend_90_d450 = gr.Checkbox(label="Поворот 90° ø450 мм")
                 bend_90_d450_img = gr.Image(value=get_component_image("поворот 90° d450"), label="Фото", height=80, width=80, interactive=False)
-                bend_90_d450_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                bend_90_d450_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 bend_90_d710 = gr.Checkbox(label="Поворот 90° ø710 мм")
                 bend_90_d710_img = gr.Image(value=get_component_image("поворот 90° d710"), label="Фото", height=80, width=80, interactive=False)
-                bend_90_d710_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                bend_90_d710_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
         
         # Блок 3: Переходы
         with gr.Group():
@@ -595,17 +593,17 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             with gr.Row():
                 transition_500x800_d630 = gr.Checkbox(label="500x800 → ø630 мм")
                 transition_500x800_d630_img = gr.Image(value=get_component_image("переход 500х800/d630"), label="Фото", height=80, width=80, interactive=False)
-                transition_500x800_d630_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                transition_500x800_d630_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 transition_600x300_d560 = gr.Checkbox(label="600x300 → ø560 мм")
                 transition_600x300_d560_img = gr.Image(value=get_component_image("переход 600х300/d560"), label="Фото", height=80, width=80, interactive=False)
-                transition_600x300_d560_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                transition_600x300_d560_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 transition_500x800_d450 = gr.Checkbox(label="500x800 → ø450 мм")
                 transition_500x800_d450_img = gr.Image(value=get_component_image("переход 500х800/d450"), label="Фото", height=80, width=80, interactive=False)
-                transition_500x800_d450_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                transition_500x800_d450_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
         
         # Блок 4: Тройники
         with gr.Group():
@@ -614,7 +612,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             with gr.Row():
                 tee_500x800 = gr.Checkbox(label="500x800/800x500/500x800 мм")
                 tee_500x800_img = gr.Image(value=get_component_image("тройник 500х800/800х500/500х800"), label="Фото", height=80, width=80, interactive=False)
-                tee_500x800_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                tee_500x800_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
         
         # Блок 5: Клапаны
         with gr.Group():
@@ -623,17 +621,17 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             with gr.Row():
                 valve_800x500 = gr.Checkbox(label="РЕГУЛЯР-Л-800х500-В-1")
                 valve_800x500_img = gr.Image(value=get_component_image("Клапан воздушный регулирующий РЕГУЛЯР-Л-800х500-В-1"), label="Фото", height=80, width=80, interactive=False)
-                valve_800x500_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                valve_800x500_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 valve_600x300 = gr.Checkbox(label="РЕГУЛЯР-600*300-Н-1")
                 valve_600x300_img = gr.Image(value=get_component_image("Клапан воздушный регулирующий РЕГУЛЯР-600*300-Н-1"), label="Фото", height=80, width=80, interactive=False)
-                valve_600x300_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                valve_600x300_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 valve_d450 = gr.Checkbox(label="РЕГУЛЯР-Л-450-Н-1")
                 valve_d450_img = gr.Image(value=get_component_image("Клапан воздушный регулирующий РЕГУЛЯР-Л-450-Н-1"), label="Фото", height=80, width=80, interactive=False)
-                valve_d450_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                valve_d450_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
         
         # Блок 6: Соединительные элементы
         with gr.Group():
@@ -642,17 +640,17 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             with gr.Row():
                 nipple = gr.Checkbox(label="Ниппель ø100-1250 мм")
                 nipple_img = gr.Image(value=get_component_image("ниппель"), label="Фото", height=80, width=80, interactive=False)
-                nipple_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                nipple_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 coupling = gr.Checkbox(label="Муфта ø100-1250 мм")
                 coupling_img = gr.Image(value=get_component_image("муфта"), label="Фото", height=80, width=80, interactive=False)
-                coupling_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                coupling_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 cap = gr.Checkbox(label="Заглушка круглая ø100-1250 мм")
                 cap_img = gr.Image(value=get_component_image("заглушка"), label="Фото", height=80, width=80, interactive=False)
-                cap_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                cap_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
         
         # Блок 7: Регулирующие элементы
         with gr.Group():
@@ -661,17 +659,17 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             with gr.Row():
                 damper = gr.Checkbox(label="Дроссель-клапан ø100-500 мм")
                 damper_img = gr.Image(value=get_component_image("дроссель-клапан"), label="Фото", height=80, width=80, interactive=False)
-                damper_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                damper_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 umbrella = gr.Checkbox(label="Зонт крышный ø100-710 мм")
                 umbrella_img = gr.Image(value=get_component_image("зонт крышный"), label="Фото", height=80, width=80, interactive=False)
-                umbrella_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                umbrella_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
             
             with gr.Row():
                 deflector = gr.Checkbox(label="Дефлектор ø200-1250 мм")
                 deflector_img = gr.Image(value=get_component_image("дефлектор"), label="Фото", height=80, width=80, interactive=False)
-                deflector_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                deflector_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
         
         # Блок 8: Материалы
         with gr.Group():
@@ -680,13 +678,13 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             with gr.Row():
                 steel_sheet = gr.Checkbox(label="Тонколистовая оц. сталь б=0,5мм")
                 steel_sheet_img = gr.Image(value=get_component_image("сталь тонколистовая"), label="Фото", height=80, width=80, interactive=False)
-                steel_sheet_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                steel_sheet_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
                 steel_sheet_length = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=0.0)
             
             with gr.Row():
                 insulation = gr.Checkbox(label="Маты минераловатные Акотерм СТИ 50/А")
                 insulation_img = gr.Image(value=get_component_image("маты минераловатные"), label="Фото", height=80, width=80, interactive=False)
-                insulation_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=0)
+                insulation_qty = gr.Number(label="Количество (шт)", minimum=0, step=1, value=1)
                 insulation_length = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=0.0)
         
         # Статус выбора компонентов
@@ -973,6 +971,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 umbrella, umbrella_qty,
                 deflector, deflector_qty,
                 steel_sheet, steel_sheet_qty, steel_sheet_length,
-                insulation, insulation_qty, insulation_length],
+                insulation, insulation_qty, insulation_length,
+                installation_price],
         outputs=[aircons_output, pdf_output]
     )

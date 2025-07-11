@@ -172,8 +172,26 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
         selected_aircons = select_aircons(db, aircon_params)
         logger.info(f"Подобрано {len(selected_aircons)} кондиционеров.")
 
-        # 3. Формируем список кондиционеров для ответа.
-        aircons_list = [schemas.AirConditioner.from_orm(ac).dict() for ac in selected_aircons]
+        # 3. Формируем список кондиционеров для ответа (добавляем нужные поля для PDF)
+        aircons_list = []
+        for ac in selected_aircons:
+            ac_dict = schemas.AirConditioner.from_orm(ac).dict()
+            aircons_list.append({
+                'name': ac_dict.get('model_name', ''),
+                'manufacturer': ac_dict.get('brand', ''),
+                'price': ac_dict.get('retail_price_byn', 0),
+                'qty': 1,  # Можно доработать, если qty приходит из заказа
+                'unit': 'шт.',
+                'delivery': 'в наличии',
+            })
+
+        # 3.1. Преобразуем components (добавляем unit)
+        components_for_pdf = []
+        for comp in components:
+            comp_new = comp.copy()
+            if 'unit' not in comp_new:
+                comp_new['unit'] = 'шт.'
+            components_for_pdf.append(comp_new)
 
         # 4. Генерируем PDF коммерческого предложения
         try:
@@ -181,7 +199,7 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
                 client_data=client_data,
                 order_params=order_params,
                 aircons=aircons_list,
-                components=components,
+                components=components_for_pdf,
                 discount_percent=discount
             )
             logger.info(f"PDF успешно сгенерирован: {pdf_path}")
@@ -194,7 +212,7 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
             "aircons_list": aircons_list,
             "total_count": len(selected_aircons),
             "client_name": client.full_name,
-            "components": components,
+            "components": components_for_pdf,
             "pdf_path": pdf_path
         }
 

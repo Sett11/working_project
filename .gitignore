@@ -13,6 +13,7 @@ GEMINI.md
 env/
 venv/
 
+*.TTF
 # Logs
 *.log
 
