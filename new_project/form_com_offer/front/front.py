@@ -413,84 +413,9 @@ def select_aircons(name, phone, mail, address, date, area, type_room, discount, 
         logger.error(error_message, exc_info=True)
         return error_message
 
-def select_components(category, price_limit):
-    """
-    Подбирает комплектующие по заданным параметрам.
-    """
-    logger.info(f"Подбор комплектующих: категория={category}, цена до {price_limit} BYN")
-    
-    try:
-        # Формируем параметры для запроса
-        params = {
-            "category": category if category != "Все категории" else None,
-            "price_limit": price_limit
-        }
-        
-        # Отправляем запрос на бэкенд
-        response = requests.post(f"{BACKEND_URL}/api/select_components/", json=params)
-        response.raise_for_status()
-        data = response.json()
-        
-        # Проверяем на ошибки
-        if "error" in data:
-            logger.error(f"Ошибка от бэкенда: {data['error']}")
-            return f"Ошибка: {data['error']}"
-        
-        components_list = data.get("components_list", [])
-        
-        # Форматируем список комплектующих для отображения
-        if isinstance(components_list, list) and components_list:
-            formatted_list = f"Найдено {data.get('total_count', len(components_list))} подходящих комплектующих:\n\n"
-            for i, component in enumerate(components_list, 1):
-                formatted_list += f"{i}. {component.get('name', 'N/A')}\n"
-                formatted_list += f"   Категория: {component.get('category', 'N/A')}\n"
-                formatted_list += f"   Размер: {component.get('size', 'N/A')}\n"
-                formatted_list += f"   Материал: {component.get('material', 'N/A')}\n"
-                formatted_list += f"   Цена: {component.get('price', 'N/A')} {component.get('currency', 'BYN')}\n"
-                formatted_list += f"   Характеристики: {component.get('characteristics', 'N/A')}\n\n"
-        else:
-            formatted_list = "Подходящих комплектующих не найдено."
 
-        logger.info(f"Подбор комплектующих завершен успешно.")
-        return formatted_list
-        
-    except requests.exceptions.RequestException as e:
-        error_message = f"Не удалось связаться с бэкендом: {e}"
-        logger.error(error_message, exc_info=True)
-        return error_message
-    except Exception as e:
-        error_message = f"Произошла внутренняя ошибка: {e}"
-        logger.error(error_message, exc_info=True)
-        return error_message
 
-def get_components_by_categories():
-    """
-    Получает все компоненты, сгруппированные по категориям.
-    """
-    logger.info("Запрос на получение компонентов по категориям")
-    
-    try:
-        # Отправляем запрос на бэкенд
-        response = requests.get(f"{BACKEND_URL}/api/components_by_categories/")
-        response.raise_for_status()
-        data = response.json()
-        
-        # Проверяем на ошибки
-        if "error" in data:
-            logger.error(f"Ошибка от бэкенда: {data['error']}")
-            return None
-        
-        logger.info(f"Получено {data.get('total_components', 0)} компонентов в {data.get('total_categories', 0)} категориях")
-        return data.get("categories", {})
-        
-    except requests.exceptions.RequestException as e:
-        error_message = f"Не удалось связаться с бэкендом: {e}"
-        logger.error(error_message, exc_info=True)
-        return None
-    except Exception as e:
-        error_message = f"Произошла внутренняя ошибка: {e}"
-        logger.error(error_message, exc_info=True)
-        return None
+
 
 # Функция create_component_card удалена, так как используется статический интерфейс
 
