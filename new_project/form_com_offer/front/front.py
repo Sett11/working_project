@@ -80,7 +80,42 @@ def vozduhovody_ui(selected_names, lengths):
     return new_selected, images, length_inputs, remove_buttons, add_btn
 
 def generate_kp(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
-                ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand):
+                ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand,
+                # Параметры комплектующих
+                airduct_500x800, airduct_500x800_qty, airduct_500x800_length,
+                airduct_600x300, airduct_600x300_qty, airduct_600x300_length,
+                airduct_800x500, airduct_800x500_qty, airduct_800x500_length,
+                airduct_d450, airduct_d450_qty, airduct_d450_length,
+                airduct_d560, airduct_d560_qty, airduct_d560_length,
+                airduct_d630, airduct_d630_qty, airduct_d630_length,
+                airduct_d710, airduct_d710_qty, airduct_d710_length,
+                # Отводы
+                bend_90_500x800, bend_90_500x800_qty,
+                bend_90_d630, bend_90_d630_qty,
+                bend_90_d560, bend_90_d560_qty,
+                bend_90_d450, bend_90_d450_qty,
+                bend_90_d710, bend_90_d710_qty,
+                # Переходы
+                transition_500x800_d630, transition_500x800_d630_qty,
+                transition_600x300_d560, transition_600x300_d560_qty,
+                transition_500x800_d450, transition_500x800_d450_qty,
+                # Тройники
+                tee_500x800, tee_500x800_qty,
+                # Клапаны
+                valve_800x500, valve_800x500_qty,
+                valve_600x300, valve_600x300_qty,
+                valve_d450, valve_d450_qty,
+                # Соединительные элементы
+                nipple, nipple_qty,
+                coupling, coupling_qty,
+                cap, cap_qty,
+                # Регулирующие элементы
+                damper, damper_qty,
+                umbrella, umbrella_qty,
+                deflector, deflector_qty,
+                # Материалы
+                steel_sheet, steel_sheet_qty, steel_sheet_length,
+                insulation, insulation_qty, insulation_length):
     """
     Отправляет запрос на бэкенд для генерации КП и возвращает результат.
     """
@@ -89,6 +124,161 @@ def generate_kp(name, phone, mail, address, date, area, type_room, discount, wif
     # Преобразуем значения для расчета мощности
     illumination_map = {"Слабая": 0, "Средняя": 1, "Сильная": 2}
     activity_map = {"Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
+    
+    # Собираем выбранные комплектующие
+    selected_components = []
+    
+    # Воздуховоды
+    if airduct_500x800:
+        qty = airduct_500x800_qty or 0
+        length = airduct_500x800_length or 0.0
+        if qty > 0 or length > 0:
+            selected_components.append({"name": "Воздуховод 500x800", "qty": qty, "length": length})
+    
+    if airduct_600x300:
+        qty = airduct_600x300_qty or 0
+        length = airduct_600x300_length or 0.0
+        if qty > 0 or length > 0:
+            selected_components.append({"name": "Воздуховод 600x300", "qty": qty, "length": length})
+    
+    if airduct_800x500:
+        qty = airduct_800x500_qty or 0
+        length = airduct_800x500_length or 0.0
+        if qty > 0 or length > 0:
+            selected_components.append({"name": "Воздуховод 800x500", "qty": qty, "length": length})
+    
+    if airduct_d450:
+        qty = airduct_d450_qty or 0
+        length = airduct_d450_length or 0.0
+        if qty > 0 or length > 0:
+            selected_components.append({"name": "Воздуховод ø450", "qty": qty, "length": length})
+    
+    if airduct_d560:
+        qty = airduct_d560_qty or 0
+        length = airduct_d560_length or 0.0
+        if qty > 0 or length > 0:
+            selected_components.append({"name": "Воздуховод ø560", "qty": qty, "length": length})
+    
+    if airduct_d630:
+        qty = airduct_d630_qty or 0
+        length = airduct_d630_length or 0.0
+        if qty > 0 or length > 0:
+            selected_components.append({"name": "Воздуховод ø630", "qty": qty, "length": length})
+    
+    if airduct_d710:
+        qty = airduct_d710_qty or 0
+        length = airduct_d710_length or 0.0
+        if qty > 0 or length > 0:
+            selected_components.append({"name": "Воздуховод ø710", "qty": qty, "length": length})
+    
+    # Отводы
+    if bend_90_500x800:
+        qty = bend_90_500x800_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Поворот 90° 500x800", "qty": qty})
+    
+    if bend_90_d630:
+        qty = bend_90_d630_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Поворот 90° ø630", "qty": qty})
+    
+    if bend_90_d560:
+        qty = bend_90_d560_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Поворот 90° ø560", "qty": qty})
+    
+    if bend_90_d450:
+        qty = bend_90_d450_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Поворот 90° ø450", "qty": qty})
+    
+    if bend_90_d710:
+        qty = bend_90_d710_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Поворот 90° ø710", "qty": qty})
+    
+    # Переходы
+    if transition_500x800_d630:
+        qty = transition_500x800_d630_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Переход 500x800→ø630", "qty": qty})
+    
+    if transition_600x300_d560:
+        qty = transition_600x300_d560_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Переход 600x300→ø560", "qty": qty})
+    
+    if transition_500x800_d450:
+        qty = transition_500x800_d450_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Переход 500x800→ø450", "qty": qty})
+    
+    # Тройники
+    if tee_500x800:
+        qty = tee_500x800_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Тройник 500x800", "qty": qty})
+    
+    # Клапаны
+    if valve_800x500:
+        qty = valve_800x500_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Клапан РЕГУЛЯР-Л-800х500", "qty": qty})
+    
+    if valve_600x300:
+        qty = valve_600x300_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Клапан РЕГУЛЯР-600*300", "qty": qty})
+    
+    if valve_d450:
+        qty = valve_d450_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Клапан РЕГУЛЯР-Л-450", "qty": qty})
+    
+    # Соединительные элементы
+    if nipple:
+        qty = nipple_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Ниппель", "qty": qty})
+    
+    if coupling:
+        qty = coupling_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Муфта", "qty": qty})
+    
+    if cap:
+        qty = cap_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Заглушка", "qty": qty})
+    
+    # Регулирующие элементы
+    if damper:
+        qty = damper_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Дроссель-клапан", "qty": qty})
+    
+    if umbrella:
+        qty = umbrella_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Зонт крышный", "qty": qty})
+    
+    if deflector:
+        qty = deflector_qty or 0
+        if qty > 0:
+            selected_components.append({"name": "Дефлектор", "qty": qty})
+    
+    # Материалы
+    if steel_sheet:
+        qty = steel_sheet_qty or 0
+        length = steel_sheet_length or 0.0
+        if qty > 0 or length > 0:
+            selected_components.append({"name": "Сталь тонколистовая", "qty": qty, "length": length})
+    
+    if insulation:
+        qty = insulation_qty or 0
+        length = insulation_length or 0.0
+        if qty > 0 or length > 0:
+            selected_components.append({"name": "Маты минераловатные", "qty": qty, "length": length})
     
     payload = {
         "client_data": {"full_name": name, "phone": phone, "email": mail, "address": address},
@@ -108,7 +298,8 @@ def generate_kp(name, phone, mail, address, date, area, type_room, discount, wif
             "num_computers": num_computers,
             "num_tvs": num_tvs,
             "other_power": other_power
-        }
+        },
+        "components": selected_components
     }
     
     try:
@@ -150,6 +341,77 @@ def generate_kp(name, phone, mail, address, date, area, type_room, discount, wif
         error_message = f"Произошла внутренняя ошибка: {e}"
         logger.error(error_message, exc_info=True)
         return error_message, None
+
+def select_aircons(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
+                   ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand):
+    """
+    Подбирает только кондиционеры без генерации КП.
+    """
+    logger.info(f"Подбор кондиционеров для клиента: {name}")
+    
+    # Преобразуем значения для расчета мощности
+    illumination_map = {"Слабая": 0, "Средняя": 1, "Сильная": 2}
+    activity_map = {"Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
+    
+    payload = {
+        "client_data": {"full_name": name, "phone": phone, "email": mail, "address": address},
+        "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": date},
+        "aircon_params": {
+            "wifi": wifi, 
+            "inverter": inverter, 
+            "price_limit": price, 
+            "brand": brand, 
+            "mount_type": mount_type,
+            # Параметры для расчета мощности
+            "area": area,
+            "ceiling_height": ceiling_height,
+            "illumination": illumination_map.get(illumination, 1),
+            "num_people": num_people,
+            "activity": activity_map.get(activity, 0),
+            "num_computers": num_computers,
+            "num_tvs": num_tvs,
+            "other_power": other_power
+        }
+    }
+    
+    try:
+        logger.info(f"Отправка запроса на эндпоинт /api/select_aircons/ на бэкенде.")
+        response = requests.post(f"{BACKEND_URL}/api/select_aircons/", json=payload)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Проверяем на ошибки
+        if "error" in data:
+            logger.error(f"Ошибка от бэкенда: {data['error']}")
+            return f"Ошибка: {data['error']}"
+        
+        aircons_list = data.get("aircons_list", [])
+        
+        # Форматируем список кондиционеров для отображения
+        if isinstance(aircons_list, list) and aircons_list:
+            formatted_list = f"Найдено {data.get('total_count', len(aircons_list))} подходящих кондиционеров:\n\n"
+            for i, aircon in enumerate(aircons_list, 1):
+                formatted_list += f"{i}. {aircon.get('brand', 'N/A')} {aircon.get('model_name', 'N/A')}\n"
+                formatted_list += f"   Мощность охлаждения: {aircon.get('cooling_power_kw', 'N/A')} кВт\n"
+                formatted_list += f"   Мощность обогрева: {aircon.get('heating_power_kw', 'N/A')} кВт\n"
+                formatted_list += f"   Цена: {aircon.get('retail_price_byn', 'N/A')} BYN\n"
+                formatted_list += f"   Инвертор: {'Да' if aircon.get('is_inverter') else 'Нет'}\n"
+                formatted_list += f"   Wi-Fi: {'Да' if aircon.get('has_wifi') else 'Нет'}\n"
+                formatted_list += f"   Тип монтажа: {aircon.get('mount_type', 'N/A')}\n\n"
+        else:
+            formatted_list = "Подходящих кондиционеров не найдено."
+
+        logger.info(f"Подбор кондиционеров для клиента {name} завершен успешно.")
+        return formatted_list
+        
+    except requests.exceptions.RequestException as e:
+        error_message = f"Не удалось связаться с бэкендом: {e}"
+        logger.error(error_message, exc_info=True)
+        return error_message
+    except Exception as e:
+        error_message = f"Произошла внутренняя ошибка: {e}"
+        logger.error(error_message, exc_info=True)
+        return error_message
 
 def select_components(category, price_limit):
     """
@@ -702,13 +964,61 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         )
     
     with gr.Tab("Результат"):
+        gr.Markdown("### Подбор кондиционеров")
         aircons_output = gr.Textbox(label="Подходящие модели", interactive=False, lines=15, max_lines=30)
+        select_aircons_btn = gr.Button("Подобрать кондиционеры", variant="primary")
+        
+        gr.Markdown("### Генерация коммерческого предложения")
         pdf_output = gr.File(label="Скачать коммерческое предложение")
         generate_btn = gr.Button("Сформировать КП", variant="primary")
     
+    # Обработчик для подбора кондиционеров
+    select_aircons_btn.click(
+        fn=select_aircons,
+        inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
+                ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand],
+        outputs=[aircons_output]
+    )
+    
+    # Обработчик для генерации КП (включает и кондиционеры, и комплектующие)
     generate_btn.click(
         fn=generate_kp,
         inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
-                ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand],
+                ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand,
+                # Добавляем все параметры комплектующих
+                airduct_500x800, airduct_500x800_qty, airduct_500x800_length,
+                airduct_600x300, airduct_600x300_qty, airduct_600x300_length,
+                airduct_800x500, airduct_800x500_qty, airduct_800x500_length,
+                airduct_d450, airduct_d450_qty, airduct_d450_length,
+                airduct_d560, airduct_d560_qty, airduct_d560_length,
+                airduct_d630, airduct_d630_qty, airduct_d630_length,
+                airduct_d710, airduct_d710_qty, airduct_d710_length,
+                # Отводы
+                bend_90_500x800, bend_90_500x800_qty,
+                bend_90_d630, bend_90_d630_qty,
+                bend_90_d560, bend_90_d560_qty,
+                bend_90_d450, bend_90_d450_qty,
+                bend_90_d710, bend_90_d710_qty,
+                # Переходы
+                transition_500x800_d630, transition_500x800_d630_qty,
+                transition_600x300_d560, transition_600x300_d560_qty,
+                transition_500x800_d450, transition_500x800_d450_qty,
+                # Тройники
+                tee_500x800, tee_500x800_qty,
+                # Клапаны
+                valve_800x500, valve_800x500_qty,
+                valve_600x300, valve_600x300_qty,
+                valve_d450, valve_d450_qty,
+                # Соединительные элементы
+                nipple, nipple_qty,
+                coupling, coupling_qty,
+                cap, cap_qty,
+                # Регулирующие элементы
+                damper, damper_qty,
+                umbrella, umbrella_qty,
+                deflector, deflector_qty,
+                # Материалы
+                steel_sheet, steel_sheet_qty, steel_sheet_length,
+                insulation, insulation_qty, insulation_length],
         outputs=[aircons_output, pdf_output]
     )

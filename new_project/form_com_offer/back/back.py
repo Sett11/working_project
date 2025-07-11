@@ -36,6 +36,58 @@ def get_all_air_conditioners(skip: int = 0, limit: int = 100, db: Session = Depe
     air_conditioners = crud.get_air_conditioners(db, skip=skip, limit=limit)
     return air_conditioners
 
+# --- Эндпоинт для подбора только кондиционеров ---
+@app.post("/api/select_aircons/")
+def select_aircons_endpoint(payload: dict, db: Session = Depends(get_session)):
+    """
+    Эндпоинт для подбора только кондиционеров без генерации КП.
+    """
+    logger.info("Получен запрос на эндпоинт /api/select_aircons/")
+    logger.debug(f"Содержимое запроса: {payload}")
+
+    try:
+        # Извлекаем данные из payload
+        client_data = payload.get("client_data", {})
+        order_params = payload.get("order_params", {})
+        aircon_params = payload.get("aircon_params", {})
+        
+        logger.info(f"Подбор кондиционеров для клиента: {client_data.get('full_name', 'N/A')}")
+        
+        # Подбор кондиционеров по параметрам
+        from selection.aircon_selector import select_aircons
+        selected_aircons = select_aircons(db, aircon_params)
+        
+        logger.info(f"Подобрано {len(selected_aircons)} кондиционеров")
+        
+        # Формируем список кондиционеров для ответа
+        aircons_list = []
+        for aircon in selected_aircons:
+            aircon_info = {
+                "model_name": aircon.model_name,
+                "brand": aircon.brand,
+                "cooling_power_kw": aircon.cooling_power_kw,
+                "heating_power_kw": aircon.heating_power_kw,
+                "retail_price_byn": aircon.retail_price_byn,
+                "is_inverter": aircon.is_inverter,
+                "has_wifi": aircon.has_wifi,
+                "mount_type": aircon.mount_type,
+                "description": aircon.description
+            }
+            aircons_list.append(aircon_info)
+        
+        # Формируем ответ
+        response_data = {
+            "aircons_list": aircons_list,
+            "total_count": len(selected_aircons)
+        }
+        
+        logger.info(f"Подбор кондиционеров завершен успешно")
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"Ошибка при подборе кондиционеров: {str(e)}", exc_info=True)
+        return {"error": f"Ошибка при подборе кондиционеров: {str(e)}"}
+
 # --- Эндпоинт для генерации КП ---
 @app.post("/api/generate_offer/")
 def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
@@ -50,6 +102,7 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
         client_data = payload.get("client_data", {})
         order_params = payload.get("order_params", {})
         aircon_params = payload.get("aircon_params", {})
+        components = payload.get("components", [])
         
         logger.info(f"Обработка запроса для клиента: {client_data.get('full_name', 'N/A')}")
         
@@ -89,6 +142,7 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
             "aircons_list": aircons_list,
             "total_count": len(selected_aircons),
             "client_name": client.full_name,
+            "components": components,
             "pdf_path": None  # Пока без PDF
         }
         
