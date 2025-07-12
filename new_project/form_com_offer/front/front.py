@@ -13,6 +13,7 @@ from utils.mylogger import Logger
 import json
 import os
 import functools
+import re
 
 # Инициализация логгера для фронтенда
 # log_file указывается без папки logs, чтобы использовать дефолтную директорию логов.
@@ -316,6 +317,64 @@ def generate_kp(
         length = insulation_length or 0.0
         if qty > 0 or length > 0:
             selected_components.append({"name": "Маты минераловатные", "qty": qty, "length": length})
+    
+    # --- ДОБАВЛЯЕМ ЦЕНЫ И ВАЛЮТУ ИЗ КАТАЛОГА С УЧЁТОМ НОРМАЛИЗАЦИИ ИМЁН ---
+    def normalize_name(name):
+        # Привести к нижнему регистру, заменить x/х, d/д, ё→е
+        name = name.lower()
+        name = name.replace('x', 'х').replace('d', 'д').replace('ё', 'е')
+        # Удалить спецсимволы и единицы измерения
+        name = re.sub(r'[°ø"\'.,:;()\[\]{}]', '', name)
+        name = re.sub(r'мм|m|метр|шт| ', '', name)
+        # Удалить все неалфавитные/нецифровые символы
+        name = re.sub(r'[^а-яa-z0-9]', '', name)
+        return name
+
+    # Словарь соответствий: ключ — имя из selected_components, значение — имя из каталога
+    COMPONENT_NAME_MAP = {
+        "Воздуховод ø450": "воздуховод d450",
+        "Воздуховод ø560": "воздуховод d560",
+        "Воздуховод ø630": "воздуховод d630",
+        "Воздуховод ø710": "воздуховод d710",
+        "Поворот 90° ø630": "поворот 90° d630",
+        "Поворот 90° ø560": "поворот 90° d560",
+        "Поворот 90° ø450": "поворот 90° d450",
+        "Поворот 90° ø710": "поворот 90° d710",
+        "Переход 500x800→ø630": "переход 500х800/d630",
+        "Переход 600x300→ø560": "переход 600х300/d560",
+        "Переход 500x800→ø450": "переход 500х800/d450",
+        "Клапан РЕГУЛЯР-Л-800х500": "Клапан воздушный регулирующий РЕГУЛЯР-Л-800х500-В-1",
+        "Клапан РЕГУЛЯР-600*300": "Клапан воздушный регулирующий РЕГУЛЯР-600*300-Н-1",
+        "Клапан РЕГУЛЯР-Л-450": "Клапан воздушный регулирующий РЕГУЛЯР-Л-450-Н-1",
+        "Сталь тонколистовая": "тонколистовая оц. Сталь б=0,5мм"
+    }
+
+    catalog = load_components_catalog()
+    for comp in selected_components:
+        # Сначала ищем по словарю соответствий
+        mapped_name = COMPONENT_NAME_MAP.get(comp['name'])
+        match = None
+        if mapped_name:
+            match = next((c for c in catalog['components'] if c['name'] == mapped_name), None)
+        # Если не найдено по словарю — используем старую нормализацию
+        if not match:
+            comp_norm = normalize_name(comp['name'])
+            match = next(
+                (c for c in catalog['components'] if normalize_name(c['name']) == comp_norm),
+                None
+            )
+            # Fallback: если не найдено точное совпадение, ищем по подстроке
+            if not match:
+                match = next(
+                    (c for c in catalog['components'] if comp_norm in normalize_name(c['name'])),
+                    None
+                )
+        if match:
+            comp['price'] = match.get('price', 0)
+            comp['currency'] = match.get('currency', 'BYN')
+        else:
+            comp['price'] = 0
+            comp['currency'] = 'BYN'
     
     payload = {
         "client_data": {"full_name": name, "phone": phone, "email": mail, "address": address},

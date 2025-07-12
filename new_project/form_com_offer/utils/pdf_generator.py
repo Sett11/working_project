@@ -100,7 +100,7 @@ def generate_commercial_offer_pdf(
     ], colWidths=[30*mm, 100*mm]))
     story.append(Spacer(1, 12))
     
-# --- Информация о клиенте и исполнителе ---
+    # --- Информация о клиенте и исполнителе ---
     client_info_data = [
         ["Заказчик:", client_data.get('full_name', '')],
         ["Адрес объекта:", client_data.get('address', '')],
@@ -173,7 +173,8 @@ def generate_commercial_offer_pdf(
         ac_table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
             ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-            ('ALIGN', (3,0), (-1,-1), 'CENTER'),
+            ('ALIGN', (4,1), (5,-1), 'RIGHT'),  # Выравнивание цен и сумм по правому краю
+            ('ALIGN', (3,0), (3,-1), 'CENTER'),  # Количество по центру
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('SPAN', (0,-1), (4,-1)),  # Объединение ячеек для "Итого"
             ('BACKGROUND', (0,-1), (-1,-1), colors.white),
@@ -208,22 +209,23 @@ def generate_commercial_offer_pdf(
                 Paragraph(f"{total:.2f}", styleTableCell)
             ])
         
-        # Итоговая строка (без скидки)
+        # Итоговая строка (без скидки) - ИСПРАВЛЕНО: сумма в последней колонке
         comp_table_data.append([
             Paragraph("Итого", styleTableHeader),
             '', '',
-            Paragraph(f"{comp_total:.2f}", styleTableHeader),
-            ''
+            '',  # Пустая ячейка вместо цены
+            Paragraph(f"{comp_total:.2f}", styleTableHeader)
         ])
         
         comp_table = Table(
             comp_table_data, 
-            colWidths=[80*mm, 25*mm, 20*mm, 30*mm, 25*mm]
+            colWidths=[70*mm, 25*mm, 20*mm, 35*mm, 35*mm]  # Увеличена ширина для цен
         )
         comp_table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
             ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-            ('ALIGN', (2,0), (-1,-1), 'CENTER'),
+            ('ALIGN', (3,1), (4,-1), 'RIGHT'),  # Выравнивание цен и сумм по правому краю
+            ('ALIGN', (2,0), (2,-1), 'CENTER'),  # Количество по центру
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('SPAN', (0,-1), (2,-1)),  # Объединение ячеек для "Итого"
             ('BACKGROUND', (0,-1), (-1,-1), colors.white),
