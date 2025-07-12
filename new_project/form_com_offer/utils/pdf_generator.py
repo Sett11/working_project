@@ -142,7 +142,7 @@ def generate_commercial_offer_pdf(
             # Заголовки таблицы
             ac_table_data = [[
                 Paragraph("Наименование товара", styleTableHeader),
-                Paragraph("Производитель", styleTableHeader),
+                Paragraph("Характеристики", styleTableHeader),
                 Paragraph("Ед. изм.", styleTableHeader),
                 Paragraph("Кол-во", styleTableHeader),
                 Paragraph("Цена за ед., BYN", styleTableHeader),
@@ -157,9 +157,16 @@ def generate_commercial_offer_pdf(
                 discount = float(ac.get('discount_percent', 0))
                 total_with_discount = price * qty * (1 - discount / 100)
                 
+                # Формируем характеристики и описание
+                specs_text = ""
+                if ac.get('specifications'):
+                    specs_text = ", ".join(ac['specifications'])
+                if ac.get('short_description'):
+                    specs_text += f"\n{ac['short_description']}"
+                
                 ac_table_data.append([
                     Paragraph(ac.get('name', ''), styleTableCell),
-                    Paragraph(ac.get('manufacturer', ''), styleTableCell),
+                    Paragraph(specs_text, styleTableCell),
                     Paragraph(ac.get('unit', 'шт.'), styleTableCell),
                     Paragraph(str(qty), styleTableCell),
                     Paragraph(f"{price:.2f}", styleTableCell),
@@ -170,7 +177,7 @@ def generate_commercial_offer_pdf(
             
             ac_table = Table(
                 ac_table_data, 
-                colWidths=[50*mm, 25*mm, 15*mm, 15*mm, 20*mm, 15*mm, 25*mm, 20*mm]
+                colWidths=[45*mm, 50*mm, 15*mm, 15*mm, 20*mm, 15*mm, 25*mm, 20*mm]
             )
             ac_table.setStyle(TableStyle([
                 ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
@@ -178,6 +185,7 @@ def generate_commercial_offer_pdf(
                 ('ALIGN', (4,1), (6,-1), 'RIGHT'),
                 ('ALIGN', (3,0), (3,-1), 'CENTER'),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('WRAP', (1,1), (1,-1), True),  # Перенос текста в колонке характеристик
             ]))
             story.append(ac_table)
             story.append(Spacer(1, 15))

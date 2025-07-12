@@ -179,6 +179,29 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
         variant_items = []
         for ac in selected_aircons:
             ac_dict = schemas.AirConditioner.from_orm(ac).dict()
+            
+            # Формируем характеристики из доступных полей
+            specs = []
+            if ac_dict.get('cooling_power_kw'):
+                specs.append(f"Охлаждение: {ac_dict['cooling_power_kw']} кВт")
+            if ac_dict.get('heating_power_kw'):
+                specs.append(f"Обогрев: {ac_dict['heating_power_kw']} кВт")
+            if ac_dict.get('energy_efficiency_class'):
+                specs.append(f"Класс: {ac_dict['energy_efficiency_class']}")
+            if ac_dict.get('pipe_diameter'):
+                specs.append(f"Трубы: {ac_dict['pipe_diameter']}")
+            if ac_dict.get('is_inverter'):
+                specs.append("Инверторный")
+            if ac_dict.get('has_wifi'):
+                specs.append("Wi-Fi")
+            if ac_dict.get('mount_type'):
+                specs.append(f"Монтаж: {ac_dict['mount_type']}")
+            
+            # Берем первые 50 символов из air_description
+            short_description = ""
+            if ac_dict.get('air_description'):
+                short_description = ac_dict['air_description'][:50] + "..." if len(ac_dict['air_description']) > 50 else ac_dict['air_description']
+            
             variant_items.append({
                 'name': ac_dict.get('model_name', ''),
                 'manufacturer': ac_dict.get('brand', ''),
@@ -186,7 +209,9 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
                 'qty': 1,  # Можно доработать, если qty приходит из заказа
                 'unit': 'шт.',
                 'delivery': 'в наличии',
-                'discount_percent': discount_percent
+                'discount_percent': discount_percent,
+                'specifications': specs,
+                'short_description': short_description
             })
         aircon_variants.append({
             'title': '',
