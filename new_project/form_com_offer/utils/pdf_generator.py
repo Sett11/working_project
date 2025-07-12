@@ -126,7 +126,6 @@ def generate_commercial_offer_pdf(
     story.append(Spacer(1, 15))
 
     # --- Варианты кондиционеров ---
-    total_aircons = 0
     for variant in aircon_variants:
         # Заголовок варианта
         if variant.get('title'):
@@ -152,14 +151,11 @@ def generate_commercial_offer_pdf(
                 Paragraph("Срок поставки", styleTableHeader)
             ]]
             
-            variant_total = 0
             for ac in variant['items']:
                 price = float(ac.get('price', 0))
                 qty = int(ac.get('qty', 1))
                 discount = float(ac.get('discount_percent', 0))
                 total_with_discount = price * qty * (1 - discount / 100)
-                variant_total += total_with_discount
-                total_aircons += total_with_discount
                 
                 ac_table_data.append([
                     Paragraph(ac.get('name', ''), styleTableCell),
@@ -172,14 +168,6 @@ def generate_commercial_offer_pdf(
                     Paragraph(ac.get('delivery', 'в наличии'), styleTableCell)
                 ])
             
-            # Итоговая строка для варианта
-            ac_table_data.append([
-                Paragraph("Итого", styleTableHeader),
-                '', '', '', '', '',
-                Paragraph(f"{variant_total:.2f}", styleTableHeader),
-                ''
-            ])
-            
             ac_table = Table(
                 ac_table_data, 
                 colWidths=[50*mm, 25*mm, 15*mm, 15*mm, 20*mm, 15*mm, 25*mm, 20*mm]
@@ -190,9 +178,6 @@ def generate_commercial_offer_pdf(
                 ('ALIGN', (4,1), (6,-1), 'RIGHT'),
                 ('ALIGN', (3,0), (3,-1), 'CENTER'),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('SPAN', (0,-1), (5,-1)),
-                ('BACKGROUND', (0,-1), (-1,-1), colors.white),
-                ('FONTNAME', (0,-1), (-1,-1), 'Arial-Bold'),
             ]))
             story.append(ac_table)
             story.append(Spacer(1, 15))
@@ -270,7 +255,8 @@ def generate_commercial_offer_pdf(
         story.append(Spacer(1, 15))
 
     # --- Расчет итоговой суммы ---
-    total_pay = total_aircons + total_components + installation_price
+    # Суммируем только комплектующие и работы, кондиционеры не суммируются
+    total_pay = total_components + installation_price
     
     # --- Итоговая сумма ---
     total_table = Table([

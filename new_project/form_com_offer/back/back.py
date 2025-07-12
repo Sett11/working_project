@@ -189,8 +189,8 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
                 'discount_percent': discount_percent
             })
         aircon_variants.append({
-            'title': 'Вариант 1',
-            'description': '• Автоматически подобранные кондиционеры',
+            'title': '',
+            'description': '• Варианты подходящие по параметрам',
             'items': variant_items
         })
 
