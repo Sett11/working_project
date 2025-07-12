@@ -531,11 +531,11 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         with gr.Row():
             with gr.Column():
                 gr.Markdown("### 1. Данные клиента")
-                name = gr.Textbox(label="Имя клиента", placeholder="Например, Иванов Иван")
-                phone = gr.Textbox(label="Телефон", placeholder="+375291234567")
-                mail = gr.Textbox(label="Электронная почта", placeholder="ivan@example.com")
-                address = gr.Textbox(label="Адрес", placeholder="г. Минск, ул. Ленина, 1")
-                date = gr.Textbox(label="Дата визита монтажника", placeholder="2025-07-12")
+                name = gr.Textbox(label="Имя клиента", value="Например, Иванов Иван")
+                phone = gr.Textbox(label="Телефон", value="+375291234567")
+                mail = gr.Textbox(label="Электронная почта", value="ivan@example.com")
+                address = gr.Textbox(label="Адрес", value="г. Минск, ул. Ленина, 1")
+                date = gr.Textbox(label="Дата визита монтажника", value="2025-07-12")
             with gr.Column():
                 gr.Markdown("### 2. Параметры заказа")
                 type_room = gr.Dropdown(["квартира", "дом", "офис", "производство"], label="Тип помещения")
