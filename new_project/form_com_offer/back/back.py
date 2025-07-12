@@ -172,35 +172,53 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
         selected_aircons = select_aircons(db, aircon_params)
         logger.info(f"Подобрано {len(selected_aircons)} кондиционеров.")
 
-        # 3. Формируем список кондиционеров для ответа (добавляем нужные поля для PDF)
-        aircons_list = []
+        # 3. Формируем варианты кондиционеров для PDF (aircon_variants)
+        aircon_variants = []
+        discount_percent = float(order_params.get('discount', 0))
+        # Формируем один вариант (можно расширить до нескольких)
+        variant_items = []
         for ac in selected_aircons:
             ac_dict = schemas.AirConditioner.from_orm(ac).dict()
-            aircons_list.append({
+            variant_items.append({
                 'name': ac_dict.get('model_name', ''),
                 'manufacturer': ac_dict.get('brand', ''),
                 'price': ac_dict.get('retail_price_byn', 0),
                 'qty': 1,  # Можно доработать, если qty приходит из заказа
                 'unit': 'шт.',
                 'delivery': 'в наличии',
+                'discount_percent': discount_percent
             })
+        aircon_variants.append({
+            'title': 'Вариант 1',
+            'description': '• Автоматически подобранные кондиционеры',
+            'items': variant_items
+        })
 
-        # 3.1. Преобразуем components (добавляем unit)
+        # 3.1. Преобразуем components (добавляем unit и discount_percent)
         components_for_pdf = []
         for comp in components:
             comp_new = comp.copy()
             if 'unit' not in comp_new:
                 comp_new['unit'] = 'шт.'
+            if 'discount_percent' not in comp_new:
+                comp_new['discount_percent'] = discount_percent
             components_for_pdf.append(comp_new)
+
+        # 3.2. Сгенерировать offer_number (только безопасные символы)
+        import datetime, re
+        today = datetime.date.today().strftime('%d_%m')
+        safe_name = re.sub(r'[^\w]', '_', client_full_name)[:20]
+        offer_number = f"{today}_{safe_name}"
 
         # 4. Генерируем PDF коммерческого предложения
         try:
             pdf_path = generate_commercial_offer_pdf(
                 client_data=client_data,
                 order_params=order_params,
-                aircons=aircons_list,
+                aircon_variants=aircon_variants,
                 components=components_for_pdf,
-                discount_percent=discount
+                discount_percent=discount_percent,
+                offer_number=offer_number
             )
             logger.info(f"PDF успешно сгенерирован: {pdf_path}")
         except Exception as e:
@@ -209,7 +227,7 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
 
         # 5. Формируем успешный ответ.
         response_data = {
-            "aircons_list": aircons_list,
+            "aircon_variants": aircon_variants,
             "total_count": len(selected_aircons),
             "client_name": client.full_name,
             "components": components_for_pdf,
