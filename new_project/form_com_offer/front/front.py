@@ -12,7 +12,6 @@ import requests
 from utils.mylogger import Logger
 import json
 import os
-import functools
 import re
 
 # Инициализация логгера для фронтенда
@@ -440,6 +439,17 @@ def generate_kp(
         logger.error(error_message, exc_info=True)
         return error_message, None
 
+def clear_and_generate_kp(*args):
+    """
+    Обертка для функции generate_kp, которая очищает поле вывода кондиционеров
+    и возвращает только результат генерации КП.
+    """
+    # Вызываем оригинальную функцию generate_kp
+    aircons_result, pdf_path = generate_kp(*args)
+    
+    # Возвращаем пустую строку для поля кондиционеров и путь к PDF
+    return "", pdf_path
+
 def select_aircons(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
                    ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand):
     """
@@ -531,7 +541,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         with gr.Row():
             with gr.Column():
                 gr.Markdown("### 1. Данные клиента")
-                name = gr.Textbox(label="Имя клиента", value="Например, Иванов Иван")
+                name = gr.Textbox(label="Имя клиента", value="Иванов Иван")
                 phone = gr.Textbox(label="Телефон", value="+375291234567")
                 mail = gr.Textbox(label="Электронная почта", value="ivan@example.com")
                 address = gr.Textbox(label="Адрес", value="г. Минск, ул. Ленина, 1")
@@ -984,7 +994,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     
     with gr.Tab("Результат"):
         gr.Markdown("### Подбор кондиционеров")
-        aircons_output = gr.Textbox(label="Подходящие модели", interactive=False, lines=15, max_lines=30)
+        aircons_output = gr.TextArea(label="Подходящие модели", interactive=False, lines=15, max_lines=None, show_copy_button=True)
         select_aircons_btn = gr.Button("Подобрать кондиционеры", variant="primary")
         
         gr.Markdown("### Генерация коммерческого предложения")
@@ -1001,7 +1011,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     
     # Обработчик для генерации КП (включает и кондиционеры, и комплектующие)
     generate_btn.click(
-        fn=generate_kp,
+        fn=clear_and_generate_kp,
         inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, 
                 ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand,
                 airduct_500x800, airduct_500x800_qty, airduct_500x800_length,
