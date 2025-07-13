@@ -532,7 +532,7 @@ def select_aircons(name, phone, mail, address, date, area, type_room, discount, 
 
 # Определяем интерфейс Gradio
 # Мы не запускаем его здесь, а просто создаем объект `app`
-with gr.Blocks(title="Автоматизация продаж кондиционеров", theme=gr.themes.Soft()) as interface:
+with gr.Blocks(title="Автоматизация продаж кондиционеров", theme=gr.themes.Ocean()) as interface:
     gr.Markdown("# Система формирования коммерческих предложений")
     
     with gr.Tab("Данные для КП"):
