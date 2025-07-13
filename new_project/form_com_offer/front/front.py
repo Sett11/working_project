@@ -377,7 +377,7 @@ def generate_kp(
     
     payload = {
         "client_data": {"full_name": name, "phone": phone, "email": mail, "address": address},
-        "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": date, "installation_price": price},
+        "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": date, "installation_price": installation_price},
         "aircon_params": {
             "wifi": wifi, 
             "inverter": inverter, 
@@ -523,8 +523,6 @@ def select_aircons(name, phone, mail, address, date, area, type_room, discount, 
         error_message = f"Произошла внутренняя ошибка: {e}"
         logger.error(error_message, exc_info=True)
         return error_message
-
-
 
 
 

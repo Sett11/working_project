@@ -7,7 +7,8 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-
+import datetime
+import re
 # Импортируем наши модули
 from db import crud, schemas
 from db.database import get_session
@@ -230,7 +231,6 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
             components_for_pdf.append(comp_new)
 
         # 3.2. Сгенерировать offer_number (только безопасные символы)
-        import datetime, re
         today = datetime.date.today().strftime('%d_%m')
         safe_name = re.sub(r'[^\w]', '_', client_full_name)[:20]
         offer_number = f"{today}_{safe_name}"

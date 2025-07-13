@@ -244,23 +244,28 @@ def generate_commercial_offer_pdf(
         story.append(Spacer(1, 15))
 
     # --- Блок работ ---
-    installation_price = 0
-    if order_params.get('installation_price', 0) > 0:
-        installation_price = float(order_params['installation_price'])
-        work_table_data = [
-            [Paragraph("Монтажные работы", styleTableCell), Paragraph(f"{installation_price:.2f}", styleTableCell)]
-        ]
-        
-        work_table = Table(
-            work_table_data, 
-            colWidths=[140*mm, 30*mm]
-        )
-        work_table.setStyle(TableStyle([
-            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-            ('ALIGN', (1,0), (1,0), 'RIGHT'),
-        ]))
-        story.append(work_table)
-        story.append(Spacer(1, 15))
+    # Явно приводим installation_price к числу и логируем
+    installation_price = 0.0
+    try:
+        installation_price = float(order_params.get('installation_price', 0) or 0)
+    except Exception as e:
+        logger.error(f"Ошибка преобразования installation_price: {e}")
+        installation_price = 0.0
+    logger.info(f"Стоимость работ (installation_price): {installation_price}")
+    # Всегда отображаем блок работ
+    work_table_data = [
+        [Paragraph("Монтажные работы", styleTableCell), Paragraph(f"{installation_price:.2f}", styleTableCell)]
+    ]
+    work_table = Table(
+        work_table_data, 
+        colWidths=[140*mm, 30*mm]
+    )
+    work_table.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('ALIGN', (1,0), (1,0), 'RIGHT'),
+    ]))
+    story.append(work_table)
+    story.append(Spacer(1, 15))
 
     # --- Расчет итоговой суммы ---
     # Суммируем только комплектующие и работы, кондиционеры не суммируются
