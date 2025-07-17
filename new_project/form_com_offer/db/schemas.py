@@ -105,4 +105,11 @@ class CommercialOfferPayload(BaseModel):
     order_params: dict
     aircon_params: dict
 
+class FullOrderCreate(BaseModel):
+    client_data: ClientCreate
+    order_params: dict
+    aircon_params: dict
+    components: list
+    status: Optional[str] = "draft"
+
 logger.info("Pydantic-схемы успешно определены.")
