@@ -157,7 +157,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         gr.Markdown("### 3. Требования к кондиционеру")
         with gr.Row():
             brand = gr.Dropdown(["Любой", "LESSAR", "DANTEX", "AUX", "QuattroClima", "Tosot", "NiceME"], label="Бренд")
-            price = gr.Slider(1000, 10000, value=3000, label="Верхний порог стоимости (BYN)")
+            price = gr.Slider(0, 10000, value=3000, label="Верхний порог стоимости (BYN)")
             inverter = gr.Checkbox(label="Инверторный компрессор")
             wifi = gr.Checkbox(label="Wi-Fi управление")
         with gr.Row():
@@ -197,11 +197,11 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                             checkbox = gr.Checkbox(label=label_text)
                         
                         with gr.Column(scale=2):
-                            qty_input = gr.Number(label="Кол-во (шт)", minimum=0, step=1, value=0)
+                            qty_input = gr.Number(label="Кол-во (шт)", minimum=0, step=1, value=1)
                         
                         with gr.Column(scale=2):
                             if is_measurable:
-                                length_input = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=0.0)
+                                length_input = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=0.1)
                             else:
                                 length_input = gr.Number(visible=False)
 
