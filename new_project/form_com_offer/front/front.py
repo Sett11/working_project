@@ -186,7 +186,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 gr.Markdown(f"#### {category}")
                 for comp in components_in_cat:
                     with gr.Row(equal_height=True):
-                        # --- ИЗМЕНЕНИЕ ЗДЕСЬ: Добавляем gr.Image ---
                         with gr.Column(scale=1):
                             image_path = get_component_image_path(comp.get('image_path'))
                             gr.Image(value=image_path, label="Фото", height=80, width=80, interactive=False)
