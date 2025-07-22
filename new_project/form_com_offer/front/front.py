@@ -67,6 +67,47 @@ def generate_kp(client_name, phone, mail, address, date, area, type_room, discou
                 ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand,
                 installation_price, *components_inputs):
     logger.info(f"Получен запрос на генерацию КП для клиента: {client_name}")
+    # --- Проверка обязательных полей ---
+    if not client_name or not phone:
+        logger.error("Имя клиента или телефон не заполнены!")
+        return "Ошибка: заполните имя и телефон клиента!", None
+    # --- Приведение типов ---
+    try:
+        area = float(area)
+    except Exception:
+        area = 0
+    try:
+        discount = int(discount)
+    except Exception:
+        discount = 0
+    try:
+        installation_price = float(installation_price)
+    except Exception:
+        installation_price = 0
+    try:
+        price = float(price)
+    except Exception:
+        price = 0
+    try:
+        ceiling_height = float(ceiling_height)
+    except Exception:
+        ceiling_height = 2.7
+    try:
+        num_people = int(num_people)
+    except Exception:
+        num_people = 1
+    try:
+        num_computers = int(num_computers)
+    except Exception:
+        num_computers = 0
+    try:
+        num_tvs = int(num_tvs)
+    except Exception:
+        num_tvs = 0
+    try:
+        other_power = float(other_power)
+    except Exception:
+        other_power = 0
     selected_components = []
     i = 0
     for component_data in COMPONENTS_CATALOG.get("components", []):
@@ -74,11 +115,19 @@ def generate_kp(client_name, phone, mail, address, date, area, type_room, discou
         qty = components_inputs[i+1]
         length = components_inputs[i+2]
         i += 3
+        try:
+            qty = int(qty) if qty else 0
+        except Exception:
+            qty = 0
+        try:
+            length = float(length) if length else 0.0
+        except Exception:
+            length = 0.0
         if is_selected:
-            comp_item = {"name": component_data["name"], "price": component_data.get("price", 0), "currency": COMPONENTS_CATALOG.get("catalog_info", {}).get("currency", "BYN"), "qty": int(qty) if qty else 0}
+            comp_item = {"name": component_data["name"], "price": component_data.get("price", 0), "currency": COMPONENTS_CATALOG.get("catalog_info", {}).get("currency", "BYN"), "qty": qty}
             if "труба" in comp_item["name"].lower() or "кабель" in comp_item["name"].lower() or "теплоизоляция" in comp_item["name"].lower() or "шланг" in comp_item["name"].lower():
                 comp_item["unit"] = "м."
-                comp_item["length"] = float(length) if length else 0.0
+                comp_item["length"] = length
             else:
                 comp_item["unit"] = "шт."
             if comp_item["qty"] > 0 or comp_item.get("length", 0) > 0:

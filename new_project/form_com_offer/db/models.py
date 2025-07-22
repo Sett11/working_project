@@ -126,7 +126,7 @@ class Component(Base):
     currency = Column(String, default="BYN")  # Валюта
     standard = Column(String, nullable=True)  # Стандарт
     manufacturer = Column(String, nullable=True)  # Производитель
-    in_stock = Column(String, default=True)  # В наличии
+    in_stock = Column(Boolean, default=True)  # В наличии
     description = Column(Text, nullable=True)  # Описание
     image_url = Column(String, nullable=True)  # Путь к изображению
 
