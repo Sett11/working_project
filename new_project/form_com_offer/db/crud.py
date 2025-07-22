@@ -25,59 +25,6 @@ from utils.mylogger import Logger
 logger = Logger(name=__name__, log_file="db.log")
 
 
-# --- CRUD-операции для Пользователей (User) ---
-
-def get_user_by_username(db: Session, username: str) -> models.User | None:
-    """
-    Получение пользователя по его имени (username).
-
-    Args:
-        db (Session): Сессия базы данных.
-        username (str): Имя пользователя для поиска.
-
-    Returns:
-        models.User | None: Объект пользователя или None, если пользователь не найден.
-    """
-    logger.debug(f"Выполняется запрос на получение пользователя по имени: {username}")
-    # Выполняем запрос к таблице пользователей по username
-    user = db.query(models.User).filter(models.User.username == username).first()
-    if user:
-        logger.debug(f"Пользователь '{username}' найден с id={user.id}.")
-    else:
-        logger.debug(f"Пользователь с именем '{username}' не найден.")
-    return user
-
-
-def create_user(db: Session, user: schemas.UserCreate) -> models.User:
-    """
-    Создание нового пользователя в базе данных.
-
-    Args:
-        db (Session): Сессия базы данных.
-        user (schemas.UserCreate): Pydantic-схема с данными нового пользователя.
-
-    Returns:
-        models.User: Созданный объект пользователя.
-    """
-    logger.info(f"Начало создания нового пользователя: {user.username}")
-    # Временная заглушка для пароля. Необходимо заменить на реальное хеширование.
-    # hashed_password = pwd_context.hash(user.password)
-    hashed_password = user.password + "_hashed"
-    
-    db_user = models.User(username=user.username, hashed_password=hashed_password, role=user.role)
-    
-    try:
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-        logger.info(f"Пользователь '{user.username}' успешно создан с id={db_user.id}.")
-        return db_user
-    except Exception as e:
-        logger.error(f"Ошибка при создании пользователя '{user.username}': {e}", exc_info=True)
-        db.rollback()
-        raise
-
-
 # --- CRUD-операции для Клиентов (Client) ---
 
 def get_client_by_phone(db: Session, phone: str) -> models.Client | None:
@@ -235,8 +182,17 @@ def create_order(db: Session, order: schemas.OrderCreate) -> models.Order:
         models.Order: Созданный объект заказа.
     """
     logger.info(f"Начало создания нового заказа для клиента с id={order.client_id}")
-    db_order = models.Order(**order.model_dump())
-    
+    db_order = models.Order(
+        client_id=order.client_id,
+        status=order.status,
+        discount=order.discount,
+        room_type=order.room_type,
+        room_area=order.room_area,
+        installer_data=order.installer_data,
+        pdf_path=None,
+        created_at=order.created_at,
+        visit_date=order.visit_date
+    )
     try:
         db.add(db_order)
         db.commit()

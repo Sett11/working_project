@@ -164,17 +164,12 @@ def save_order_endpoint(payload: FullOrderCreate, db: Session = Depends(get_sess
         client = crud.get_client_by_phone(db, client_data.phone)
         if not client:
             client = crud.create_client(db, client_data)
-        # 2. Менеджер (пока не реализовано, ставим None или 1)
-        manager_id = 1  # TODO: заменить на реального менеджера, если будет авторизация
-        # 3. OrderCreate
+        # 2. OrderCreate
         order_params = payload.order_params or {}
-        aircon_params = payload.aircon_params or {}
-        components = payload.components or []
-        # 4. Формируем OrderCreate
+        # 3. Формируем OrderCreate
         from datetime import date
         order_create = schemas.OrderCreate(
             client_id=client.id,
-            manager_id=manager_id,
             created_at=date.today(),
             visit_date=order_params.get("visit_date"),
             status=payload.status or "draft",

@@ -55,15 +55,7 @@ class AirConditionerCreate(AirConditionerBase):
 class AirConditioner(AirConditionerBase, OrmBase):
     id: int
 
-class UserBase(BaseModel):
-    username: str
-    role: str
-
-class UserCreate(UserBase):
-    password: str
-
-class User(UserBase, OrmBase):
-    id: int
+# УДАЛЕНО: UserBase, UserCreate, User
 
 class ClientBase(BaseModel):
     full_name: str
@@ -86,7 +78,6 @@ class OrderBase(BaseModel):
 
 class OrderCreate(OrderBase):
     client_id: int
-    manager_id: int
     created_at: date
     visit_date: Optional[date] = None
 
@@ -95,9 +86,6 @@ class Order(OrderBase, OrmBase):
     created_at: date
     visit_date: Optional[date] = None
     client: Client
-    manager: User
-    air_conditioners: List[AirConditioner] = []
-    components: List[Component] = []
     pdf_path: Optional[str] = None
 
 class CommercialOfferPayload(BaseModel):

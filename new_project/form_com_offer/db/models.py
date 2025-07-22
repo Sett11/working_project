@@ -2,7 +2,6 @@
 Модуль моделей SQLAlchemy для работы с основной структурой базы данных.
 
 Здесь определены таблицы и связи:
-- User (Пользователь)
 - Client (Клиент)
 - Order (Заказ)
 - AirConditioner (Кондиционер)
@@ -22,32 +21,11 @@ logger = Logger(name=__name__, log_file="db.log")
 
 # --- Таблицы связей (Многие-ко-многим) ---
 
-order_air_conditioner_association = Table(
-    'order_air_conditioner', Base.metadata,
-    Column('order_id', Integer, ForeignKey('orders.id'), primary_key=True),
-    Column('air_conditioner_id', Integer, ForeignKey('air_conditioners.id'), primary_key=True)
-)
-
-order_component_association = Table(
-    'order_component', Base.metadata,
-    Column('order_id', Integer, ForeignKey('orders.id'), primary_key=True),
-    Column('component_id', Integer, ForeignKey('components.id'), primary_key=True)
-)
-
+# УДАЛЕНО: order_air_conditioner_association, order_component_association
 
 # --- Основные модели ---
 
-class User(Base):
-    """
-    Модель пользователя системы.
-    """
-    __tablename__ = 'users'
-    id = Column(Integer, primary_key=True, index=True)  # Уникальный идентификатор пользователя
-    username = Column(String, unique=True, index=True)  # Имя пользователя (логин)
-    hashed_password = Column(String)  # Хешированный пароль
-    role = Column(String)  # Например, 'manager', 'installer'
-    orders = relationship("Order", back_populates="manager")  # Связь с заказами, где пользователь — менеджер
-
+# УДАЛЕНО: class User
 
 class Client(Base):
     """
@@ -61,7 +39,6 @@ class Client(Base):
     address = Column(String, nullable=True)  # Адрес клиента
     orders = relationship("Order", back_populates="client")  # Связь с заказами клиента
 
-
 class Order(Base):
     """
     Модель заказа (коммерческого предложения).
@@ -74,20 +51,12 @@ class Order(Base):
     room_area = Column(Float, nullable=True)  # Площадь помещения
     installer_data = Column(Text, nullable=True)  # Можно хранить JSON как текст (данные от монтажника)
     pdf_path = Column(String, nullable=True)  # Путь к сгенерированному PDF (если есть)
-    
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата создания заказа
     visit_date = Column(DateTime(timezone=True), nullable=True)  # Дата визита монтажника
-
     # --- Связи ---
     client_id = Column(Integer, ForeignKey('clients.id'))  # Внешний ключ на клиента
     client = relationship("Client", back_populates="orders")  # Объект клиента
-
-    manager_id = Column(Integer, ForeignKey('users.id'))  # Внешний ключ на менеджера
-    manager = relationship("User", back_populates="orders")  # Объект менеджера
-
-    air_conditioners = relationship("AirConditioner", secondary=order_air_conditioner_association)  # Модели кондиционеров в заказе
-    components = relationship("Component", secondary=order_component_association)  # Комплектующие в заказе
-
+    # УДАЛЕНО: manager_id, manager, air_conditioners, components
 
 class AirConditioner(Base):
     """
@@ -110,7 +79,6 @@ class AirConditioner(Base):
     has_wifi = Column(Boolean, default=False)  # Признак наличия Wi-Fi
     mount_type = Column(String, nullable=True)  # Тип монтажа
 
-
 class Component(Base):
     """
     Модель комплектующего для монтажа.
@@ -130,5 +98,4 @@ class Component(Base):
     description = Column(Text, nullable=True)  # Описание
     image_url = Column(String, nullable=True)  # Путь к изображению
 
-
-logger.info("Все модели базы данных (User, Client, Order, AirConditioner, Component) успешно определены.")
+logger.info("Все модели базы данных (Client, Order, AirConditioner, Component) успешно определены.")
