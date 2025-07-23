@@ -473,6 +473,9 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             gr.Markdown("### Генерация коммерческого предложения")
             pdf_output = gr.File(label="Скачать коммерческое предложение")
             generate_btn = gr.Button("Сформировать КП", variant="primary")
+            # Новая кнопка для изменения статуса заказа
+            change_status_output = gr.Textbox(label="Статус изменения статуса заказа", interactive=False)
+            change_status_btn = gr.Button("Изменить статус заказа на завершённый", variant="secondary")
         
         # 1. Удаляю вкладку/группу 'Сохранить заказ' и все связанные с ней элементы
         # (Удаляю Tab/Group с save_order_status, save_order_btn, delete_order_btn)
@@ -659,6 +662,22 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             logger.error(f"Ошибка при сохранении комплектующих: {e}", exc_info=True)
             return f"Ошибка: {e}", order_id
 
+    def change_status_handler(order_id_hidden_value):
+        payload = {"id": order_id_hidden_value, "status": "completed"}
+        logger.info(f"[DEBUG] change_status_handler: payload: {json.dumps(payload, ensure_ascii=False)}")
+        try:
+            response = requests.post(f"{BACKEND_URL}/api/save_order/", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            if data.get("success"):
+                return "Статус заказа успешно изменён на 'completed'!"
+            else:
+                error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
+                return f"Ошибка: {error_msg}"
+        except Exception as e:
+            logger.error(f"Ошибка при изменении статуса заказа: {e}", exc_info=True)
+            return f"Ошибка: {e}"
+
     # --- Привязка обработчиков к кнопкам ---
     select_aircons_btn.click(
         fn=select_aircons_handler,
@@ -681,4 +700,9 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         fn=save_components_handler,
         inputs=[order_id_hidden] + components_ui_inputs,
         outputs=[save_components_status, order_id_hidden]
+    )
+    change_status_btn.click(
+        fn=change_status_handler,
+        inputs=[order_id_hidden],
+        outputs=[change_status_output]
     )
