@@ -430,8 +430,10 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 num_computers = gr.Slider(0, 10, step=1, label="Количество компьютеров")
                 num_tvs = gr.Slider(0, 5, step=1, label="Количество телевизоров")
                 other_power = gr.Slider(0, 2000, step=50, label="Мощность прочей техники (Вт)")
-            # Скрытое поле для id заказа
             order_id_hidden = gr.Number(label="ID заказа (скрытое)", visible=False)
+            # Кнопка для сохранения данных для КП
+            save_kp_status = gr.Textbox(label="Статус сохранения данных для КП", interactive=False)
+            save_kp_btn = gr.Button("Сохранить данные для КП", variant="primary")
 
         # Вкладка "Комплектующие"
         with gr.Tab("Комплектующие"):
@@ -459,13 +461,9 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                 else:
                                     length_input = gr.Number(visible=False)
                             components_ui_inputs.extend([checkbox, qty_input, length_input])
-            # Кнопка для загрузки комплектующих
-            load_components_btn = gr.Button("Загрузить комплектующие из заказа", variant="primary")
-            load_components_btn.click(
-                fn=update_components_tab,
-                inputs=[order_state],  # всегда актуальное состояние
-                outputs=components_ui_inputs
-            )
+            # (Удаляю кнопку 'Загрузить комплектующие из заказа')
+            save_components_status = gr.Textbox(label="Статус сохранения комплектующих", interactive=False)
+            save_components_btn = gr.Button("Сохранить комплектующие", variant="primary")
 
         # Вкладка "Результат" и обработчики без изменений
         with gr.Tab("Результат"):
@@ -476,13 +474,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             pdf_output = gr.File(label="Скачать коммерческое предложение")
             generate_btn = gr.Button("Сформировать КП", variant="primary")
         
-        # Вкладка "Сохранить заказ" (добавляем кнопку удаления)
-        with gr.Tab("Сохранить заказ"):
-            gr.Markdown("### Сохранить заказ как черновик в базе данных")
-            save_order_status = gr.Textbox(label="Статус сохранения", interactive=False)
-            with gr.Row():
-                save_order_btn = gr.Button("Сохранить заказ", variant="primary")
-                delete_order_btn = gr.Button("Удалить заказ", variant="stop", visible=order_state.value.get('id') is not None)
+        # 1. Удаляю вкладку/группу 'Сохранить заказ' и все связанные с ней элементы
+        # (Удаляю Tab/Group с save_order_status, save_order_btn, delete_order_btn)
 
     def show_start():
         return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), order_state.value, [], gr.update(value=None)
@@ -540,55 +533,70 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     def select_aircons_handler(*inputs):
         return select_aircons(*inputs)
 
-    def generate_kp_handler(*inputs):
-        args = list(inputs)
-        # Преобразуем дату перед отправкой
-        args[4] = fix_date(args[4]) 
-        return generate_kp(*args)
+    # 3. Исправляю кнопку 'Сформировать КП' так, чтобы она отправляла только id заказа
+    # и на бэкенде PDF формировался на основе данных из базы
 
-    def save_order_handler(
-        order_state,
+    def generate_kp_handler(order_id_hidden_value):
+        # Отправляем только id заказа, бэкенд сам достаёт все данные
+        payload = {"id": order_id_hidden_value}
+        logger.info(f"[DEBUG] generate_kp_handler: payload: {json.dumps(payload, ensure_ascii=False)}")
+        try:
+            response = requests.post(f"{BACKEND_URL}/api/generate_offer/", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            if "error" in data:
+                logger.error(f"Ошибка от бэкенда: {data['error']}")
+                return f"Ошибка: {data['error']}", None
+            pdf_path = data.get("pdf_path", None)
+            formatted_list = "Коммерческое предложение генерируется... Пожалуйста, скачайте PDF файл."
+            logger.info(f"КП успешно сформировано.")
+            return formatted_list, pdf_path
+        except requests.exceptions.RequestException as e:
+            error_message = f"Не удалось связаться с бэкендом: {e}"
+            logger.error(error_message, exc_info=True)
+            return error_message, None
+        except Exception as e:
+            error_message = f"Произошла внутренняя ошибка: {e}"
+            logger.error(error_message, exc_info=True)
+            return error_message, None
+
+    def save_kp_handler(
         order_id_hidden_value,
         client_name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type,
-        ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price,
-        *components_inputs
+        ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price
     ):
-        # Используем id только из скрытого поля
+        # Сохраняем только данные для КП (без комплектующих)
         order_id = order_id_hidden_value
-        new_order_state = {
-            "client_data": {
-                "full_name": client_name,
-                "phone": phone,
-                "email": mail,
-                "address": address
-            },
-            "order_params": {
-                "room_area": area,
-                "room_type": type_room,
-                "discount": discount,
-                "visit_date": fix_date(date),
-                "installation_price": installation_price
-            },
-            "aircon_params": {
-                "wifi": wifi,
-                "inverter": inverter,
-                "price_limit": price,
-                "brand": brand,
-                "mount_type": mount_type,
-                "area": area,
-                "ceiling_height": ceiling_height,
-                "illumination": illumination,
-                "num_people": num_people,
-                "activity": activity,
-                "num_computers": num_computers,
-                "num_tvs": num_tvs,
-                "other_power": other_power
-            },
-            "components": [],
+        payload = {
+            "client_data": {"full_name": client_name, "phone": phone, "email": mail, "address": address},
+            "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": fix_date(date), "installation_price": installation_price},
+            "aircon_params": {"wifi": wifi, "inverter": inverter, "price_limit": price, "brand": brand, "mount_type": mount_type, "area": area, "ceiling_height": ceiling_height, "illumination": illumination, "num_people": num_people, "activity": activity, "num_computers": num_computers, "num_tvs": num_tvs, "other_power": other_power},
             "status": "draft"
         }
         if order_id is not None and str(order_id).isdigit():
-            new_order_state["id"] = int(order_id)
+            payload["id"] = int(order_id)
+        logger.info(f"[DEBUG] save_kp_handler: payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+        try:
+            resp = requests.post(f"{BACKEND_URL}/api/save_order/", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("success"):
+                new_order_id = data.get("order_id")
+                msg = f"Данные для КП успешно сохранены! ID: {new_order_id}"
+                return msg, new_order_id
+            else:
+                error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
+                return f"Ошибка: {error_msg}", order_id
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении данных для КП: {e}", exc_info=True)
+            return f"Ошибка: {e}", order_id
+
+    def save_components_handler(
+        order_id_hidden_value,
+        *components_inputs
+    ):
+        # Сохраняем только комплектующие (по id заказа)
+        order_id = order_id_hidden_value
         selected_components = []
         i = 0
         for component_data in COMPONENTS_CATALOG.get("components", []):
@@ -605,28 +613,23 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             else:
                 comp_item["unit"] = "шт."
             selected_components.append(comp_item)
-        new_order_state["components"] = selected_components
-        logger.info(f"[DEBUG] save_order_handler: order_id={order_id} (type={type(order_id)})")
-        payload = dict(new_order_state)  # копируем для отправки
-        logger.info(f"[DEBUG] save_order_handler: Отправка payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+        payload = {"components": selected_components}
+        if order_id is not None and str(order_id).isdigit():
+            payload["id"] = int(order_id)
+        logger.info(f"[DEBUG] save_components_handler: payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
         try:
             resp = requests.post(f"{BACKEND_URL}/api/save_order/", json=payload)
             resp.raise_for_status()
             data = resp.json()
             if data.get("success"):
-                new_order_id = data.get("order_id")
-                action = "обновлён" if data.get("updated") else "сохранён"
-                msg = f"Заказ успешно {action}! ID: {new_order_id}"
-                logger.info(msg)
-                new_order_state['id'] = new_order_id
-                return msg, new_order_state, new_order_id
+                msg = f"Комплектующие успешно сохранены!"
+                return msg, order_id
             else:
                 error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
-                logger.error(f"Ошибка при сохранении заказа: {error_msg}")
-                return f"Ошибка: {error_msg}", new_order_state, order_id
+                return f"Ошибка: {error_msg}", order_id
         except Exception as e:
-            logger.error(f"Ошибка при сохранении заказа: {e}", exc_info=True)
-            return f"Ошибка: {e}", new_order_state, order_id
+            logger.error(f"Ошибка при сохранении комплектующих: {e}", exc_info=True)
+            return f"Ошибка: {e}", order_id
 
     # --- Привязка обработчиков к кнопкам ---
     select_aircons_btn.click(
@@ -637,18 +640,17 @@ with gr.Blocks(title="Автоматизация продаж кондицион
 
     generate_btn.click(
         fn=generate_kp_handler,
-        inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price] + components_ui_inputs,
+        inputs=[order_id_hidden],
         outputs=[aircons_output, pdf_output]
     )
 
-    save_order_btn.click(
-        fn=save_order_handler,
-        inputs=[order_state, order_id_hidden, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price] + components_ui_inputs,
-        outputs=[save_order_status, order_state, order_id_hidden]
+    save_kp_btn.click(
+        fn=save_kp_handler,
+        inputs=[order_id_hidden, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price],
+        outputs=[save_kp_status, order_id_hidden]
     )
-    
-    delete_order_btn.click(
-        fn=lambda state, oid: delete_order(oid) if oid else {"error": "Нет ID для удаления"},
-        inputs=[order_state, order_id_state],
-        outputs=[save_order_status]
+    save_components_btn.click(
+        fn=save_components_handler,
+        inputs=[order_id_hidden] + components_ui_inputs,
+        outputs=[save_components_status, order_id_hidden]
     )

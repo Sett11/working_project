@@ -39,13 +39,10 @@ def get_client_by_phone(db: Session, phone: str) -> models.Client | None:
     Returns:
         models.Client | None: Объект клиента или None, если клиент не найден.
     """
-    logger.debug(f"Выполняется запрос на получение клиента по номеру телефона: {phone}")
+    logger.info(f"[CRUD] get_client_by_phone: phone={phone}")
     # Выполняем запрос к таблице клиентов по номеру телефона
     client = db.query(models.Client).filter(models.Client.phone == phone).first()
-    if client:
-        logger.debug(f"Клиент с телефоном '{phone}' найден: {client.full_name} (id={client.id}).")
-    else:
-        logger.debug(f"Клиент с телефоном '{phone}' не найден.")
+    logger.info(f"[CRUD] get_client_by_phone: found={bool(client)}")
     return client
 
 
@@ -60,7 +57,7 @@ def create_client(db: Session, client: schemas.ClientCreate) -> models.Client:
     Returns:
         models.Client: Созданный объект клиента.
     """
-    logger.info(f"Начало создания нового клиента: {client.full_name}")
+    logger.info(f"[CRUD] create_client: {client}")
     db_client = models.Client(**client.model_dump())
     
     try:
@@ -175,7 +172,7 @@ def create_order(db: Session, order: schemas.OrderCreate) -> models.Order:
     """
     Создание нового заказа в базе данных.
     """
-    logger.info(f"Начало создания нового заказа для клиента с id={order.client_id}")
+    logger.info(f"[CRUD] create_order: {order}")
     db_order = models.Order(
         client_id=order.client_id,
         status=order.status,
@@ -199,7 +196,7 @@ def update_order_by_id(db: Session, order_id: int, order_update: schemas.OrderCr
     """
     Обновляет заказ по id. Если заказа нет — возвращает None.
     """
-    logger.info(f"Попытка обновить заказ с id={order_id}")
+    logger.info(f"[CRUD] update_order_by_id: order_id={order_id}, order_update={order_update}")
     db_order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not db_order:
         logger.warning(f"Заказ с id={order_id} не найден для обновления.")

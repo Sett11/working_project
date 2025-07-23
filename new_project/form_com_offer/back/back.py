@@ -63,16 +63,27 @@ def select_aircons_endpoint(payload: dict, db: Session = Depends(get_session)):
 # --- Эндпоинт для генерации КП (С УЛУЧШЕНИЕМ) ---
 @app.post("/api/generate_offer/")
 def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
-    logger.info("Получен запрос на эндпоинт /api/generate_offer/")
-    
+    logger.info(f"Получен запрос на эндпоинт /api/generate_offer/. Payload: {json.dumps(payload, ensure_ascii=False)}")
     try:
-        client_data = payload.get("client_data", {})
-        order_params = payload.get("order_params", {})
-        aircon_params = payload.get("aircon_params", {})
-        components = payload.get("components", [])
+        # Если в payload только id — подгружаем все данные заказа из базы
+        if list(payload.keys()) == ["id"] or ("id" in payload and len(payload) == 1):
+            order_id = payload["id"]
+            order = db.query(crud.models.Order).filter_by(id=order_id).first()
+            if not order:
+                logger.error(f"Заказ с id={order_id} не найден для генерации КП!")
+                return {"error": f"Заказ с id={order_id} не найден!"}
+            order_data = json.loads(order.order_data)
+            client_data = order_data.get("client_data", {})
+            order_params = order_data.get("order_params", {})
+            aircon_params = order_data.get("aircon_params", {})
+            components = order_data.get("components", [])
+        else:
+            client_data = payload.get("client_data", {})
+            order_params = payload.get("order_params", {})
+            aircon_params = payload.get("aircon_params", {})
+            components = payload.get("components", [])
         discount = order_params.get("discount", 0)
         client_full_name = client_data.get('full_name', 'N/A')
-        
         # 1. Создание или поиск клиента
         client_phone = client_data.get("phone")
         if not client_phone:
@@ -80,74 +91,64 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
         client = crud.get_client_by_phone(db, client_phone)
         if not client:
             client = crud.create_client(db, schemas.ClientCreate(**client_data))
-        
         # 2. Подбор кондиционеров
         selected_aircons = select_aircons(db, aircon_params)
-        
-        # --- УЛУЧШЕНИЕ ЗДЕСЬ: Формируем более подробные варианты для PDF ---
+        # --- Формируем варианты для PDF ---
         aircon_variants = []
         variant_items = []
         for ac in selected_aircons:
             ac_dict = schemas.AirConditioner.from_orm(ac).dict()
-            
-            # Формируем список характеристик
             specs = []
             if ac_dict.get('cooling_power_kw'): specs.append(f"Охлаждение: {ac_dict['cooling_power_kw']} кВт")
             if ac_dict.get('heating_power_kw'): specs.append(f"Обогрев: {ac_dict['heating_power_kw']} кВт")
             if ac_dict.get('energy_efficiency_class'): specs.append(f"Класс: {ac_dict['energy_efficiency_class']}")
             if ac_dict.get('is_inverter'): specs.append("Инверторный")
             if ac_dict.get('has_wifi'): specs.append("Wi-Fi")
-            
-            # Достаем 'features' из описания, если они там есть
             description = ac_dict.get('description', '')
             if "Особенности: " in description:
                 features_str = description.split("Особенности: ")[-1]
                 specs.extend([f.strip() for f in features_str.split(',')])
-
             variant_items.append({
                 'name': f"{ac_dict.get('brand', '')} {ac_dict.get('model_name', '')}",
                 'manufacturer': ac_dict.get('brand', ''),
                 'price': ac_dict.get('retail_price_byn', 0),
                 'qty': 1, 'unit': 'шт.', 'delivery': 'в наличии',
                 'discount_percent': float(order_params.get('discount', 0)),
-                'specifications': specs, # Передаем расширенный список характеристик
-                'short_description': "" # Поле больше не используется
+                'specifications': specs,
+                'short_description': ""
             })
-        
         aircon_variants.append({
             'title': 'Варианты оборудования, подходящие по параметрам',
-            'description': '', # Убираем старое описание
+            'description': '',
             'items': variant_items
         })
-        # --- Конец улучшения ---
-
+        # 1. Оставляем только выбранные комплектующие (selected=True и qty>0 или length>0)
         components_for_pdf = []
         for comp in components:
-            comp_new = comp.copy()
-            comp_new.setdefault('unit', 'шт.')
-            comp_new.setdefault('discount_percent', discount)
-            components_for_pdf.append(comp_new)
-            
+            if comp.get('selected') and (comp.get('qty', 0) > 0 or comp.get('length', 0) > 0):
+                comp_new = comp.copy()
+                comp_new.setdefault('unit', 'шт.')
+                comp_new.setdefault('discount_percent', discount)
+                components_for_pdf.append(comp_new)
         today = datetime.date.today().strftime('%d_%m')
-        safe_name = re.sub(r'[^\w]', '_', client_full_name)[:20]
+        # 2. Имя клиента для offer_number: только запрещённые для имени файла символы заменяем на '_', буквы и пробелы оставляем
+        import re
+        safe_name = re.sub(r'[\\/:*?"<>|]', '_', client_full_name).strip()[:20]
         offer_number = f"{today}_{safe_name}"
-
         # 4. Генерируем PDF
         pdf_path = generate_commercial_offer_pdf(
             client_data=client_data, order_params=order_params,
             aircon_variants=aircon_variants, components=components_for_pdf,
             discount_percent=discount, offer_number=offer_number
         )
-
         response_data = {
-            "aircon_variants": aircon_variants, # Для отладки
+            "aircon_variants": aircon_variants,
             "total_count": len(selected_aircons),
             "client_name": client.full_name,
-            "components": components_for_pdf, # Для отладки
+            "components": components_for_pdf,
             "pdf_path": pdf_path
         }
         return response_data
-
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
@@ -157,51 +158,58 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
 # --- Новый эндпоинт для сохранения заказа-черновика ---
 
 @app.post("/api/save_order/")
-def save_order_endpoint(payload: FullOrderCreate, db: Session = Depends(get_session)):
-    """
-    Сохраняет или обновляет заказ.
-    - Если в payload есть `id`, пытается обновить существующий заказ.
-    - Если заказ с таким `id` не найден, или `id` не предоставлен, создает новый заказ.
-    - Возвращает JSON с `success`, `order_id` и флагом `updated`.
-    """
-    logger.info("Получен запрос на эндпоинт /api/save_order/ (сохранение/обновление заказа)")
+def save_order_endpoint(payload: dict, db: Session = Depends(get_session)):
+    logger.info(f"Получен запрос на эндпоинт /api/save_order/ (сохранение/обновление заказа). Payload: {json.dumps(payload, ensure_ascii=False)}")
     try:
-        # 1. Найти или создать клиента
-        client_data = payload.client_data
-        client = crud.get_client_by_phone(db, client_data.phone)
-        if not client:
-            client = crud.create_client(db, client_data)
-
-        # 2. Подготовить данные для создания/обновления
-        from datetime import date
-        # Безопасно извлекаем ID из данных, чтобы он не дублировался в order_data
-        order_data_dict = payload.model_dump()
-        order_id = order_data_dict.pop("id", None)
-
-        order_payload = schemas.OrderCreate(
-            client_id=client.id,
-            created_at=date.today(),
-            status=payload.status or "draft",
-            pdf_path=None, # PDF генерируется отдельно
-            order_data=order_data_dict
-        )
-
-        # 3. Попытаться обновить, если есть ID
+        # Определяем режим: только КП, только components, или оба
+        has_kp = 'client_data' in payload and 'order_params' in payload and 'aircon_params' in payload
+        has_components = 'components' in payload
+        logger.info(f"Режим сохранения: КП={has_kp}, components={has_components}")
+        # 1. Найти или создать клиента (если есть client_data)
+        client = None
+        if has_kp:
+            client_data = payload["client_data"]
+            client = crud.get_client_by_phone(db, client_data["phone"])
+            if not client:
+                client = crud.create_client(db, schemas.ClientCreate(**client_data))
+        # 2. Получить существующий заказ, если есть id
+        order_id = payload.get("id")
+        order = None
         if order_id is not None:
-            logger.info(f"Попытка обновить заказ с ID: {order_id}")
-            updated_order = crud.update_order_by_id(db, order_id, order_payload)
-            if updated_order:
-                logger.info(f"Заказ ID: {updated_order.id} успешно обновлен.")
-                return {"success": True, "order_id": updated_order.id, "updated": True}
-            else:
-                # Если заказ с таким ID не найден, логируем и переходим к созданию нового
-                logger.warning(f"Заказ с ID: {order_id} не найден для обновления. Будет создан новый заказ.")
-
-        # 4. Создать новый заказ, если не было ID или обновление не удалось
-        new_order = crud.create_order(db, order_payload)
-        logger.info(f"Новый заказ успешно создан с ID: {new_order.id}")
-        return {"success": True, "order_id": new_order.id, "updated": False}
-
+            order = db.query(crud.models.Order).filter_by(id=order_id).first()
+            logger.info(f"Найден заказ с id={order_id}: {bool(order)}")
+        # 3. Если заказа нет и есть КП-данные — создать новый заказ
+        if not order and has_kp:
+            from datetime import date
+            order_data = {k: payload[k] for k in ("client_data", "order_params", "aircon_params") if k in payload}
+            if has_components:
+                order_data["components"] = payload["components"]
+            order_payload = schemas.OrderCreate(
+                client_id=client.id,
+                created_at=date.today(),
+                status=payload.get("status", "draft"),
+                pdf_path=None,
+                order_data=order_data
+            )
+            order = crud.create_order(db, order_payload)
+            logger.info(f"Создан новый заказ с id={order.id}")
+            return {"success": True, "order_id": order.id, "updated": False}
+        # 4. Если заказ есть — обновить только нужные поля
+        if order:
+            order_data = json.loads(order.order_data)
+            if has_kp:
+                for k in ("client_data", "order_params", "aircon_params"):
+                    if k in payload:
+                        order_data[k] = payload[k]
+            if has_components:
+                order_data["components"] = payload["components"]
+            order.order_data = json.dumps(order_data, ensure_ascii=False)
+            order.status = payload.get("status", order.status)
+            db.commit()
+            logger.info(f"Обновлён заказ id={order.id}. Итоговое order_data: {order.order_data}")
+            return {"success": True, "order_id": order.id, "updated": True}
+        logger.error("Не удалось найти или создать заказ для обновления.")
+        return {"success": False, "error": "Не удалось найти или создать заказ."}
     except Exception as e:
         logger.error(f"Ошибка при сохранении/обновлении заказа: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Внутренняя ошибка сервера при обработке заказа: {e}")
