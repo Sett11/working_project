@@ -12,6 +12,7 @@ from utils.mylogger import Logger
 from selection.aircon_selector import select_aircons
 from utils.pdf_generator import generate_commercial_offer_pdf
 from db.schemas import FullOrderCreate
+import json
 
 logger = Logger(name=__name__, log_file="backend.log")
 app = FastAPI(title="Air-Con Commercial Offer API", version="0.1.0")
@@ -157,33 +158,53 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
 
 @app.post("/api/save_order/")
 def save_order_endpoint(payload: FullOrderCreate, db: Session = Depends(get_session)):
-    logger.info("Получен запрос на эндпоинт /api/save_order/ (сохранение черновика заказа)")
+    """
+    Сохраняет или обновляет заказ.
+    - Если в payload есть `id`, пытается обновить существующий заказ.
+    - Если заказ с таким `id` не найден, или `id` не предоставлен, создает новый заказ.
+    - Возвращает JSON с `success`, `order_id` и флагом `updated`.
+    """
+    logger.info("Получен запрос на эндпоинт /api/save_order/ (сохранение/обновление заказа)")
     try:
-        # 1. Клиент
+        # 1. Найти или создать клиента
         client_data = payload.client_data
         client = crud.get_client_by_phone(db, client_data.phone)
         if not client:
             client = crud.create_client(db, client_data)
-        # 2. OrderCreate
-        order_params = payload.order_params or {}
-        # 3. Формируем OrderCreate
+
+        # 2. Подготовить данные для создания/обновления
         from datetime import date
-        order_create = schemas.OrderCreate(
+        # Безопасно извлекаем ID из данных, чтобы он не дублировался в order_data
+        order_data_dict = payload.model_dump()
+        order_id = order_data_dict.pop("id", None)
+
+        order_payload = schemas.OrderCreate(
             client_id=client.id,
             created_at=date.today(),
-            visit_date=order_params.get("visit_date"),
             status=payload.status or "draft",
-            discount=order_params.get("discount", 0),
-            room_type=order_params.get("room_type"),
-            room_area=order_params.get("room_area"),
-            installer_data=None  # Можно добавить дополнительные данные, если нужно
+            pdf_path=None, # PDF генерируется отдельно
+            order_data=order_data_dict
         )
-        order = crud.create_order(db, order_create)
-        logger.info(f"Заказ-черновик успешно сохранён с id={order.id}")
-        return {"success": True, "order_id": order.id}
+
+        # 3. Попытаться обновить, если есть ID
+        if order_id is not None:
+            logger.info(f"Попытка обновить заказ с ID: {order_id}")
+            updated_order = crud.update_order_by_id(db, order_id, order_payload)
+            if updated_order:
+                logger.info(f"Заказ ID: {updated_order.id} успешно обновлен.")
+                return {"success": True, "order_id": updated_order.id, "updated": True}
+            else:
+                # Если заказ с таким ID не найден, логируем и переходим к созданию нового
+                logger.warning(f"Заказ с ID: {order_id} не найден для обновления. Будет создан новый заказ.")
+
+        # 4. Создать новый заказ, если не было ID или обновление не удалось
+        new_order = crud.create_order(db, order_payload)
+        logger.info(f"Новый заказ успешно создан с ID: {new_order.id}")
+        return {"success": True, "order_id": new_order.id, "updated": False}
+
     except Exception as e:
-        logger.error(f"Ошибка при сохранении заказа: {e}", exc_info=True)
-        return {"error": str(e)}
+        logger.error(f"Ошибка при сохранении/обновлении заказа: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Внутренняя ошибка сервера при обработке заказа: {e}")
 
 # --- Эндпоинт: получить список всех заказов (id, имя, дата, адрес, статус) ---
 @app.get("/api/orders/")
@@ -197,26 +218,13 @@ def get_orders_list(db: Session = Depends(get_session)):
     try:
         orders = db.query(crud.models.Order).all()
         logger.info(f"Всего заказов в базе: {len(orders)}")
-        # Группируем по статусу
-        editing_statuses = ("draft", "forming")
-        editing_orders = [o for o in orders if o.status in editing_statuses]
-        other_orders = [o for o in orders if o.status not in editing_statuses]
-        # Сортируем внутри групп по дате создания (новые выше)
-        editing_orders.sort(key=lambda o: o.created_at, reverse=True)
-        other_orders.sort(key=lambda o: o.created_at, reverse=True)
-        sorted_orders = editing_orders + other_orders
         result = []
-        for order in sorted_orders:
-            status = order.status
-            if status in ("forming", "draft"): status_str = "Уточнение деталей"
-            elif status == "generated": status_str = "Сформировано КП"
-            else: status_str = status
+        for order in orders:
             result.append({
                 "id": order.id,
-                "client_name": order.client.full_name if order.client else "-",
+                "client_name": json.loads(order.order_data)["client_data"]["full_name"],
                 "created_at": order.created_at.strftime("%Y-%m-%d"),
-                "address": order.client.address if order.client else "-",
-                "status": status_str
+                "status": order.status
             })
         logger.info(f"Отправлен список заказов: {result}")
         return result
@@ -231,28 +239,13 @@ def get_order_by_id(order_id: int = Path(...), db: Session = Depends(get_session
         order = db.query(crud.models.Order).filter_by(id=order_id).first()
         if not order:
             return {"error": "Заказ не найден"}
-        # Собираем все данные для автозаполнения (примерно как на фронте)
-        client = order.client
-        client_data = {
-            "full_name": client.full_name if client else "",
-            "phone": client.phone if client else "",
-            "email": client.email if client else "",
-            "address": client.address if client else ""
-        }
-        order_params = {
-            "room_area": order.room_area,
-            "room_type": order.room_type,
-            "discount": order.discount,
-            "visit_date": order.visit_date.strftime("%Y-%m-%d") if order.visit_date else None,
-            "installation_price": None # если есть
-        }
-        # aircon_params и components — если нужно, можно доработать
-        return {
-            "id": order.id,
-            "client_data": client_data,
-            "order_params": order_params,
-            "status": order.status
-        }
+        # Возвращаем order_data как есть (словарь)
+        order_data = json.loads(order.order_data)
+        order_data["id"] = order.id
+        order_data["status"] = order.status
+        order_data["pdf_path"] = order.pdf_path
+        order_data["created_at"] = order.created_at.strftime("%Y-%m-%d")
+        return order_data
     except Exception as e:
         logger.error(f"Ошибка при получении заказа по id: {e}", exc_info=True)
         return {"error": str(e)}

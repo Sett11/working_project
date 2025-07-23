@@ -14,6 +14,7 @@
 from sqlalchemy.orm import Session
 from . import models, schemas
 from utils.mylogger import Logger
+import json
 # TODO: Добавить и настроить безопасное хеширование паролей.
 # from passlib.context import CryptContext
 
@@ -173,25 +174,14 @@ def get_all_components(db: Session) -> list[models.Component]:
 def create_order(db: Session, order: schemas.OrderCreate) -> models.Order:
     """
     Создание нового заказа в базе данных.
-
-    Args:
-        db (Session): Сессия базы данных.
-        order (schemas.OrderCreate): Pydantic-схема с данными нового заказа.
-
-    Returns:
-        models.Order: Созданный объект заказа.
     """
     logger.info(f"Начало создания нового заказа для клиента с id={order.client_id}")
     db_order = models.Order(
         client_id=order.client_id,
         status=order.status,
-        discount=order.discount,
-        room_type=order.room_type,
-        room_area=order.room_area,
-        installer_data=order.installer_data,
-        pdf_path=None,
-        created_at=order.created_at,
-        visit_date=order.visit_date
+        pdf_path=order.pdf_path,
+        order_data=json.dumps(order.order_data, ensure_ascii=False),
+        created_at=order.created_at
     )
     try:
         db.add(db_order)
@@ -201,5 +191,30 @@ def create_order(db: Session, order: schemas.OrderCreate) -> models.Order:
         return db_order
     except Exception as e:
         logger.error(f"Ошибка при создании заказа для клиента id={order.client_id}: {e}", exc_info=True)
+        db.rollback()
+        raise
+
+
+def update_order_by_id(db: Session, order_id: int, order_update: schemas.OrderCreate) -> models.Order | None:
+    """
+    Обновляет заказ по id. Если заказа нет — возвращает None.
+    """
+    logger.info(f"Попытка обновить заказ с id={order_id}")
+    db_order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not db_order:
+        logger.warning(f"Заказ с id={order_id} не найден для обновления.")
+        return None
+    try:
+        db_order.status = order_update.status
+        db_order.pdf_path = order_update.pdf_path
+        db_order.order_data = json.dumps(order_update.order_data, ensure_ascii=False)
+        db_order.created_at = order_update.created_at
+        db_order.client_id = order_update.client_id
+        db.commit()
+        db.refresh(db_order)
+        logger.info(f"Заказ с id={order_id} успешно обновлён.")
+        return db_order
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении заказа id={order_id}: {e}", exc_info=True)
         db.rollback()
         raise

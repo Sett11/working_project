@@ -70,23 +70,18 @@ class Client(ClientBase, OrmBase):
     id: int
 
 class OrderBase(BaseModel):
-    status: Optional[str] = "forming"
-    discount: Optional[int] = 0
-    room_type: Optional[str] = None
-    room_area: Optional[float] = None
-    installer_data: Optional[dict] = None
+    status: Optional[str] = "draft"
+    pdf_path: Optional[str] = None
+    order_data: dict
 
 class OrderCreate(OrderBase):
     client_id: int
     created_at: date
-    visit_date: Optional[date] = None
 
 class Order(OrderBase, OrmBase):
     id: int
     created_at: date
-    visit_date: Optional[date] = None
     client: Client
-    pdf_path: Optional[str] = None
 
 class CommercialOfferPayload(BaseModel):
     client_data: ClientCreate
@@ -94,6 +89,7 @@ class CommercialOfferPayload(BaseModel):
     aircon_params: dict
 
 class FullOrderCreate(BaseModel):
+    id: Optional[int] = None
     client_data: ClientCreate
     order_params: dict
     aircon_params: dict

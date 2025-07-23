@@ -263,10 +263,125 @@ def get_placeholder_order():
         ]
     }
 
+def fill_fields_from_order(order):
+    client = order.get("client_data", {})
+    order_params = order.get("order_params", {})
+    aircon_params = order.get("aircon_params", {})
+    components = order.get("components", [])
+    # Собираем значения для всех input-компонентов
+    values = [
+        client.get("full_name", ""),
+        client.get("phone", ""),
+        client.get("email", ""),
+        client.get("address", ""),
+        order_params.get("visit_date", ""),
+        order_params.get("room_area", 50),
+        order_params.get("room_type", None),
+        order_params.get("discount", 0),
+        aircon_params.get("wifi", False),
+        aircon_params.get("inverter", False),
+        aircon_params.get("price_limit", 3000),
+        aircon_params.get("mount_type", "Любой"),
+        aircon_params.get("ceiling_height", 2.7),
+        aircon_params.get("illumination", "Средняя"),
+        aircon_params.get("num_people", 1),
+        aircon_params.get("activity", "Сидячая работа"),
+        aircon_params.get("num_computers", 0),
+        aircon_params.get("num_tvs", 0),
+        aircon_params.get("other_power", 0),
+        aircon_params.get("brand", None),
+        order_params.get("installation_price", 0),
+    ]
+    # Добавляем значения для всех комплектующих (selected, qty, length)
+    for comp in components:
+        values.append(comp.get("selected", False))
+        values.append(comp.get("qty", 0))
+        values.append(comp.get("length", 0.0))
+    logger.info(f"[DEBUG] fill_fields_from_order: values count={len(values)}; values={values}")
+    return [gr.update(value=v) for v in values]
+
+def fill_fields_from_order_diff(order, placeholder):
+    """
+    Возвращает список gr.update только для тех полей, которые отличаются от placeholder.
+    Для совпадающих — gr.update() (без изменений).
+    """
+    client = order.get("client_data", {})
+    order_params = order.get("order_params", {})
+    aircon_params = order.get("aircon_params", {})
+    components = order.get("components", [])
+    ph_client = placeholder["client_data"]
+    ph_order_params = placeholder["order_params"]
+    ph_aircon_params = placeholder["aircon_params"]
+    ph_components = placeholder["components"]
+    values = [
+        (client.get("full_name", ""), ph_client.get("full_name", "")),
+        (client.get("phone", ""), ph_client.get("phone", "")),
+        (client.get("email", ""), ph_client.get("email", "")),
+        (client.get("address", ""), ph_client.get("address", "")),
+        (order_params.get("visit_date", ""), ph_order_params.get("visit_date", "")),
+        (order_params.get("room_area", 50), ph_order_params.get("room_area", 50)),
+        (order_params.get("room_type", None), ph_order_params.get("room_type", None)),
+        (order_params.get("discount", 0), ph_order_params.get("discount", 0)),
+        (aircon_params.get("wifi", False), ph_aircon_params.get("wifi", False)),
+        (aircon_params.get("inverter", False), ph_aircon_params.get("inverter", False)),
+        (aircon_params.get("price_limit", 3000), ph_aircon_params.get("price_limit", 3000)),
+        (aircon_params.get("mount_type", "Любой"), ph_aircon_params.get("mount_type", "Любой")),
+        (aircon_params.get("ceiling_height", 2.7), ph_aircon_params.get("ceiling_height", 2.7)),
+        (aircon_params.get("illumination", "Средняя"), ph_aircon_params.get("illumination", "Средняя")),
+        (aircon_params.get("num_people", 1), ph_aircon_params.get("num_people", 1)),
+        (aircon_params.get("activity", "Сидячая работа"), ph_aircon_params.get("activity", "Сидячая работа")),
+        (aircon_params.get("num_computers", 0), ph_aircon_params.get("num_computers", 0)),
+        (aircon_params.get("num_tvs", 0), ph_aircon_params.get("num_tvs", 0)),
+        (aircon_params.get("other_power", 0), ph_aircon_params.get("other_power", 0)),
+        (aircon_params.get("brand", None), ph_aircon_params.get("brand", None)),
+        (order_params.get("installation_price", 0), ph_order_params.get("installation_price", 0)),
+    ]
+    updates = []
+    for v, ph in values:
+        if v != ph:
+            updates.append(gr.update(value=v))
+        else:
+            updates.append(gr.update())
+    # Комплектующие — только для on_tab_change
+    comp_diffs = []
+    for i, comp in enumerate(components):
+        ph_comp = ph_components[i] if i < len(ph_components) else {}
+        for key in ["selected", "qty", "length"]:
+            v = comp.get(key, False if key=="selected" else 0)
+            ph_v = ph_comp.get(key, False if key=="selected" else 0)
+            if v != ph_v:
+                comp_diffs.append(gr.update(value=v))
+            else:
+                comp_diffs.append(gr.update())
+    return updates, comp_diffs
+
+def update_components_tab(order_state):
+    order = order_state  # order_state.value
+    order_components = order.get("components", [])
+    updates = []
+    for catalog_comp in COMPONENTS_CATALOG.get("components", []):
+        # Сравниваем имена без учёта регистра и пробелов
+        cname = catalog_comp.get("name", "").replace(" ", "").lower()
+        found = None
+        for c in order_components:
+            oname = c.get("name", "").replace(" ", "").lower()
+            if cname == oname:
+                found = c
+                logger.info(f"[DEBUG] update_components_tab: match catalog='{catalog_comp.get('name')}' <-> order='{c.get('name')}'")
+                break
+        updates.append(gr.update(value=found.get("selected", False) if found else False))
+        updates.append(gr.update(value=found.get("qty", 0) if found else 0))
+        updates.append(gr.update(value=found.get("length", 0.0) if found else 0.0))
+    logger.info(f"[DEBUG] update_components_tab: обновляю {len(updates)} полей комплектующих (по имени, нечувствительно к регистру и пробелам)")
+    return updates
+
 # --- Новый подход: управление экранами через screen_state и gr.Group(visible=...) ---
+
+components_ui_inputs = []  # <-- ВНЕ интерфейса, глобально!
 
 with gr.Blocks(title="Автоматизация продаж кондиционеров", theme=gr.themes.Ocean()) as interface:
     order_state = gr.State(get_placeholder_order())
+    order_id_state = gr.State(None)  # Новый state для id заказа
     orders_table_data = gr.State([])
 
     with gr.Group(visible=True) as start_screen:
@@ -275,8 +390,10 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         create_btn = gr.Button("Создать новый заказ", variant="primary")
         load_btn = gr.Button("Загрузить заказ", variant="secondary")
     with gr.Group(visible=False) as orders_list_screen:
-        gr.Markdown("### Выберите заказ для редактирования")
-        orders_table = gr.Dataframe(headers=["ID", "Клиент", "Дата", "Адрес", "Статус"], datatype=["number", "str", "str", "str", "str"], interactive=True)
+        gr.Markdown("### Выберите заказ для загрузки")
+        orders_radio = gr.Radio(choices=[], label="Список заказов")
+        load_selected_btn = gr.Button("Загрузить выбранный заказ", variant="primary")
+        load_error = gr.Markdown(visible=False)
         back_to_start_btn = gr.Button("Назад")
     with gr.Group(visible=False) as main_order_screen:
         # Вкладка "Данные для КП"
@@ -284,40 +401,41 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("### 1. Данные клиента")
-                    name = gr.Textbox(label="Имя клиента", value=order_state.value["client_data"]["full_name"])
-                    phone = gr.Textbox(label="Телефон", value=order_state.value["client_data"]["phone"])
-                    mail = gr.Textbox(label="Электронная почта", value=order_state.value["client_data"]["email"])
-                    address = gr.Textbox(label="Адрес", value=order_state.value["client_data"]["address"])
-                    date = gr.Textbox(label="Дата визита монтажника", value=order_state.value["order_params"]["visit_date"])
+                    name = gr.Textbox(label="Имя клиента")
+                    phone = gr.Textbox(label="Телефон")
+                    mail = gr.Textbox(label="Электронная почта")
+                    address = gr.Textbox(label="Адрес")
+                    date = gr.Textbox(label="Дата визита монтажника")
                 with gr.Column():
                     gr.Markdown("### 2. Параметры заказа")
-                    type_room = gr.Dropdown(["квартира", "дом", "офис", "производство"], label="Тип помещения", value=order_state.value["order_params"]["room_type"])
-                    area = gr.Slider(10, 200, value=order_state.value["order_params"]["room_area"], label="Площадь помещения (м²)")
-                    discount = gr.Slider(0, 50, value=order_state.value["order_params"]["discount"], label="Индивидуальная скидка (%)")
-                    installation_price = gr.Number(label="Стоимость монтажа (BYN)", minimum=0, step=1, value=order_state.value["order_params"]["installation_price"])
+                    type_room = gr.Dropdown(["квартира", "дом", "офис", "производство"], label="Тип помещения")
+                    area = gr.Slider(10, 200, label="Площадь помещения (м²)")
+                    discount = gr.Slider(0, 50, label="Индивидуальная скидка (%)")
+                    installation_price = gr.Number(label="Стоимость монтажа (BYN)", minimum=0, step=1)
             gr.Markdown("### 3. Требования к кондиционеру")
             with gr.Row():
-                brand = gr.Dropdown(["Любой", "LESSAR", "DANTEX", "AUX", "QuattroClima", "Tosot", "NiceME"], label="Бренд", value=order_state.value["aircon_params"]["brand"])
-                price = gr.Slider(0, 10000, value=order_state.value["aircon_params"]["price_limit"], label="Верхний порог стоимости (BYN)")
-                inverter = gr.Checkbox(label="Инверторный компрессор", value=order_state.value["aircon_params"]["inverter"])
-                wifi = gr.Checkbox(label="Wi-Fi управление", value=order_state.value["aircon_params"]["wifi"])
+                brand = gr.Dropdown(["Любой", "LESSAR", "DANTEX", "AUX", "QuattroClima", "Tosot", "NiceME"], label="Бренд")
+                price = gr.Slider(0, 10000, label="Верхний порог стоимости (BYN)")
+                inverter = gr.Checkbox(label="Инверторный компрессор")
+                wifi = gr.Checkbox(label="Wi-Fi управление")
             with gr.Row():
-                mount_type = gr.Dropdown(["Любой", "настенный", "кассетный", "потолочный", "напольный", "колонный"], label="Тип монтажа", value=order_state.value["aircon_params"]["mount_type"])
+                mount_type = gr.Dropdown(["Любой", "настенный", "кассетный", "потолочный", "напольный", "колонный"], label="Тип монтажа")
             gr.Markdown("### 4. Дополнительные параметры для расчета мощности")
             with gr.Row():
-                ceiling_height = gr.Slider(2.0, 5.0, value=order_state.value["aircon_params"]["ceiling_height"], step=0.1, label="Высота потолков (м)")
-                illumination = gr.Dropdown(["Слабая", "Средняя", "Сильная"], value=order_state.value["aircon_params"]["illumination"], label="Освещенность")
-                num_people = gr.Slider(1, 10, value=order_state.value["aircon_params"]["num_people"], step=1, label="Количество людей")
-                activity = gr.Dropdown(["Сидячая работа", "Легкая работа", "Средняя работа", "Тяжелая работа", "Спорт"], value=order_state.value["aircon_params"]["activity"], label="Активность людей")
+                ceiling_height = gr.Slider(2.0, 5.0, step=0.1, label="Высота потолков (м)")
+                illumination = gr.Dropdown(["Слабая", "Средняя", "Сильная"], label="Освещенность")
+                num_people = gr.Slider(1, 10, step=1, label="Количество людей")
+                activity = gr.Dropdown(["Сидячая работа", "Легкая работа", "Средняя работа", "Тяжелая работа", "Спорт"], label="Активность людей")
             with gr.Row():
-                num_computers = gr.Slider(0, 10, value=order_state.value["aircon_params"]["num_computers"], step=1, label="Количество компьютеров")
-                num_tvs = gr.Slider(0, 5, value=order_state.value["aircon_params"]["num_tvs"], step=1, label="Количество телевизоров")
-                other_power = gr.Slider(0, 2000, value=order_state.value["aircon_params"]["other_power"], step=50, label="Мощность прочей техники (Вт)")
+                num_computers = gr.Slider(0, 10, step=1, label="Количество компьютеров")
+                num_tvs = gr.Slider(0, 5, step=1, label="Количество телевизоров")
+                other_power = gr.Slider(0, 2000, step=50, label="Мощность прочей техники (Вт)")
+            # Скрытое поле для id заказа
+            order_id_hidden = gr.Number(label="ID заказа (скрытое)", visible=False)
 
         # Вкладка "Комплектующие"
         with gr.Tab("Комплектующие"):
             gr.Markdown("### Подбор комплектующих для монтажа")
-            components_ui_inputs = []
             components_by_category = defaultdict(list)
             for idx, comp in enumerate(COMPONENTS_CATALOG.get("components", [])):
                 components_by_category[comp["category"]].append((comp, idx))
@@ -332,15 +450,22 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                             with gr.Column(scale=5):
                                 is_measurable = "труба" in comp["name"].lower() or "кабель" in comp["name"].lower() or "теплоизоляция" in comp["name"].lower() or "шланг" in comp["name"].lower() or "провод" in comp["name"].lower()
                                 label_text = f"{comp['name']}"
-                                checkbox = gr.Checkbox(label=label_text, value=order_state.value["components"][idx]["selected"])
+                                checkbox = gr.Checkbox(label=label_text)
                             with gr.Column(scale=2):
-                                qty_input = gr.Number(label="Кол-во (шт)", minimum=0, step=1, value=order_state.value["components"][idx]["qty"])
+                                qty_input = gr.Number(label="Кол-во (шт)", minimum=0, step=1)
                             with gr.Column(scale=2):
                                 if is_measurable:
-                                    length_input = gr.Number(label="Длина (м)", minimum=0, step=0.1, value=order_state.value["components"][idx]["length"])
+                                    length_input = gr.Number(label="Длина (м)", minimum=0, step=0.1)
                                 else:
                                     length_input = gr.Number(visible=False)
                             components_ui_inputs.extend([checkbox, qty_input, length_input])
+            # Кнопка для загрузки комплектующих
+            load_components_btn = gr.Button("Загрузить комплектующие из заказа", variant="primary")
+            load_components_btn.click(
+                fn=update_components_tab,
+                inputs=[order_state],  # всегда актуальное состояние
+                outputs=components_ui_inputs
+            )
 
         # Вкладка "Результат" и обработчики без изменений
         with gr.Tab("Результат"):
@@ -360,94 +485,170 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 delete_order_btn = gr.Button("Удалить заказ", variant="stop", visible=order_state.value.get('id') is not None)
 
     def show_start():
-        return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), order_state.value, []
+        return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), order_state.value, [], gr.update(value=None)
     def show_orders():
         orders = fetch_orders_list()
-        table_data = [[o["id"], o["client_name"], o["created_at"], o["address"], o["status"]] for o in orders]
-        return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), order_state.value, table_data
+        choices = [f"{o['id']} | {o['client_name']} | {o.get('address', '-') if 'address' in o else '-'} | {o['created_at']} | {o['status']}" for o in orders]
+        logger.info(f"[DEBUG] show_orders: choices={choices}")
+        return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), order_state.value, gr.update(choices=choices, value=None), gr.update(visible=False, value=""), gr.update(value=None)
+    def load_selected_order(selected):
+        logger.info(f"[DEBUG] load_selected_order: selected={selected}")
+        if not selected:
+            logger.info(f"[DEBUG] load_selected_order: error - не выбран заказ")
+            return [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(22)] + [gr.update(), gr.update(value=None)] + [gr.update()]
+        order_id = int(selected.split("|")[0].strip())
+        order = fetch_order_data(order_id)
+        logger.info(f"[DEBUG] load_selected_order: loaded order={order}")
+        placeholder = get_placeholder_order()
+        updates, _ = fill_fields_from_order_diff(order, placeholder)
+        logger.info(f"[DEBUG] load_selected_order: order_state.value до обновления={order_state.value}")
+        logger.info(f"[DEBUG] load_selected_order: order_state.value после обновления={order}")
+        logger.info(f"[DEBUG] load_selected_order: order_id_state будет {order.get('id')}")
+        # Возвращаем: скрыть ошибку, скрыть список заказов, показать основную форму, обновить все поля, обновить order_state, обновить order_id_state, и скрытое поле id
+        return [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + [gr.update(value=order), gr.update(value=order.get("id"))] + [gr.update(value=order.get("id"))]
     def show_main(order=None):
         if order is None:
-            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), get_placeholder_order(), orders_table_data.value
+            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), get_placeholder_order(), orders_table_data.value, gr.update(value=None)
         else:
-            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order, orders_table_data.value
-    def on_select_order(evt):
-        idx = evt.index if hasattr(evt, 'index') else None
-        if idx is not None and orders_table_data.value:
-            order_id = orders_table_data.value[idx][0]
+            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order, orders_table_data.value, gr.update(value=order.get("id"))
+    def on_select_order(row):
+        logger.info(f"[DEBUG] on_select_order: row={row}")
+        if row and len(row) > 0:
+            order_id = row[0]
             order = fetch_order_data(order_id)
+            logger.info(f"[DEBUG] on_select_order: loaded order={order}")
             return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order, orders_table_data.value
+        logger.info(f"[DEBUG] on_select_order: fallback")
         return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), order_state.value, orders_table_data.value
 
     create_btn.click(fn=lambda: show_main(), outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_table_data])
-    load_btn.click(fn=show_orders, outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_table_data])
+    load_btn.click(fn=show_orders, outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_radio, load_error])
+    # Собираем все input-компоненты в правильном порядке для outputs
+    all_inputs = [
+        name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price
+    ] 
+
+    load_selected_btn.click(
+        fn=load_selected_order,
+        inputs=[orders_radio],
+        outputs=[load_error, orders_list_screen, main_order_screen, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price, order_state, order_id_state, order_id_hidden]
+    )
     back_to_start_btn.click(fn=show_start, outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_table_data])
-    # Удаляю select_order_btn и его обработчик
-    # select_order_btn.click(fn=lambda idx: on_select_order(idx), inputs=[orders_table.selected], outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_table_data])
-    # Вместо этого:
-    orders_table.select(on_select_order, outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_table_data])
-    # Кнопка удаления заказа
-    delete_order_btn.click(fn=lambda: delete_order(order_state.value.get('id')), outputs=[save_order_status])
+    # Удаляю orders_table.select(on_select_order, outputs=[...]) как устаревший и неиспользуемый
 
     # --- Обработчики кнопок ---
     def select_aircons_handler(*inputs):
-        # inputs: все значения из полей, собрать payload как в select_aircons
-        # ... собрать значения ...
-        # ... вызвать select_aircons(...)
         return select_aircons(*inputs)
 
     def generate_kp_handler(*inputs):
-        # ... собрать значения ...
-        # ... вызвать generate_kp(...)
         args = list(inputs)
-        args[4] = fix_date(args[4])  # date
+        # Преобразуем дату перед отправкой
+        args[4] = fix_date(args[4]) 
         return generate_kp(*args)
 
     def save_order_handler(
+        order_state,
+        order_id_hidden_value,
         client_name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type,
         ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price,
         *components_inputs
     ):
-        # Собираем компоненты
+        # Используем id только из скрытого поля
+        order_id = order_id_hidden_value
+        new_order_state = {
+            "client_data": {
+                "full_name": client_name,
+                "phone": phone,
+                "email": mail,
+                "address": address
+            },
+            "order_params": {
+                "room_area": area,
+                "room_type": type_room,
+                "discount": discount,
+                "visit_date": fix_date(date),
+                "installation_price": installation_price
+            },
+            "aircon_params": {
+                "wifi": wifi,
+                "inverter": inverter,
+                "price_limit": price,
+                "brand": brand,
+                "mount_type": mount_type,
+                "area": area,
+                "ceiling_height": ceiling_height,
+                "illumination": illumination,
+                "num_people": num_people,
+                "activity": activity,
+                "num_computers": num_computers,
+                "num_tvs": num_tvs,
+                "other_power": other_power
+            },
+            "components": [],
+            "status": "draft"
+        }
+        if order_id is not None and str(order_id).isdigit():
+            new_order_state["id"] = int(order_id)
         selected_components = []
         i = 0
         for component_data in COMPONENTS_CATALOG.get("components", []):
-            is_selected = components_inputs[i]
-            qty = components_inputs[i+1]
-            length = components_inputs[i+2]
+            is_selected, qty, length = components_inputs[i], components_inputs[i+1], components_inputs[i+2]
             i += 3
-            comp_item = {"name": component_data["name"], "price": component_data.get("price", 0), "currency": COMPONENTS_CATALOG.get("catalog_info", {}).get("currency", "BYN"), "qty": int(qty) if qty else 0, "selected": is_selected}
+            comp_item = {
+                "name": component_data["name"], "price": component_data.get("price", 0),
+                "currency": COMPONENTS_CATALOG.get("catalog_info", {}).get("currency", "BYN"),
+                "qty": int(qty) if qty else 0, "selected": is_selected, "length": 0.0
+            }
             if "труба" in comp_item["name"].lower() or "кабель" in comp_item["name"].lower() or "теплоизоляция" in comp_item["name"].lower() or "шланг" in comp_item["name"].lower():
                 comp_item["unit"] = "м."
                 comp_item["length"] = float(length) if length else 0.0
             else:
                 comp_item["unit"] = "шт."
-            comp_item["length"] = comp_item.get("length", 0.0)
             selected_components.append(comp_item)
-        illumination_map = {"Слабая": 0, "Средняя": 1, "Сильная": 2}
-        activity_map = {"Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
-        visit_date = fix_date(date)
-        payload = {
-            "client_data": {"full_name": client_name, "phone": phone, "email": mail, "address": address},
-            "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": visit_date, "installation_price": installation_price},
-            "aircon_params": {"wifi": wifi, "inverter": inverter, "price_limit": price, "brand": brand, "mount_type": mount_type, "area": area, "ceiling_height": ceiling_height, "illumination": illumination, "num_people": num_people, "activity": activity, "num_computers": num_computers, "num_tvs": num_tvs, "other_power": other_power},
-            "components": selected_components,
-            "status": "draft"
-        }
-        import requests
+        new_order_state["components"] = selected_components
+        logger.info(f"[DEBUG] save_order_handler: order_id={order_id} (type={type(order_id)})")
+        payload = dict(new_order_state)  # копируем для отправки
+        logger.info(f"[DEBUG] save_order_handler: Отправка payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
         try:
             resp = requests.post(f"{BACKEND_URL}/api/save_order/", json=payload)
             resp.raise_for_status()
             data = resp.json()
-            if "order_id" in data:
-                order_state.value["id"] = data["order_id"]
-                delete_order_btn.visible = True
-            return "Заказ успешно сохранён!"
+            if data.get("success"):
+                new_order_id = data.get("order_id")
+                action = "обновлён" if data.get("updated") else "сохранён"
+                msg = f"Заказ успешно {action}! ID: {new_order_id}"
+                logger.info(msg)
+                new_order_state['id'] = new_order_id
+                return msg, new_order_state, new_order_id
+            else:
+                error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
+                logger.error(f"Ошибка при сохранении заказа: {error_msg}")
+                return f"Ошибка: {error_msg}", new_order_state, order_id
         except Exception as e:
-            return f"Ошибка: {e}"
+            logger.error(f"Ошибка при сохранении заказа: {e}", exc_info=True)
+            return f"Ошибка: {e}", new_order_state, order_id
 
     # --- Привязка обработчиков к кнопкам ---
-    select_aircons_btn.click(fn=select_aircons_handler, inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand], outputs=[aircons_output])
-    generate_btn.click(fn=generate_kp_handler, inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price] + components_ui_inputs, outputs=[aircons_output, pdf_output])
-    save_order_btn.click(fn=save_order_handler, inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price] + components_ui_inputs, outputs=[save_order_status])
-    # Кнопка удаления заказа (видимость зависит от наличия id)
-    delete_order_btn.click(fn=lambda: delete_order(order_state.value.get('id')) if order_state.value.get('id') else {'error': 'Нет id заказа для удаления'}, outputs=[save_order_status])
+    select_aircons_btn.click(
+        fn=select_aircons_handler,
+        inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand],
+        outputs=[aircons_output]
+    )
+
+    generate_btn.click(
+        fn=generate_kp_handler,
+        inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price] + components_ui_inputs,
+        outputs=[aircons_output, pdf_output]
+    )
+
+    save_order_btn.click(
+        fn=save_order_handler,
+        inputs=[order_state, order_id_hidden, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price] + components_ui_inputs,
+        outputs=[save_order_status, order_state, order_id_hidden]
+    )
+    
+    delete_order_btn.click(
+        fn=lambda state, oid: delete_order(oid) if oid else {"error": "Нет ID для удаления"},
+        inputs=[order_state, order_id_state],
+        outputs=[save_order_status]
+    )

@@ -10,6 +10,7 @@
 """
 from sqlalchemy import (Column, Integer, String, Float, ForeignKey, DateTime,
                         Text, Table, Boolean)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -45,18 +46,12 @@ class Order(Base):
     """
     __tablename__ = 'orders'
     id = Column(Integer, primary_key=True, index=True)  # Уникальный идентификатор заказа
-    status = Column(String, default='forming')  # Статус заказа
-    discount = Column(Integer, default=0)  # Скидка по заказу
-    room_type = Column(String, nullable=True)  # Тип помещения
-    room_area = Column(Float, nullable=True)  # Площадь помещения
-    installer_data = Column(Text, nullable=True)  # Можно хранить JSON как текст (данные от монтажника)
-    pdf_path = Column(String, nullable=True)  # Путь к сгенерированному PDF (если есть)
+    status = Column(String, default='draft')  # Статус заказа: 'draft' или 'ready'
+    pdf_path = Column(String, nullable=True)  # Путь к PDF-файлу (если есть)
+    order_data = Column(Text, nullable=False)  # Все данные заказа в формате JSON (строка)
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата создания заказа
-    visit_date = Column(DateTime(timezone=True), nullable=True)  # Дата визита монтажника
-    # --- Связи ---
     client_id = Column(Integer, ForeignKey('clients.id'))  # Внешний ключ на клиента
     client = relationship("Client", back_populates="orders")  # Объект клиента
-    # УДАЛЕНО: manager_id, manager, air_conditioners, components
 
 class AirConditioner(Base):
     """
