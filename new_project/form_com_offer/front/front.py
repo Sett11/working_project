@@ -530,8 +530,36 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     # Удаляю orders_table.select(on_select_order, outputs=[...]) как устаревший и неиспользуемый
 
     # --- Обработчики кнопок ---
-    def select_aircons_handler(*inputs):
-        return select_aircons(*inputs)
+    def select_aircons_handler(order_id_hidden_value):
+        payload = {"id": order_id_hidden_value}
+        logger.info(f"[DEBUG] select_aircons_handler: payload: {json.dumps(payload, ensure_ascii=False)}")
+        try:
+            response = requests.post(f"{BACKEND_URL}/api/select_aircons/", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            if "error" in data:
+                logger.error(f"Ошибка от бэкенда: {data['error']}")
+                return f"Ошибка: {data['error']}"
+            aircons_list = data.get("aircons_list", [])
+            if isinstance(aircons_list, list) and aircons_list:
+                formatted_list = f"Найдено {data.get('total_count', len(aircons_list))} подходящих кондиционеров:\n\n"
+                for i, aircon in enumerate(aircons_list, 1):
+                    formatted_list += f"{i}. {aircon.get('brand', 'N/A')} {aircon.get('model_name', 'N/A')}\n"
+                    formatted_list += f"   Мощность охлаждения: {aircon.get('cooling_power_kw', 'N/A')} кВт\n"
+                    formatted_list += f"   Цена: {aircon.get('retail_price_byn', 'N/A')} BYN\n"
+                    formatted_list += f"   Инвертор: {'Да' if aircon.get('is_inverter') else 'Нет'}\n\n"
+            else:
+                formatted_list = "Подходящих кондиционеров не найдено."
+            logger.info(f"Подбор кондиционеров завершен успешно.")
+            return formatted_list
+        except requests.exceptions.RequestException as e:
+            error_message = f"Не удалось связаться с бэкендом: {e}"
+            logger.error(error_message, exc_info=True)
+            return error_message
+        except Exception as e:
+            error_message = f"Произошла внутренняя ошибка: {e}"
+            logger.error(error_message, exc_info=True)
+            return error_message
 
     # 3. Исправляю кнопку 'Сформировать КП' так, чтобы она отправляла только id заказа
     # и на бэкенде PDF формировался на основе данных из базы
@@ -634,7 +662,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     # --- Привязка обработчиков к кнопкам ---
     select_aircons_btn.click(
         fn=select_aircons_handler,
-        inputs=[name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand],
+        inputs=[order_id_hidden],
         outputs=[aircons_output]
     )
 

@@ -44,9 +44,19 @@ def get_all_air_conditioners(skip: int = 0, limit: int = 100, db: Session = Depe
 
 @app.post("/api/select_aircons/")
 def select_aircons_endpoint(payload: dict, db: Session = Depends(get_session)):
-    logger.info("Получен запрос на эндпоинт /api/select_aircons/")
+    logger.info(f"Получен запрос на эндпоинт /api/select_aircons/. Payload: {json.dumps(payload, ensure_ascii=False)}")
     try:
-        aircon_params = payload.get("aircon_params", {})
+        # Если в payload только id — достаём параметры из заказа
+        if list(payload.keys()) == ["id"] or ("id" in payload and len(payload) == 1):
+            order_id = payload["id"]
+            order = db.query(crud.models.Order).filter_by(id=order_id).first()
+            if not order:
+                logger.error(f"Заказ с id={order_id} не найден для подбора кондиционеров!")
+                return {"error": f"Заказ с id={order_id} не найден!"}
+            order_data = json.loads(order.order_data)
+            aircon_params = order_data.get("aircon_params", {})
+        else:
+            aircon_params = payload.get("aircon_params", {})
         client_full_name = payload.get("client_data", {}).get('full_name', 'N/A')
         logger.info(f"Начат подбор кондиционеров для клиента: {client_full_name}")
         selected_aircons = select_aircons(db, aircon_params)
