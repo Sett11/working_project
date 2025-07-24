@@ -9,9 +9,8 @@
 - Определение базового класса для декларативных моделей (Base).
 - Функцию-генератор `get_session` для использования в зависимостях FastAPI.
 """
-from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
 from utils.mylogger import Logger
@@ -39,38 +38,34 @@ if not DATABASE_URL:
 logger.info(f"Используется URL базы данных: {DATABASE_URL.split('@')[-1]}") # Логируем без учетных данных
 
 try:
-    # Создаём движок SQLAlchemy, который будет управлять подключениями к БД.
-    engine = create_engine(DATABASE_URL)
-    
-    # Создаём фабрику сессий. Каждая сессия будет представлять собой
-    # отдельный диалог с базой данных.
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    
-    # Создаём базовый класс для всех декларативных моделей SQLAlchemy.
+    # Создаём асинхронный движок SQLAlchemy для работы с asyncpg
+    engine = create_async_engine(DATABASE_URL, echo=False, future=True)
+
+    # Создаём асинхронную фабрику сессий
+    AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+    # Создаём базовый класс для всех декларативных моделей SQLAlchemy (общий для sync/async)
     Base = declarative_base()
-    
-    logger.info("Соединение с базой данных успешно настроено.")
+
+    logger.info("Асинхронное соединение с базой данных успешно настроено.")
 except Exception as e:
     logger.error(f"Ошибка при настройке соединения с базой данных: {e}", exc_info=True)
     # Если произошла ошибка, прерываем выполнение, так как без БД приложение неработоспособно.
     raise
 
-def get_session():
+async def get_session():
     """
-    Зависимость FastAPI для получения сессии базы данных.
+    Асинхронная зависимость FastAPI для получения сессии базы данных.
 
-    Эта функция-генератор создаёт новую сессию для каждого входящего запроса,
+    Эта функция-генератор создаёт новую асинхронную сессию для каждого входящего запроса,
     передаёт ее в эндпоинт и гарантированно закрывает после завершения запроса.
 
     Yields:
-        Session: Объект сессии SQLAlchemy.
+        AsyncSession: Объект асинхронной сессии SQLAlchemy.
     """
-    db = SessionLocal()
-    logger.debug(f"Сессия базы данных {id(db)} создана.")
-    try:
-        # Передаём управление эндпоинту.
-        yield db
-    finally:
-        # Закрываем сессию после того, как эндпоинт отработал.
-        db.close()
-        logger.debug(f"Сессия базы данных {id(db)} закрыта.")
+    async with AsyncSessionLocal() as session:
+        logger.debug(f"Асинхронная сессия базы данных {id(session)} создана.")
+        try:
+            yield session
+        finally:
+            logger.debug(f"Асинхронная сессия базы данных {id(session)} закрыта.")

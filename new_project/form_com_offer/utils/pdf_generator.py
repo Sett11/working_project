@@ -13,6 +13,7 @@ from utils.mylogger import Logger
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 import re
+import asyncio
 
 logger = Logger("pdf_generator", "pdf_generator.log")
 
@@ -301,3 +302,13 @@ def generate_commercial_offer_pdf(
     except Exception as e:
         logger.error(f"Ошибка при генерации PDF: {e}", exc_info=True)
         raise
+
+# --- Асинхронная обёртка для генерации PDF ---
+async def generate_commercial_offer_pdf_async(*args, **kwargs):
+    """
+    Асинхронная обёртка для generate_commercial_offer_pdf.
+    Вызывает sync-функцию в отдельном потоке через asyncio.to_thread,
+    чтобы не блокировать event loop.
+    Используйте только для вызова из async-кода (например, FastAPI backend).
+    """
+    return await asyncio.to_thread(generate_commercial_offer_pdf, *args, **kwargs)

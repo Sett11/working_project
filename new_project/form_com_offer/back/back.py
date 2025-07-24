@@ -2,40 +2,41 @@
 Основной файл бэкенда, реализующий API на FastAPI.
 """
 from fastapi import FastAPI, Depends, HTTPException, Path
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import datetime
 import re
 from db import crud, schemas
 from db.database import get_session
 from utils.mylogger import Logger
-from selection.aircon_selector import select_aircons
-from utils.pdf_generator import generate_commercial_offer_pdf
+from utils.aircon_selector import select_aircons
+from utils.pdf_generator import generate_commercial_offer_pdf_async
 from db.schemas import FullOrderCreate
 import json
+from sqlalchemy import select
 
 logger = Logger(name=__name__, log_file="backend.log")
 app = FastAPI(title="Air-Con Commercial Offer API", version="0.1.0")
 
 # ... (эндпоинты startup, shutdown, read_root, get_all_air_conditioners, select_aircons_endpoint без изменений) ...
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     logger.info("Запуск FastAPI приложения...")
 
 @app.on_event("shutdown")
-def shutdown_event():
+async def shutdown_event():
     logger.info("Остановка FastAPI приложения.")
 
 @app.get("/")
-def read_root():
+async def read_root():
     logger.info("Запрос к корневому эндпоинту '/' (проверка работоспособности API)")
     return {"message": "API бэкенда для подбора кондиционеров работает."}
 
 @app.get("/api/air_conditioners/", response_model=List[schemas.AirConditioner])
-def get_all_air_conditioners(skip: int = 0, limit: int = 100, db: Session = Depends(get_session)):
+async def get_all_air_conditioners(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_session)):
     logger.info(f"Запрос на получение списка кондиционеров (skip={skip}, limit={limit}).")
     try:
-        air_conditioners = crud.get_air_conditioners(db, skip=skip, limit=limit)
+        air_conditioners = await crud.get_air_conditioners(db, skip=skip, limit=limit)
         logger.info(f"Успешно получено {len(air_conditioners)} записей о кондиционерах.")
         return air_conditioners
     except Exception as e:
@@ -43,13 +44,14 @@ def get_all_air_conditioners(skip: int = 0, limit: int = 100, db: Session = Depe
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера при получении данных.")
 
 @app.post("/api/select_aircons/")
-def select_aircons_endpoint(payload: dict, db: Session = Depends(get_session)):
+async def select_aircons_endpoint(payload: dict, db: AsyncSession = Depends(get_session)):
     logger.info(f"Получен запрос на эндпоинт /api/select_aircons/. Payload: {json.dumps(payload, ensure_ascii=False)}")
     try:
         # Если в payload только id — достаём параметры из заказа
         if list(payload.keys()) == ["id"] or ("id" in payload and len(payload) == 1):
             order_id = payload["id"]
-            order = db.query(crud.models.Order).filter_by(id=order_id).first()
+            result = await db.execute(select(crud.models.Order).filter_by(id=order_id))
+            order = result.scalars().first()
             if not order:
                 logger.error(f"Заказ с id={order_id} не найден для подбора кондиционеров!")
                 return {"error": f"Заказ с id={order_id} не найден!"}
@@ -59,7 +61,7 @@ def select_aircons_endpoint(payload: dict, db: Session = Depends(get_session)):
             aircon_params = payload.get("aircon_params", {})
         client_full_name = payload.get("client_data", {}).get('full_name', 'N/A')
         logger.info(f"Начат подбор кондиционеров для клиента: {client_full_name}")
-        selected_aircons = select_aircons(db, aircon_params)
+        selected_aircons = await select_aircons(db, aircon_params)
         logger.info(f"Подобрано {len(selected_aircons)} кондиционеров.")
         aircons_list = [schemas.AirConditioner.from_orm(ac).dict() for ac in selected_aircons]
         response_data = {"aircons_list": aircons_list, "total_count": len(selected_aircons)}
@@ -72,13 +74,14 @@ def select_aircons_endpoint(payload: dict, db: Session = Depends(get_session)):
 
 # --- Эндпоинт для генерации КП (С УЛУЧШЕНИЕМ) ---
 @app.post("/api/generate_offer/")
-def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
+async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_session)):
     logger.info(f"Получен запрос на эндпоинт /api/generate_offer/. Payload: {json.dumps(payload, ensure_ascii=False)}")
     try:
         # Если в payload только id — подгружаем все данные заказа из базы
         if list(payload.keys()) == ["id"] or ("id" in payload and len(payload) == 1):
             order_id = payload["id"]
-            order = db.query(crud.models.Order).filter_by(id=order_id).first()
+            result = await db.execute(select(crud.models.Order).filter_by(id=order_id))
+            order = result.scalars().first()
             if not order:
                 logger.error(f"Заказ с id={order_id} не найден для генерации КП!")
                 return {"error": f"Заказ с id={order_id} не найден!"}
@@ -98,11 +101,11 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
         client_phone = client_data.get("phone")
         if not client_phone:
             raise HTTPException(status_code=400, detail="Отсутствует номер телефона клиента.")
-        client = crud.get_client_by_phone(db, client_phone)
+        client = await crud.get_client_by_phone(db, client_phone)
         if not client:
-            client = crud.create_client(db, schemas.ClientCreate(**client_data))
+            client = await crud.create_client(db, schemas.ClientCreate(**client_data))
         # 2. Подбор кондиционеров
-        selected_aircons = select_aircons(db, aircon_params)
+        selected_aircons = await select_aircons(db, aircon_params)
         # --- Формируем варианты для PDF ---
         aircon_variants = []
         variant_items = []
@@ -146,7 +149,7 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
         safe_name = re.sub(r'[\\/:*?"<>|]', '_', client_full_name).strip()[:20]
         offer_number = f"{today}_{safe_name}"
         # 4. Генерируем PDF
-        pdf_path = generate_commercial_offer_pdf(
+        pdf_path = await generate_commercial_offer_pdf_async(
             client_data=client_data, order_params=order_params,
             aircon_variants=aircon_variants, components=components_for_pdf,
             discount_percent=discount, offer_number=offer_number
@@ -155,7 +158,7 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
         if 'order' in locals() and order is not None:
             order.status = 'completed'
             order.pdf_path = pdf_path
-            db.commit()
+            await db.commit()
         response_data = {
             "aircon_variants": aircon_variants,
             "total_count": len(selected_aircons),
@@ -173,7 +176,7 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
 # --- Новый эндпоинт для сохранения заказа-черновика ---
 
 @app.post("/api/save_order/")
-def save_order_endpoint(payload: dict, db: Session = Depends(get_session)):
+async def save_order_endpoint(payload: dict, db: AsyncSession = Depends(get_session)):
     logger.info(f"Получен запрос на эндпоинт /api/save_order/ (сохранение/обновление заказа). Payload: {json.dumps(payload, ensure_ascii=False)}")
     try:
         # Определяем режим: только КП, только components, или оба
@@ -184,14 +187,15 @@ def save_order_endpoint(payload: dict, db: Session = Depends(get_session)):
         client = None
         if has_kp:
             client_data = payload["client_data"]
-            client = crud.get_client_by_phone(db, client_data["phone"])
+            client = await crud.get_client_by_phone(db, client_data["phone"])
             if not client:
-                client = crud.create_client(db, schemas.ClientCreate(**client_data))
+                client = await crud.create_client(db, schemas.ClientCreate(**client_data))
         # 2. Получить существующий заказ, если есть id
         order_id = payload.get("id")
         order = None
         if order_id is not None:
-            order = db.query(crud.models.Order).filter_by(id=order_id).first()
+            result = await db.execute(select(crud.models.Order).filter_by(id=order_id))
+            order = result.scalars().first()
             logger.info(f"Найден заказ с id={order_id}: {bool(order)}")
         # 3. Если заказа нет и есть КП-данные — создать новый заказ
         if not order and has_kp:
@@ -206,7 +210,7 @@ def save_order_endpoint(payload: dict, db: Session = Depends(get_session)):
                 pdf_path=None,
                 order_data=order_data
             )
-            order = crud.create_order(db, order_payload)
+            order = await crud.create_order(db, order_payload)
             logger.info(f"Создан новый заказ с id={order.id}")
             return {"success": True, "order_id": order.id, "updated": False}
         # 4. Если заказ есть — обновить только нужные поля
@@ -220,7 +224,7 @@ def save_order_endpoint(payload: dict, db: Session = Depends(get_session)):
                 order_data["components"] = payload["components"]
             order.order_data = json.dumps(order_data, ensure_ascii=False)
             order.status = payload.get("status", order.status)
-            db.commit()
+            await db.commit()
             logger.info(f"Обновлён заказ id={order.id}. Итоговое order_data: {order.order_data}")
             return {"success": True, "order_id": order.id, "updated": True}
         logger.error("Не удалось найти или создать заказ для обновления.")
@@ -231,7 +235,7 @@ def save_order_endpoint(payload: dict, db: Session = Depends(get_session)):
 
 # --- Эндпоинт: получить список всех заказов (id, имя, дата, адрес, статус) ---
 @app.get("/api/orders/")
-def get_orders_list(db: Session = Depends(get_session)):
+async def get_orders_list(db: AsyncSession = Depends(get_session)):
     """
     Возвращает список всех заказов для фронта.
     Сначала идут заказы в статусе 'draft' или 'forming' (редактируются), затем остальные.
@@ -239,7 +243,8 @@ def get_orders_list(db: Session = Depends(get_session)):
     Логирует результат и ошибки.
     """
     try:
-        orders = db.query(crud.models.Order).all()
+        result = await db.execute(select(crud.models.Order))
+        orders = result.scalars().all()
         logger.info(f"Всего заказов в базе: {len(orders)}")
         result = []
         for order in orders:
@@ -260,9 +265,10 @@ def get_orders_list(db: Session = Depends(get_session)):
 
 # --- Эндпоинт: получить заказ по ID ---
 @app.get("/api/order/{order_id}")
-def get_order_by_id(order_id: int = Path(...), db: Session = Depends(get_session)):
+async def get_order_by_id(order_id: int = Path(...), db: AsyncSession = Depends(get_session)):
     try:
-        order = db.query(crud.models.Order).filter_by(id=order_id).first()
+        result = await db.execute(select(crud.models.Order).filter_by(id=order_id))
+        order = result.scalars().first()
         if not order:
             return {"error": "Заказ не найден"}
         # Возвращаем order_data как есть (словарь)
@@ -278,13 +284,14 @@ def get_order_by_id(order_id: int = Path(...), db: Session = Depends(get_session
 
 # --- Эндпоинт: удалить заказ по ID ---
 @app.delete("/api/order/{order_id}")
-def delete_order(order_id: int = Path(...), db: Session = Depends(get_session)):
+async def delete_order(order_id: int = Path(...), db: AsyncSession = Depends(get_session)):
     try:
-        order = db.query(crud.models.Order).filter_by(id=order_id).first()
+        result = await db.execute(select(crud.models.Order).filter_by(id=order_id))
+        order = result.scalars().first()
         if not order:
             return {"error": "Заказ не найден"}
-        db.delete(order)
-        db.commit()
+        await db.delete(order)
+        await db.commit()
         logger.info(f"Заказ id={order_id} успешно удалён")
         return {"success": True}
     except Exception as e:

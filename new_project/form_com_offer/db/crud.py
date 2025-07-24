@@ -11,7 +11,8 @@
 Каждая функция принимает сессию БД и необходимые данные, выполняет операцию
 и возвращает результат. Ведётся подробное логирование всех действий.
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from . import models, schemas
 from utils.mylogger import Logger
 import json
@@ -28,7 +29,7 @@ logger = Logger(name=__name__, log_file="db.log")
 
 # --- CRUD-операции для Клиентов (Client) ---
 
-def get_client_by_phone(db: Session, phone: str) -> models.Client | None:
+async def get_client_by_phone(db: AsyncSession, phone: str) -> models.Client | None:
     """
     Получение клиента по его номеру телефона.
 
@@ -41,12 +42,13 @@ def get_client_by_phone(db: Session, phone: str) -> models.Client | None:
     """
     logger.info(f"[CRUD] get_client_by_phone: phone={phone}")
     # Выполняем запрос к таблице клиентов по номеру телефона
-    client = db.query(models.Client).filter(models.Client.phone == phone).first()
+    result = await db.execute(select(models.Client).where(models.Client.phone == phone))
+    client = result.scalar_one_or_none()
     logger.info(f"[CRUD] get_client_by_phone: found={bool(client)}")
     return client
 
 
-def create_client(db: Session, client: schemas.ClientCreate) -> models.Client:
+async def create_client(db: AsyncSession, client: schemas.ClientCreate) -> models.Client:
     """
     Создание нового клиента в базе данных.
 
@@ -62,19 +64,19 @@ def create_client(db: Session, client: schemas.ClientCreate) -> models.Client:
     
     try:
         db.add(db_client)
-        db.commit()
-        db.refresh(db_client)
+        await db.commit()
+        await db.refresh(db_client)
         logger.info(f"Клиент '{client.full_name}' успешно создан с id={db_client.id}.")
         return db_client
     except Exception as e:
         logger.error(f"Ошибка при создании клиента '{client.full_name}': {e}", exc_info=True)
-        db.rollback()
+        await db.rollback()
         raise
 
 
 # --- CRUD-операции для Продуктов (Product) ---
 
-def get_air_conditioners(db: Session, skip: int = 0, limit: int = 100) -> list[models.AirConditioner]:
+async def get_air_conditioners(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[models.AirConditioner]:
     """
     Получение списка кондиционеров с пагинацией.
 
@@ -88,10 +90,11 @@ def get_air_conditioners(db: Session, skip: int = 0, limit: int = 100) -> list[m
     """
     logger.debug(f"Запрос на получение списка кондиционеров (skip={skip}, limit={limit})")
     # Получаем кондиционеры с пагинацией
-    return db.query(models.AirConditioner).offset(skip).limit(limit).all()
+    result = await db.execute(select(models.AirConditioner).offset(skip).limit(limit))
+    return result.scalars().all()
 
 
-def get_components(db: Session, skip: int = 0, limit: int = 100) -> list[models.Component]:
+async def get_components(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[models.Component]:
     """
     Получение списка комплектующих с пагинацией.
 
@@ -105,10 +108,11 @@ def get_components(db: Session, skip: int = 0, limit: int = 100) -> list[models.
     """
     logger.debug(f"Запрос на получение списка комплектующих (skip={skip}, limit={limit})")
     # Получаем комплектующие с пагинацией
-    return db.query(models.Component).offset(skip).limit(limit).all()
+    result = await db.execute(select(models.Component).offset(skip).limit(limit))
+    return result.scalars().all()
 
 
-def get_components_by_filters(db: Session, filters: dict) -> list[models.Component]:
+async def get_components_by_filters(db: AsyncSession, filters: dict) -> list[models.Component]:
     """
     Получение списка комплектующих по заданным фильтрам.
 
@@ -121,27 +125,28 @@ def get_components_by_filters(db: Session, filters: dict) -> list[models.Compone
     """
     logger.debug(f"Запрос на получение комплектующих с фильтрами: {filters}")
     
-    query = db.query(models.Component)
+    stmt = select(models.Component)
     
     # Применяем фильтры, если они указаны.
     if filters.get("category"):
-        query = query.filter(models.Component.category == filters["category"])
+        stmt = stmt.where(models.Component.category == filters["category"])
     
     if filters.get("price_limit"):
-        query = query.filter(models.Component.price <= filters["price_limit"])
+        stmt = stmt.where(models.Component.price <= filters["price_limit"])
     
     # Фильтруем только товары, которые есть в наличии.
-    query = query.filter(models.Component.in_stock == True)
+    stmt = stmt.where(models.Component.in_stock == True)
     
     # Сортируем результат по цене (от дешёвых к дорогим).
-    query = query.order_by(models.Component.price.asc())
+    stmt = stmt.order_by(models.Component.price.asc())
     
-    components = query.all()
+    result = await db.execute(stmt)
+    components = result.scalars().all()
     logger.info(f"Найдено {len(components)} комплектующих по фильтрам: {filters}")
     return components
 
 
-def get_all_components(db: Session) -> list[models.Component]:
+async def get_all_components(db: AsyncSession) -> list[models.Component]:
     """
     Получение полного списка всех комплектующих, имеющихся в наличии.
 
@@ -153,22 +158,17 @@ def get_all_components(db: Session) -> list[models.Component]:
     """
     logger.debug("Запрос на получение всех комплектующих в наличии.")
     
-    query = db.query(models.Component)
+    stmt = select(models.Component).where(models.Component.in_stock == True).order_by(models.Component.category.asc(), models.Component.price.asc())
     
-    # Фильтруем только товары в наличии.
-    query = query.filter(models.Component.in_stock == True)
-    
-    # Сортируем по категории, а затем по цене.
-    query = query.order_by(models.Component.category.asc(), models.Component.price.asc())
-    
-    components = query.all()
+    result = await db.execute(stmt)
+    components = result.scalars().all()
     logger.info(f"Всего получено {len(components)} комплектующих из БД.")
     return components
 
 
 # --- CRUD-операции для Заказов (Order) ---
 
-def create_order(db: Session, order: schemas.OrderCreate) -> models.Order:
+async def create_order(db: AsyncSession, order: schemas.OrderCreate) -> models.Order:
     """
     Создание нового заказа в базе данных.
     """
@@ -182,22 +182,23 @@ def create_order(db: Session, order: schemas.OrderCreate) -> models.Order:
     )
     try:
         db.add(db_order)
-        db.commit()
-        db.refresh(db_order)
+        await db.commit()
+        await db.refresh(db_order)
         logger.info(f"Заказ для клиента id={order.client_id} успешно создан с id={db_order.id}.")
         return db_order
     except Exception as e:
         logger.error(f"Ошибка при создании заказа для клиента id={order.client_id}: {e}", exc_info=True)
-        db.rollback()
+        await db.rollback()
         raise
 
 
-def update_order_by_id(db: Session, order_id: int, order_update: schemas.OrderCreate) -> models.Order | None:
+async def update_order_by_id(db: AsyncSession, order_id: int, order_update: schemas.OrderCreate) -> models.Order | None:
     """
     Обновляет заказ по id. Если заказа нет — возвращает None.
     """
     logger.info(f"[CRUD] update_order_by_id: order_id={order_id}, order_update={order_update}")
-    db_order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    result = await db.execute(select(models.Order).where(models.Order.id == order_id))
+    db_order = result.scalar_one_or_none()
     if not db_order:
         logger.warning(f"Заказ с id={order_id} не найден для обновления.")
         return None
@@ -207,11 +208,11 @@ def update_order_by_id(db: Session, order_id: int, order_update: schemas.OrderCr
         db_order.order_data = json.dumps(order_update.order_data, ensure_ascii=False)
         db_order.created_at = order_update.created_at
         db_order.client_id = order_update.client_id
-        db.commit()
-        db.refresh(db_order)
+        await db.commit()
+        await db.refresh(db_order)
         logger.info(f"Заказ с id={order_id} успешно обновлён.")
         return db_order
     except Exception as e:
         logger.error(f"Ошибка при обновлении заказа id={order_id}: {e}", exc_info=True)
-        db.rollback()
+        await db.rollback()
         raise

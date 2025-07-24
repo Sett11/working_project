@@ -5,7 +5,8 @@
 - Функцию расчёта требуемой мощности кондиционера по методике RFClimat.ru
 - Функцию подбора кондиционеров из БД по заданным параметрам
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from db import models
 from utils.mylogger import Logger
 from typing import List, Optional
@@ -83,7 +84,7 @@ def calculate_required_power(params: dict) -> float:
         # Резервный расчёт по упрощённой методике
         return float(params.get("area", 0)) / 10
 
-def select_aircons(db: Session, params: dict) -> list[models.AirConditioner]:
+async def select_aircons(db: AsyncSession, params: dict) -> list[models.AirConditioner]:
     """
     Подбирает кондиционеры из БД по заданным параметрам.
 
@@ -107,52 +108,53 @@ def select_aircons(db: Session, params: dict) -> list[models.AirConditioner]:
         # Расчёт требуемой мощности
         required_power_kw = calculate_required_power(params)
         logger.info(f"Требуемая мощность с запасом: {required_power_kw:.2f} кВт")
-        
-        # Формируем запрос к БД
-        query = db.query(models.AirConditioner)
-        
+
+        # Формируем асинхронный запрос к БД
+        stmt = select(models.AirConditioner)
+
         # Обязательный фильтр: наличие цены
-        query = query.filter(models.AirConditioner.retail_price_byn.isnot(None))
-        
+        stmt = stmt.where(models.AirConditioner.retail_price_byn.isnot(None))
+
         # Фильтр по мощности
         min_power = required_power_kw
         max_power = required_power_kw * 1.3  # +30% запас сверху
-        query = query.filter(models.AirConditioner.cooling_power_kw >= min_power)
-        query = query.filter(models.AirConditioner.cooling_power_kw <= max_power)
-        
+        stmt = stmt.where(models.AirConditioner.cooling_power_kw >= min_power)
+        stmt = stmt.where(models.AirConditioner.cooling_power_kw <= max_power)
+
         # Фильтр по цене
         if "price_limit" in params and params["price_limit"]:
             try:
                 price_limit = float(params["price_limit"])
-                query = query.filter(models.AirConditioner.retail_price_byn <= price_limit)
+                stmt = stmt.where(models.AirConditioner.retail_price_byn <= price_limit)
                 logger.info(f"Применён фильтр по цене: <= {price_limit} BYN")
             except (ValueError, TypeError):
                 logger.warning("Некорректное значение price_limit. Фильтр не применён")
-        
+
         # Фильтр по бренду
         if params.get("brand") and params["brand"] != "Любой":
-            query = query.filter(models.AirConditioner.brand == params["brand"])
+            stmt = stmt.where(models.AirConditioner.brand == params["brand"])
             logger.info(f"Применён фильтр по бренду: {params['brand']}")
-        
+
         # Фильтр по инвертору
         if "inverter" in params and params["inverter"] is not None:
-            query = query.filter(models.AirConditioner.is_inverter == params["inverter"])
+            stmt = stmt.where(models.AirConditioner.is_inverter == params["inverter"])
             logger.info(f"Применён фильтр по инвертору: {params['inverter']}")
-        
+
         # Фильтр по Wi-Fi
         if "wifi" in params and params["wifi"] is not None:
-            query = query.filter(models.AirConditioner.has_wifi == params["wifi"])
+            stmt = stmt.where(models.AirConditioner.has_wifi == params["wifi"])
             logger.info(f"Применён фильтр по Wi-Fi: {params['wifi']}")
-        
+
         # Фильтр по типу монтажа
         if "mount_type" in params and params["mount_type"] and params["mount_type"] != "Любой":
-            query = query.filter(models.AirConditioner.mount_type == params["mount_type"])
+            stmt = stmt.where(models.AirConditioner.mount_type == params["mount_type"])
             logger.info(f"Применён фильтр по типу монтажа: {params['mount_type']}")
-        
-        selected = query.all()
+
+        result = await db.execute(stmt)
+        selected = result.scalars().all()
         logger.info(f"Подбор завершён. Найдено {len(selected)} моделей.")
         return selected
-        
+
     except Exception as e:
         logger.error(f"Ошибка при подборе кондиционеров: {str(e)}")
         return []

@@ -6,6 +6,8 @@
 делая веб-интерфейс доступным в локальной сети.
 """
 from front.front import interface, logger
+import nest_asyncio
+nest_asyncio.apply()
 
 # Основная точка входа в приложение.
 # При запуске этого файла как основного скрипта, выполняется код ниже.

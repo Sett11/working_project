@@ -2,7 +2,7 @@
 Модуль фронтенда Gradio для системы формирования коммерческих предложений по кондиционерам.
 """
 import gradio as gr
-import requests
+import httpx
 from utils.mylogger import Logger
 import json
 import os
@@ -63,7 +63,7 @@ def fix_date(date_str):
     return date_str
 
 # ... (функции generate_kp и select_aircons остаются без изменений) ...
-def generate_kp(client_name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type,
+async def generate_kp(client_name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type,
                 ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand,
                 installation_price, *components_inputs):
     logger.info(f"Получен запрос на генерацию КП для клиента: {client_name}")
@@ -142,17 +142,18 @@ def generate_kp(client_name, phone, mail, address, date, area, type_room, discou
     }
     try:
         logger.info(f"Отправка запроса на эндпоинт /api/generate_offer/ на бэкенде.")
-        response = requests.post(f"{BACKEND_URL}/api/generate_offer/", json=payload)
-        response.raise_for_status()
-        data = response.json()
-        if "error" in data:
-            logger.error(f"Ошибка от бэкенда: {data['error']}")
-            return f"Ошибка: {data['error']}", None
-        pdf_path = data.get("pdf_path", None)
-        formatted_list = "Коммерческое предложение генерируется... Пожалуйста, скачайте PDF файл."
-        logger.info(f"КП для клиента {client_name} успешно сформировано.")
-        return formatted_list, pdf_path
-    except requests.exceptions.RequestException as e:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{BACKEND_URL}/api/generate_offer/", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            if "error" in data:
+                logger.error(f"Ошибка от бэкенда: {data['error']}")
+                return f"Ошибка: {data['error']}", None
+            pdf_path = data.get("pdf_path", None)
+            formatted_list = "Коммерческое предложение генерируется... Пожалуйста, скачайте PDF файл."
+            logger.info(f"КП для клиента {client_name} успешно сформировано.")
+            return formatted_list, pdf_path
+    except httpx.RequestError as e:
         error_message = f"Не удалось связаться с бэкендом: {e}"
         logger.error(error_message, exc_info=True)
         return error_message, None
@@ -161,7 +162,7 @@ def generate_kp(client_name, phone, mail, address, date, area, type_room, discou
         logger.error(error_message, exc_info=True)
         return error_message, None
 
-def select_aircons(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type,
+async def select_aircons(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type,
                    ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand):
     logger.info(f"Подбор кондиционеров для клиента: {name}")
     illumination_map = {"Слабая": 0, "Средняя": 1, "Сильная": 2}
@@ -169,25 +170,26 @@ def select_aircons(name, phone, mail, address, date, area, type_room, discount, 
     payload = {"client_data": {"full_name": name, "phone": phone, "email": mail, "address": address}, "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": date}, "aircon_params": {"wifi": wifi, "inverter": inverter, "price_limit": price, "brand": brand, "mount_type": mount_type, "area": area, "ceiling_height": ceiling_height, "illumination": illumination_map.get(illumination, 1), "num_people": num_people, "activity": activity_map.get(activity, 0), "num_computers": num_computers, "num_tvs": num_tvs, "other_power": other_power}}
     try:
         logger.info(f"Отправка запроса на эндпоинт /api/select_aircons/ на бэкенде.")
-        response = requests.post(f"{BACKEND_URL}/api/select_aircons/", json=payload)
-        response.raise_for_status()
-        data = response.json()
-        if "error" in data:
-            logger.error(f"Ошибка от бэкенда: {data['error']}")
-            return f"Ошибка: {data['error']}"
-        aircons_list = data.get("aircons_list", [])
-        if isinstance(aircons_list, list) and aircons_list:
-            formatted_list = f"Найдено {data.get('total_count', len(aircons_list))} подходящих кондиционеров:\n\n"
-            for i, aircon in enumerate(aircons_list, 1):
-                formatted_list += f"{i}. {aircon.get('brand', 'N/A')} {aircon.get('model_name', 'N/A')}\n"
-                formatted_list += f"   Мощность охлаждения: {aircon.get('cooling_power_kw', 'N/A')} кВт\n"
-                formatted_list += f"   Цена: {aircon.get('retail_price_byn', 'N/A')} BYN\n"
-                formatted_list += f"   Инвертор: {'Да' if aircon.get('is_inverter') else 'Нет'}\n\n"
-        else:
-            formatted_list = "Подходящих кондиционеров не найдено."
-        logger.info(f"Подбор кондиционеров для клиента {name} завершен успешно.")
-        return formatted_list
-    except requests.exceptions.RequestException as e:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{BACKEND_URL}/api/select_aircons/", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            if "error" in data:
+                logger.error(f"Ошибка от бэкенда: {data['error']}")
+                return f"Ошибка: {data['error']}"
+            aircons_list = data.get("aircons_list", [])
+            if isinstance(aircons_list, list) and aircons_list:
+                formatted_list = f"Найдено {data.get('total_count', len(aircons_list))} подходящих кондиционеров:\n\n"
+                for i, aircon in enumerate(aircons_list, 1):
+                    formatted_list += f"{i}. {aircon.get('brand', 'N/A')} {aircon.get('model_name', 'N/A')}\n"
+                    formatted_list += f"   Мощность охлаждения: {aircon.get('cooling_power_kw', 'N/A')} кВт\n"
+                    formatted_list += f"   Цена: {aircon.get('retail_price_byn', 'N/A')} BYN\n"
+                    formatted_list += f"   Инвертор: {'Да' if aircon.get('is_inverter') else 'Нет'}\n\n"
+            else:
+                formatted_list = "Подходящих кондиционеров не найдено."
+            logger.info(f"Подбор кондиционеров для клиента {name} завершен успешно.")
+            return formatted_list
+    except httpx.RequestError as e:
         return f"Не удалось связаться с бэкендом: {e}"
     except Exception as e:
         return f"Произошла внутренняя ошибка: {e}"
@@ -200,29 +202,32 @@ def select_aircons(name, phone, mail, address, date, area, type_room, discount, 
 selected_order_id = None
 loaded_order_data = {}
 
-def fetch_orders_list():
+async def fetch_orders_list():
     try:
-        resp = requests.get(f"{BACKEND_URL}/api/orders/")
-        resp.raise_for_status()
-        return resp.json()
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{BACKEND_URL}/api/orders/")
+            resp.raise_for_status()
+            return resp.json()
     except Exception as e:
         logger.error(f"Ошибка при получении списка заказов: {e}")
         return []
 
-def fetch_order_data(order_id):
+async def fetch_order_data(order_id):
     try:
-        resp = requests.get(f"{BACKEND_URL}/api/order/{order_id}")
-        resp.raise_for_status()
-        return resp.json()
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{BACKEND_URL}/api/order/{order_id}")
+            resp.raise_for_status()
+            return resp.json()
     except Exception as e:
         logger.error(f"Ошибка при получении заказа: {e}")
         return None
 
-def delete_order(order_id):
+async def delete_order(order_id):
     try:
-        resp = requests.delete(f"{BACKEND_URL}/api/order/{order_id}")
-        resp.raise_for_status()
-        return resp.json()
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(f"{BACKEND_URL}/api/order/{order_id}")
+            resp.raise_for_status()
+            return resp.json()
     except Exception as e:
         logger.error(f"Ошибка при удалении заказа: {e}")
         return {"error": str(e)}
@@ -507,8 +512,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
 
     def show_start():
         return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), order_state.value, [], gr.update(value=None)
-    def show_orders():
-        orders = fetch_orders_list()
+    async def show_orders():
+        orders = await fetch_orders_list()
         # --- Сортировка по статусу ---
         def status_key(order):
             status_order = {
@@ -527,13 +532,13 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         ]
         logger.info(f"[DEBUG] show_orders: choices={choices}")
         return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), order_state.value, gr.update(choices=choices, value=None), gr.update(visible=False, value=""), gr.update(value=None)
-    def load_selected_order(selected):
+    async def load_selected_order(selected):
         logger.info(f"[DEBUG] load_selected_order: selected={selected}")
         if not selected:
             logger.info(f"[DEBUG] load_selected_order: error - не выбран заказ")
             return [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(22)] + [gr.update(), gr.update(value=None)] + [gr.update() for _ in components_ui_inputs] + [gr.update()]
         order_id = int(selected.split("|")[0].strip())
-        order = fetch_order_data(order_id)
+        order = await fetch_order_data(order_id)
         logger.info(f"[DEBUG] load_selected_order: loaded order={order}")
         placeholder = get_placeholder_order()
         updates, _ = fill_fields_from_order_diff(order, placeholder)
@@ -575,29 +580,30 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     # Удаляю orders_table.select(on_select_order, outputs=[...]) как устаревший и неиспользуемый
 
     # --- Обработчики кнопок ---
-    def select_aircons_handler(order_id_hidden_value):
+    async def select_aircons_handler(order_id_hidden_value):
         payload = {"id": order_id_hidden_value}
         logger.info(f"[DEBUG] select_aircons_handler: payload: {json.dumps(payload, ensure_ascii=False)}")
         try:
-            response = requests.post(f"{BACKEND_URL}/api/select_aircons/", json=payload)
-            response.raise_for_status()
-            data = response.json()
-            if "error" in data:
-                logger.error(f"Ошибка от бэкенда: {data['error']}")
-                return f"Ошибка: {data['error']}"
-            aircons_list = data.get("aircons_list", [])
-            if isinstance(aircons_list, list) and aircons_list:
-                formatted_list = f"Найдено {data.get('total_count', len(aircons_list))} подходящих кондиционеров:\n\n"
-                for i, aircon in enumerate(aircons_list, 1):
-                    formatted_list += f"{i}. {aircon.get('brand', 'N/A')} {aircon.get('model_name', 'N/A')}\n"
-                    formatted_list += f"   Мощность охлаждения: {aircon.get('cooling_power_kw', 'N/A')} кВт\n"
-                    formatted_list += f"   Цена: {aircon.get('retail_price_byn', 'N/A')} BYN\n"
-                    formatted_list += f"   Инвертор: {'Да' if aircon.get('is_inverter') else 'Нет'}\n\n"
-            else:
-                formatted_list = "Подходящих кондиционеров не найдено."
-            logger.info(f"Подбор кондиционеров завершен успешно.")
-            return formatted_list
-        except requests.exceptions.RequestException as e:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{BACKEND_URL}/api/select_aircons/", json=payload)
+                response.raise_for_status()
+                data = response.json()
+                if "error" in data:
+                    logger.error(f"Ошибка от бэкенда: {data['error']}")
+                    return f"Ошибка: {data['error']}"
+                aircons_list = data.get("aircons_list", [])
+                if isinstance(aircons_list, list) and aircons_list:
+                    formatted_list = f"Найдено {data.get('total_count', len(aircons_list))} подходящих кондиционеров:\n\n"
+                    for i, aircon in enumerate(aircons_list, 1):
+                        formatted_list += f"{i}. {aircon.get('brand', 'N/A')} {aircon.get('model_name', 'N/A')}\n"
+                        formatted_list += f"   Мощность охлаждения: {aircon.get('cooling_power_kw', 'N/A')} кВт\n"
+                        formatted_list += f"   Цена: {aircon.get('retail_price_byn', 'N/A')} BYN\n"
+                        formatted_list += f"   Инвертор: {'Да' if aircon.get('is_inverter') else 'Нет'}\n\n"
+                else:
+                    formatted_list = "Подходящих кондиционеров не найдено."
+                logger.info(f"Подбор кондиционеров завершен успешно.")
+                return formatted_list
+        except httpx.RequestError as e:
             error_message = f"Не удалось связаться с бэкендом: {e}"
             logger.error(error_message, exc_info=True)
             return error_message
@@ -609,22 +615,23 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     # 3. Исправляю кнопку 'Сформировать КП' так, чтобы она отправляла только id заказа
     # и на бэкенде PDF формировался на основе данных из базы
 
-    def generate_kp_handler(order_id_hidden_value):
+    async def generate_kp_handler(order_id_hidden_value):
         # Отправляем только id заказа, бэкенд сам достаёт все данные и меняет статус
         payload = {"id": order_id_hidden_value}
         logger.info(f"[DEBUG] generate_kp_handler: payload: {json.dumps(payload, ensure_ascii=False)}")
         try:
-            response = requests.post(f"{BACKEND_URL}/api/generate_offer/", json=payload)
-            response.raise_for_status()
-            data = response.json()
-            if "error" in data:
-                logger.error(f"Ошибка от бэкенда: {data['error']}")
-                return f"Ошибка: {data['error']}", None
-            pdf_path = data.get("pdf_path", None)
-            formatted_list = "Коммерческое предложение генерируется... Пожалуйста, скачайте PDF файл."
-            logger.info(f"КП успешно сформировано.")
-            return formatted_list, pdf_path
-        except requests.exceptions.RequestException as e:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{BACKEND_URL}/api/generate_offer/", json=payload)
+                response.raise_for_status()
+                data = response.json()
+                if "error" in data:
+                    logger.error(f"Ошибка от бэкенда: {data['error']}")
+                    return f"Ошибка: {data['error']}", None
+                pdf_path = data.get("pdf_path", None)
+                formatted_list = "Коммерческое предложение генерируется... Пожалуйста, скачайте PDF файл."
+                logger.info(f"КП успешно сформировано.")
+                return formatted_list, pdf_path
+        except httpx.RequestError as e:
             error_message = f"Не удалось связаться с бэкендом: {e}"
             logger.error(error_message, exc_info=True)
             return error_message, None
@@ -633,7 +640,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             logger.error(error_message, exc_info=True)
             return error_message, None
 
-    def save_kp_handler(
+    async def save_kp_handler(
         order_id_hidden_value,
         client_name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type,
         ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price
@@ -650,21 +657,22 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             payload["id"] = int(order_id)
         logger.info(f"[DEBUG] save_kp_handler: payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
         try:
-            resp = requests.post(f"{BACKEND_URL}/api/save_order/", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            if data.get("success"):
-                new_order_id = data.get("order_id")
-                msg = f"Данные для КП успешно сохранены! ID: {new_order_id}"
-                return msg, new_order_id
-            else:
-                error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
-                return f"Ошибка: {error_msg}", order_id
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(f"{BACKEND_URL}/api/save_order/", json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("success"):
+                    new_order_id = data.get("order_id")
+                    msg = f"Данные для КП успешно сохранены! ID: {new_order_id}"
+                    return msg, new_order_id
+                else:
+                    error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
+                    return f"Ошибка: {error_msg}", order_id
         except Exception as e:
             logger.error(f"Ошибка при сохранении данных для КП: {e}", exc_info=True)
             return f"Ошибка: {e}", order_id
 
-    def save_components_handler(
+    async def save_components_handler(
         order_id_hidden_value,
         *components_inputs
     ):
@@ -691,15 +699,16 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             payload["id"] = int(order_id)
         logger.info(f"[DEBUG] save_components_handler: payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
         try:
-            resp = requests.post(f"{BACKEND_URL}/api/save_order/", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            if data.get("success"):
-                msg = f"Комплектующие успешно сохранены!"
-                return msg, order_id
-            else:
-                error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
-                return f"Ошибка: {error_msg}", order_id
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(f"{BACKEND_URL}/api/save_order/", json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("success"):
+                    msg = f"Комплектующие успешно сохранены!"
+                    return msg, order_id
+                else:
+                    error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
+                    return f"Ошибка: {error_msg}", order_id
         except Exception as e:
             logger.error(f"Ошибка при сохранении комплектующих: {e}", exc_info=True)
             return f"Ошибка: {e}", order_id
