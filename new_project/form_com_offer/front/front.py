@@ -509,7 +509,22 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), order_state.value, [], gr.update(value=None)
     def show_orders():
         orders = fetch_orders_list()
-        choices = [f"{o['id']} | {o['client_name']} | {o.get('address', '-') if 'address' in o else '-'} | {o['created_at']} | {o['status']}" for o in orders]
+        # --- Сортировка по статусу ---
+        def status_key(order):
+            status_order = {
+                'partially filled': 0,
+                'completely filled': 1,
+                'completed': 2
+            }
+            return (status_order.get(order.get('status'), 99), -int(order['id']))  # новые выше
+        orders_sorted = sorted(orders, key=status_key)
+        # --- Формирование строк ---
+        choices = [
+            f"{o['id']} | {o['client_name']} | {json.loads(o.get('address', '')) if False else (json.loads(o.get('address', '')) if False else (o.get('address') if o.get('address') else (json.loads(o.get('order_data', '{}')).get('client_data', {}).get('address', '') if 'order_data' in o else 'Адрес клиента')))} | {o['created_at']} | {o['status']}"
+            if o.get('address') else
+            f"{o['id']} | {o['client_name']} | Адрес клиента | {o['created_at']} | {o['status']}"
+            for o in orders_sorted
+        ]
         logger.info(f"[DEBUG] show_orders: choices={choices}")
         return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), order_state.value, gr.update(choices=choices, value=None), gr.update(visible=False, value=""), gr.update(value=None)
     def load_selected_order(selected):

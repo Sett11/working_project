@@ -243,9 +243,12 @@ def get_orders_list(db: Session = Depends(get_session)):
         logger.info(f"Всего заказов в базе: {len(orders)}")
         result = []
         for order in orders:
+            order_data = json.loads(order.order_data)
+            client_data = order_data.get("client_data", {})
             result.append({
                 "id": order.id,
-                "client_name": json.loads(order.order_data)["client_data"]["full_name"],
+                "client_name": client_data.get("full_name", ""),
+                "address": client_data.get("address", ""),
                 "created_at": order.created_at.strftime("%Y-%m-%d"),
                 "status": order.status
             })
