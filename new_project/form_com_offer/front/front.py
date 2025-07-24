@@ -501,9 +501,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             gr.Markdown("### Генерация коммерческого предложения")
             pdf_output = gr.File(label="Скачать коммерческое предложение")
             generate_btn = gr.Button("Сформировать КП", variant="primary")
-            # Новая кнопка для изменения статуса заказа
-            change_status_output = gr.Textbox(label="Статус изменения статуса заказа", interactive=False)
-            change_status_btn = gr.Button("Изменить статус заказа на завершённый", variant="secondary")
         
         # 1. Удаляю вкладку/группу 'Сохранить заказ' и все связанные с ней элементы
         # (Удаляю Tab/Group с save_order_status, save_order_btn, delete_order_btn)
