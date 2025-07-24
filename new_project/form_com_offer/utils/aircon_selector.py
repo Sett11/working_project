@@ -135,34 +135,44 @@ async def select_aircons(db: AsyncSession, params: dict) -> list[models.AirCondi
         stmt = stmt.where(models.AirConditioner.cooling_power_kw <= max_power)
 
         # Фильтр по цене
-        if "price_limit" in params and params["price_limit"]:
+        if "price_limit" in params and params["price_limit"] is not None:
             try:
                 price_limit = float(params["price_limit"])
                 stmt = stmt.where(models.AirConditioner.retail_price_byn <= price_limit)
                 logger.info(f"Применён фильтр по цене: <= {price_limit} BYN")
             except (ValueError, TypeError):
                 logger.warning("Некорректное значение price_limit. Фильтр не применён")
+        else:
+            logger.warning(f"Некорректное значение price_limit = {params['price_limit']}. Фильтр не применён")
 
         # Фильтр по бренду
         if params.get("brand") and params["brand"] != "Любой":
             stmt = stmt.where(models.AirConditioner.brand == params["brand"])
             logger.info(f"Применён фильтр по бренду: {params['brand']}")
+        else:
+            logger.warning(f"Некорректное значение brand = {params['brand']}. Фильтр не применён")
 
         # Фильтр по инвертору
         if "inverter" in params and params["inverter"] is not None:
             stmt = stmt.where(models.AirConditioner.is_inverter == params["inverter"])
             logger.info(f"Применён фильтр по инвертору: {params['inverter']}")
+        else:
+            logger.warning(f"Некорректное значение inverter = {params['inverter']}. Фильтр не применён")
 
         # Фильтр по Wi-Fi
         if "wifi" in params and params["wifi"] is not None:
             stmt = stmt.where(models.AirConditioner.has_wifi == params["wifi"])
             logger.info(f"Применён фильтр по Wi-Fi: {params['wifi']}")
+        else:
+            logger.warning(f"Некорректное значение wifi = {params['wifi']}. Фильтр не применён")
 
         # Фильтр по типу монтажа
         if "mount_type" in params and params["mount_type"] and params["mount_type"] != "Любой":
             stmt = stmt.where(models.AirConditioner.mount_type == params["mount_type"])
             logger.info(f"Применён фильтр по типу монтажа: {params['mount_type']}")
-
+        else:
+            logger.warning(f"Некорректное значение mount_type = {params['mount_type']}. Фильтр не применён")
+        
         result = await db.execute(stmt)
         selected = result.scalars().all()
         logger.info(f"Подбор завершён. Найдено {len(selected)} моделей.")
