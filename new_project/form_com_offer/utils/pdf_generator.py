@@ -186,6 +186,7 @@ def generate_commercial_offer_pdf(
         total_components = 0
         if components:
             story.append(Paragraph("<b>Комплектующие и материалы:</b>", styleBold))
+            story.append(Spacer(1, 8))
             comp_table_data = [[
                 Paragraph("Наименование", styleTableHeader),
                 Paragraph("Ед. изм.", styleTableHeader),
@@ -264,10 +265,21 @@ def generate_commercial_offer_pdf(
         total_pay = total_components + installation_price
         
         # --- Итоговая сумма ---
+        styleTotalNote = ParagraphStyle('TotalNote', parent=styleBold, fontSize=9, spaceAfter=0, spaceBefore=0)
         total_table = Table([
-            [Paragraph(f"<b>ИТОГО К ОПЛАТЕ:</b>", styleBold), Paragraph(f"<b>{total_pay:.2f} BYN</b>", styleBold)]
-        ], colWidths=[100*mm, 50*mm])
-        
+            [
+                Paragraph(f"<b>ИТОГО К ОПЛАТЕ:</b>", styleBold),
+                Paragraph(f"<b>{total_pay:.2f} BYN</b>", styleBold),
+                Paragraph(f"<b>+ стоимость выбранного кондиционера</b>", styleTotalNote)
+            ]
+        ], colWidths=[80*mm, 50*mm, 70*mm])
+        total_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+            ('ALIGN', (2,0), (2,0), 'RIGHT'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+            ('TOPPADDING', (0,0), (-1,-1), 2),
+        ]))
         story.append(total_table)
         story.append(Spacer(1, 20))
 
