@@ -151,6 +151,11 @@ def generate_offer_endpoint(payload: dict, db: Session = Depends(get_session)):
             aircon_variants=aircon_variants, components=components_for_pdf,
             discount_percent=discount, offer_number=offer_number
         )
+        # --- Меняем статус заказа на completed, если заказ найден по id ---
+        if 'order' in locals() and order is not None:
+            order.status = 'completed'
+            order.pdf_path = pdf_path
+            db.commit()
         response_data = {
             "aircon_variants": aircon_variants,
             "total_count": len(selected_aircons),

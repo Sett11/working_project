@@ -598,7 +598,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     # и на бэкенде PDF формировался на основе данных из базы
 
     def generate_kp_handler(order_id_hidden_value):
-        # Отправляем только id заказа, бэкенд сам достаёт все данные
+        # Отправляем только id заказа, бэкенд сам достаёт все данные и меняет статус
         payload = {"id": order_id_hidden_value}
         logger.info(f"[DEBUG] generate_kp_handler: payload: {json.dumps(payload, ensure_ascii=False)}")
         try:
@@ -632,7 +632,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             "client_data": {"full_name": client_name, "phone": phone, "email": mail, "address": address},
             "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": fix_date(date), "installation_price": installation_price},
             "aircon_params": {"wifi": wifi, "inverter": inverter, "price_limit": price, "brand": brand, "mount_type": mount_type, "area": area, "ceiling_height": ceiling_height, "illumination": illumination, "num_people": num_people, "activity": activity, "num_computers": num_computers, "num_tvs": num_tvs, "other_power": other_power},
-            "status": "draft"
+            "status": "partially filled"
         }
         if order_id is not None and str(order_id).isdigit():
             payload["id"] = int(order_id)
@@ -674,7 +674,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             else:
                 comp_item["unit"] = "шт."
             selected_components.append(comp_item)
-        payload = {"components": selected_components}
+        payload = {"components": selected_components, "status": "completely filled"}
         if order_id is not None and str(order_id).isdigit():
             payload["id"] = int(order_id)
         logger.info(f"[DEBUG] save_components_handler: payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
@@ -691,22 +691,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         except Exception as e:
             logger.error(f"Ошибка при сохранении комплектующих: {e}", exc_info=True)
             return f"Ошибка: {e}", order_id
-
-    def change_status_handler(order_id_hidden_value):
-        payload = {"id": order_id_hidden_value, "status": "completed"}
-        logger.info(f"[DEBUG] change_status_handler: payload: {json.dumps(payload, ensure_ascii=False)}")
-        try:
-            response = requests.post(f"{BACKEND_URL}/api/save_order/", json=payload)
-            response.raise_for_status()
-            data = response.json()
-            if data.get("success"):
-                return "Статус заказа успешно изменён на 'completed'!"
-            else:
-                error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
-                return f"Ошибка: {error_msg}"
-        except Exception as e:
-            logger.error(f"Ошибка при изменении статуса заказа: {e}", exc_info=True)
-            return f"Ошибка: {e}"
 
     # --- Привязка обработчиков к кнопкам ---
     select_aircons_btn.click(
@@ -730,9 +714,4 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         fn=save_components_handler,
         inputs=[order_id_hidden] + components_ui_inputs,
         outputs=[save_components_status, order_id_hidden]
-    )
-    change_status_btn.click(
-        fn=change_status_handler,
-        inputs=[order_id_hidden],
-        outputs=[change_status_output]
     )
