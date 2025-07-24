@@ -379,6 +379,34 @@ def update_components_tab(order_state):
 
 components_ui_inputs = []  # <-- ВНЕ интерфейса, глобально!
 
+# --- Новый хелпер для подгрузки комплектующих ---
+def fill_components_fields_from_order(order, components_catalog):
+    """
+    Возвращает список gr.update для всех полей комплектующих (чекбокс, qty, length).
+    Для selected=true — значения из заказа, остальные — дефолтные.
+    Порядок совпадает с components_ui_inputs.
+    """
+    updates = []
+    order_components = order.get("components", [])
+    for catalog_comp in components_catalog.get("components", []):
+        # Ищем компонент в заказе по имени (без учёта регистра и пробелов)
+        cname = catalog_comp.get("name", "").replace(" ", "").lower()
+        found = None
+        for c in order_components:
+            oname = c.get("name", "").replace(" ", "").lower()
+            if cname == oname:
+                found = c
+                break
+        if found and found.get("selected"):
+            updates.append(gr.update(value=True))
+            updates.append(gr.update(value=found.get("qty", 0)))
+            updates.append(gr.update(value=found.get("length", 0.0)))
+        else:
+            updates.append(gr.update(value=False))
+            updates.append(gr.update(value=0))
+            updates.append(gr.update(value=0.0))
+    return updates
+
 with gr.Blocks(title="Автоматизация продаж кондиционеров", theme=gr.themes.Ocean()) as interface:
     order_state = gr.State(get_placeholder_order())
     order_id_state = gr.State(None)  # Новый state для id заказа
@@ -491,17 +519,19 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         logger.info(f"[DEBUG] load_selected_order: selected={selected}")
         if not selected:
             logger.info(f"[DEBUG] load_selected_order: error - не выбран заказ")
-            return [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(22)] + [gr.update(), gr.update(value=None)] + [gr.update()]
+            return [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(22)] + [gr.update(), gr.update(value=None)] + [gr.update() for _ in components_ui_inputs] + [gr.update()]
         order_id = int(selected.split("|")[0].strip())
         order = fetch_order_data(order_id)
         logger.info(f"[DEBUG] load_selected_order: loaded order={order}")
         placeholder = get_placeholder_order()
         updates, _ = fill_fields_from_order_diff(order, placeholder)
+        # --- Подгружаем комплектующие ---
+        comp_updates = fill_components_fields_from_order(order, COMPONENTS_CATALOG)
         logger.info(f"[DEBUG] load_selected_order: order_state.value до обновления={order_state.value}")
         logger.info(f"[DEBUG] load_selected_order: order_state.value после обновления={order}")
         logger.info(f"[DEBUG] load_selected_order: order_id_state будет {order.get('id')}")
-        # Возвращаем: скрыть ошибку, скрыть список заказов, показать основную форму, обновить все поля, обновить order_state, обновить order_id_state, и скрытое поле id
-        return [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + [gr.update(value=order), gr.update(value=order.get("id"))] + [gr.update(value=order.get("id"))]
+        # Возвращаем: скрыть ошибку, скрыть список заказов, показать основную форму, обновить все поля, обновить order_state, обновить order_id_state, и скрытое поле id, комплектующие
+        return [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + [gr.update(value=order), gr.update(value=order.get("id"))] + comp_updates + [gr.update(value=order.get("id"))]
     def show_main(order=None):
         if order is None:
             return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), get_placeholder_order(), orders_table_data.value, gr.update(value=None)
@@ -527,7 +557,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     load_selected_btn.click(
         fn=load_selected_order,
         inputs=[orders_radio],
-        outputs=[load_error, orders_list_screen, main_order_screen, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price, order_state, order_id_state, order_id_hidden]
+        outputs=[load_error, orders_list_screen, main_order_screen, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price, order_state, order_id_state] + components_ui_inputs + [order_id_hidden]
     )
     back_to_start_btn.click(fn=show_start, outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_table_data])
     # Удаляю orders_table.select(on_select_order, outputs=[...]) как устаревший и неиспользуемый
