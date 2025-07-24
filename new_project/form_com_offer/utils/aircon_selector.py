@@ -34,12 +34,25 @@ def calculate_required_power(params: dict) -> float:
         float: Требуемая мощность охлаждения (кВт)
     """
     try:
+        # Словари для преобразования строковых значений в индексы
+        illumination_map = {"слабая": 0, "средняя": 1, "сильная": 2}
+        activity_map = {"сидячая работа": 0, "легкая работа": 1, "средняя работа": 2, "тяжелая работа": 3, "спорт": 4}
         # Извлекаем параметры с значениями по умолчанию
         area = float(params.get("area", 0))
         ceiling_height = float(params.get("ceiling_height", 2.7))
-        illumination = int(params.get("illumination", 1))
+        # --- Корректное преобразование освещённости ---
+        illumination_raw = params.get("illumination", 1)
+        if isinstance(illumination_raw, str):
+            illumination = illumination_map.get(illumination_raw.strip().lower(), 1)
+        else:
+            illumination = int(illumination_raw)
+        # --- Корректное преобразование активности ---
+        activity_raw = params.get("activity", 1)
+        if isinstance(activity_raw, str):
+            activity = activity_map.get(activity_raw.strip().lower(), 1)
+        else:
+            activity = int(activity_raw)
         num_people = int(params.get("num_people", 1))
-        activity = int(params.get("activity", 1))
         num_computers = int(params.get("num_computers", 0))
         num_tvs = int(params.get("num_tvs", 0))
         other_power = float(params.get("other_power", 0))
