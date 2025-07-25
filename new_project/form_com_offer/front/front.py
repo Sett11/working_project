@@ -8,6 +8,7 @@ import json
 import os
 from collections import defaultdict
 import re
+import datetime
 
 # Инициализация логгера
 logger = Logger(name=__name__, log_file="frontend.log")
@@ -236,25 +237,25 @@ async def delete_order(order_id):
 def get_placeholder_order():
     return {
         "client_data": {
-            "full_name": "",
-            "phone": "",
-            "email": "",
-            "address": ""
+            "full_name": "Вася Плюшкин",
+            "phone": "+375001111111",
+            "email": "no_pain_no_gain@mail.ru",
+            "address": "Минск, ул. ВесёлыхБобриков д. 89, корп. 1, кв. 99"
         },
         "order_params": {
-            "room_area": 50,
-            "room_type": None,
-            "discount": 0,
-            "visit_date": "",
-            "installation_price": 0
+            "room_area": 15,
+            "room_type": "квартира",
+            "discount": 5,
+            "visit_date": datetime.date.today().strftime('%Y-%m-%d'),
+            "installation_price": 666
         },
         "aircon_params": {
             "wifi": False,
             "inverter": False,
-            "price_limit": 3000,
-            "brand": None,
+            "price_limit": 10000,  # <-- default value теперь 10000
+            "brand": "Любой",
             "mount_type": "Любой",
-            "area": 50,
+            "area": 15,
             "ceiling_height": 2.7,
             "illumination": "Средняя",
             "num_people": 1,
@@ -434,35 +435,35 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("### 1. Данные клиента")
-                    name = gr.Textbox(label="Имя клиента")
-                    phone = gr.Textbox(label="Телефон")
-                    mail = gr.Textbox(label="Электронная почта")
-                    address = gr.Textbox(label="Адрес")
-                    date = gr.Textbox(label="Дата визита монтажника")
+                    name = gr.Textbox(label="Имя клиента", value=get_placeholder_order()["client_data"]["full_name"])
+                    phone = gr.Textbox(label="Телефон", value=get_placeholder_order()["client_data"]["phone"])
+                    mail = gr.Textbox(label="Электронная почта", value=get_placeholder_order()["client_data"]["email"])
+                    address = gr.Textbox(label="Адрес", value=get_placeholder_order()["client_data"]["address"])
+                    date = gr.Textbox(label="Дата визита монтажника", value=get_placeholder_order()["order_params"]["visit_date"])
                 with gr.Column():
                     gr.Markdown("### 2. Параметры заказа")
-                    type_room = gr.Dropdown(["квартира", "дом", "офис", "производство"], label="Тип помещения")
-                    area = gr.Slider(10, 200, label="Площадь помещения (м²)")
-                    discount = gr.Slider(0, 50, label="Индивидуальная скидка (%)")
-                    installation_price = gr.Number(label="Стоимость монтажа (BYN)", minimum=0, step=1)
+                    type_room = gr.Dropdown(["квартира", "дом", "офис", "производство"], label="Тип помещения", value=get_placeholder_order()["order_params"]["room_type"])
+                    area = gr.Slider(10, 200, label="Площадь помещения (м²)", value=get_placeholder_order()["order_params"]["room_area"])
+                    discount = gr.Slider(0, 50, label="Индивидуальная скидка (%)", value=get_placeholder_order()["order_params"]["discount"])
+                    installation_price = gr.Number(label="Стоимость монтажа (BYN)", minimum=0, step=1, value=get_placeholder_order()["order_params"]["installation_price"])
             gr.Markdown("### 3. Требования к кондиционеру")
             with gr.Row():
-                brand = gr.Dropdown(["Любой", "LESSAR", "DANTEX", "AUX", "QuattroClima", "Tosot", "NiceME"], label="Бренд")
-                price = gr.Slider(0, 10000, label="Верхний порог стоимости (BYN)")
-                inverter = gr.Checkbox(label="Инверторный компрессор")
-                wifi = gr.Checkbox(label="Wi-Fi управление")
+                brand = gr.Dropdown(["Любой", "LESSAR", "DANTEX", "AUX", "QuattroClima", "Tosot", "NiceME"], label="Бренд", value=get_placeholder_order()["aircon_params"]["brand"])
+                price = gr.Slider(0, 10000, value=get_placeholder_order()["aircon_params"]["price_limit"], label="Верхний порог стоимости (BYN)")
+                inverter = gr.Checkbox(label="Инверторный компрессор", value=get_placeholder_order()["aircon_params"]["inverter"])
+                wifi = gr.Checkbox(label="Wi-Fi управление", value=get_placeholder_order()["aircon_params"]["wifi"])
             with gr.Row():
-                mount_type = gr.Dropdown(["Любой", "настенный", "кассетный", "потолочный", "напольный", "колонный"], label="Тип монтажа")
+                mount_type = gr.Dropdown(["Любой", "настенный", "кассетный", "потолочный", "напольный", "колонный"], label="Тип монтажа", value=get_placeholder_order()["aircon_params"]["mount_type"])
             gr.Markdown("### 4. Дополнительные параметры для расчета мощности")
             with gr.Row():
-                ceiling_height = gr.Slider(2.0, 5.0, step=0.1, label="Высота потолков (м)")
-                illumination = gr.Dropdown(["Слабая", "Средняя", "Сильная"], label="Освещенность")
-                num_people = gr.Slider(1, 10, step=1, label="Количество людей")
-                activity = gr.Dropdown(["Сидячая работа", "Легкая работа", "Средняя работа", "Тяжелая работа", "Спорт"], label="Активность людей")
+                ceiling_height = gr.Slider(2.0, 5.0, step=0.1, label="Высота потолков (м)", value=get_placeholder_order()["aircon_params"]["ceiling_height"])
+                illumination = gr.Dropdown(["Слабая", "Средняя", "Сильная"], label="Освещенность", value=get_placeholder_order()["aircon_params"]["illumination"])
+                num_people = gr.Slider(1, 10, step=1, label="Количество людей", value=get_placeholder_order()["aircon_params"]["num_people"])
+                activity = gr.Dropdown(["Сидячая работа", "Легкая работа", "Средняя работа", "Тяжелая работа", "Спорт"], label="Активность людей", value=get_placeholder_order()["aircon_params"]["activity"])
             with gr.Row():
-                num_computers = gr.Slider(0, 10, step=1, label="Количество компьютеров")
-                num_tvs = gr.Slider(0, 5, step=1, label="Количество телевизоров")
-                other_power = gr.Slider(0, 2000, step=50, label="Мощность прочей техники (Вт)")
+                num_computers = gr.Slider(0, 10, step=1, label="Количество компьютеров", value=get_placeholder_order()["aircon_params"]["num_computers"])
+                num_tvs = gr.Slider(0, 5, step=1, label="Количество телевизоров", value=get_placeholder_order()["aircon_params"]["num_tvs"])
+                other_power = gr.Slider(0, 2000, step=50, label="Мощность прочей техники (Вт)", value=get_placeholder_order()["aircon_params"]["other_power"])
             order_id_hidden = gr.Number(label="ID заказа (скрытое)", visible=False)
             # Кнопка для сохранения данных для КП
             save_kp_status = gr.Textbox(label="Статус сохранения данных для КП", interactive=False)
@@ -551,7 +552,42 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         return [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + [gr.update(value=order), gr.update(value=order.get("id"))] + comp_updates + [gr.update(value=order.get("id"))]
     def show_main(order=None):
         if order is None:
-            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), get_placeholder_order(), orders_table_data.value, gr.update(value=None)
+            placeholder = get_placeholder_order()
+            client = placeholder["client_data"]
+            order_params = placeholder["order_params"]
+            aircon_params = placeholder["aircon_params"]
+            values = [
+                gr.update(value=client.get("full_name", "")),
+                gr.update(value=client.get("phone", "")),
+                gr.update(value=client.get("email", "")),
+                gr.update(value=client.get("address", "")),
+                gr.update(value=order_params.get("visit_date", "")),
+                gr.update(value=order_params.get("room_area", 50)),
+                gr.update(value=order_params.get("room_type", "квартира")),
+                gr.update(value=order_params.get("discount", 0)),
+                gr.update(value=aircon_params.get("wifi", False)),
+                gr.update(value=aircon_params.get("inverter", False)),
+                gr.update(value=aircon_params.get("price_limit", 10000)),
+                gr.update(value=aircon_params.get("mount_type", "Любой")),
+                gr.update(value=aircon_params.get("ceiling_height", 2.7)),
+                gr.update(value=aircon_params.get("illumination", "Средняя")),
+                gr.update(value=aircon_params.get("num_people", 1)),
+                gr.update(value=aircon_params.get("activity", "Сидячая работа")),
+                gr.update(value=aircon_params.get("num_computers", 0)),
+                gr.update(value=aircon_params.get("num_tvs", 0)),
+                gr.update(value=aircon_params.get("other_power", 0)),
+                gr.update(value=aircon_params.get("brand", "Любой")),
+                gr.update(value=order_params.get("installation_price", 0)),
+            ]
+            for comp in placeholder["components"]:
+                values.append(gr.update(value=comp.get("selected", False)))
+                values.append(gr.update(value=comp.get("qty", 0)))
+                values.append(gr.update(value=comp.get("length", 0.0)))
+            return (
+                gr.update(visible=False), gr.update(visible=False), gr.update(visible=True),
+                *values,
+                placeholder, orders_table_data.value, gr.update(value=None)
+            )
         else:
             return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order, orders_table_data.value, gr.update(value=order.get("id"))
     def on_select_order(row):
@@ -564,7 +600,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         logger.info(f"[DEBUG] on_select_order: fallback")
         return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), order_state.value, orders_table_data.value
 
-    create_btn.click(fn=lambda: show_main(), outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_table_data])
+    create_btn.click(fn=lambda: show_main(), outputs=[start_screen, orders_list_screen, main_order_screen, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price, order_state, orders_table_data] + components_ui_inputs + [order_id_hidden])
     load_btn.click(fn=show_orders, outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_radio, load_error])
     # Собираем все input-компоненты в правильном порядке для outputs
     all_inputs = [
