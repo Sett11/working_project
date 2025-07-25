@@ -266,7 +266,8 @@ def get_placeholder_order():
         },
         "components": [
             {"selected": False, "qty": 1, "length": 0.1} for _ in COMPONENTS_CATALOG.get("components", [])
-        ]
+        ],
+        "comment": "Оставьте комментарий..."
     }
 
 def fill_fields_from_order(order):
@@ -274,7 +275,7 @@ def fill_fields_from_order(order):
     order_params = order.get("order_params", {})
     aircon_params = order.get("aircon_params", {})
     components = order.get("components", [])
-    # Собираем значения для всех input-компонентов
+    # Собираем значения для всех input-компонентов (без комментария)
     values = [
         client.get("full_name", ""),
         client.get("phone", ""),
@@ -296,7 +297,7 @@ def fill_fields_from_order(order):
         aircon_params.get("num_tvs", 0),
         aircon_params.get("other_power", 0),
         aircon_params.get("brand", None),
-        order_params.get("installation_price", 0),
+        order_params.get("installation_price", 0)
     ]
     # Добавляем значения для всех комплектующих (selected, qty, length)
     for comp in components:
@@ -304,13 +305,9 @@ def fill_fields_from_order(order):
         values.append(comp.get("qty", 0))
         values.append(comp.get("length", 0.0))
     logger.info(f"[DEBUG] fill_fields_from_order: values count={len(values)}; values={values}")
-    return [gr.update(value=v) for v in values]
+    return [gr.update(value=v) for v in values], order.get("comment", "Оставьте комментарий...")
 
 def fill_fields_from_order_diff(order, placeholder):
-    """
-    Возвращает список gr.update только для тех полей, которые отличаются от placeholder.
-    Для совпадающих — gr.update() (без изменений).
-    """
     client = order.get("client_data", {})
     order_params = order.get("order_params", {})
     aircon_params = order.get("aircon_params", {})
@@ -340,7 +337,7 @@ def fill_fields_from_order_diff(order, placeholder):
         (aircon_params.get("num_tvs", 0), ph_aircon_params.get("num_tvs", 0)),
         (aircon_params.get("other_power", 0), ph_aircon_params.get("other_power", 0)),
         (aircon_params.get("brand", None), ph_aircon_params.get("brand", None)),
-        (order_params.get("installation_price", 0), ph_order_params.get("installation_price", 0)),
+        (order_params.get("installation_price", 0), ph_order_params.get("installation_price", 0))
     ]
     updates = []
     for v, ph in values:
@@ -359,7 +356,8 @@ def fill_fields_from_order_diff(order, placeholder):
                 comp_diffs.append(gr.update(value=v))
             else:
                 comp_diffs.append(gr.update())
-    return updates, comp_diffs
+    comment_value = order.get("comment", "Оставьте комментарий...")
+    return updates, comp_diffs, comment_value
 
 def update_components_tab(order_state):
     order = order_state  # order_state.value
@@ -499,6 +497,12 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             save_components_status = gr.Textbox(label="Статус сохранения комплектующих", interactive=False)
             save_components_btn = gr.Button("Сохранить комплектующие", variant="primary")
 
+        # Вкладка "Комментарии к заказу"
+        with gr.Tab("Комментарии к заказу"):
+            comment_box = gr.Textbox(label="Комментарий к заказу", value=get_placeholder_order()["comment"], lines=5, max_lines=20)
+            save_comment_status = gr.Textbox(label="Статус сохранения комментария", interactive=False)
+            save_comment_btn = gr.Button("Сохранить комментарий", variant="primary")
+
         # Вкладка "Результат" и обработчики без изменений
         with gr.Tab("Результат"):
             gr.Markdown("### Подбор кондиционеров")
@@ -537,19 +541,16 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         logger.info(f"[DEBUG] load_selected_order: selected={selected}")
         if not selected:
             logger.info(f"[DEBUG] load_selected_order: error - не выбран заказ")
-            return [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(22)] + [gr.update(), gr.update(value=None)] + [gr.update() for _ in components_ui_inputs] + [gr.update()]
+            return [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(22)] + [gr.update(), gr.update(value=None)] + [gr.update() for _ in components_ui_inputs] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()]
         order_id = int(selected.split("|")[0].strip())
         order = await fetch_order_data(order_id)
         logger.info(f"[DEBUG] load_selected_order: loaded order={order}")
         placeholder = get_placeholder_order()
-        updates, _ = fill_fields_from_order_diff(order, placeholder)
-        # --- Подгружаем комплектующие ---
+        updates, comp_updates, comment_value = fill_fields_from_order_diff(order, placeholder)
         comp_updates = fill_components_fields_from_order(order, COMPONENTS_CATALOG)
-        logger.info(f"[DEBUG] load_selected_order: order_state.value до обновления={order_state.value}")
-        logger.info(f"[DEBUG] load_selected_order: order_state.value после обновления={order}")
-        logger.info(f"[DEBUG] load_selected_order: order_id_state будет {order.get('id')}")
-        # Возвращаем: скрыть ошибку, скрыть список заказов, показать основную форму, обновить все поля, обновить order_state, обновить order_id_state, и скрытое поле id, комплектующие
-        return [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + [gr.update(value=order), gr.update(value=order.get("id"))] + comp_updates + [gr.update(value=order.get("id"))]
+        # Возвращаем: ... все поля ... comment_box, save_comment_status, order_id_hidden, order_state, order_id_state
+        return [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + comp_updates + [gr.update(value=comment_value), gr.update(value=""), gr.update(value=order.get("id")), gr.update(value=order), gr.update(value=order.get("id"))]
+
     def show_main(order=None):
         if order is None:
             placeholder = get_placeholder_order()
@@ -583,13 +584,18 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 values.append(gr.update(value=comp.get("selected", False)))
                 values.append(gr.update(value=comp.get("qty", 0)))
                 values.append(gr.update(value=comp.get("length", 0.0)))
+            # comment_box, save_comment_status, order_id_hidden, order_state, order_id_state
+            values += [gr.update(value=placeholder.get("comment", "Оставьте комментарий...")), gr.update(value=""), gr.update(value=None), gr.update(value=placeholder), gr.update(value=None)]
             return (
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=True),
-                *values,
-                placeholder, orders_table_data.value, gr.update(value=None)
+                *values
             )
         else:
-            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order, orders_table_data.value, gr.update(value=order.get("id"))
+            updates, _ = fill_fields_from_order_diff(order, get_placeholder_order())
+            comp_updates = fill_components_fields_from_order(order, COMPONENTS_CATALOG)
+            comment_value = order.get("comment", "Оставьте комментарий...")
+            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), *updates, *comp_updates, gr.update(value=comment_value), gr.update(value=""), gr.update(value=order.get("id")), gr.update(value=order), gr.update(value=order.get("id"))
+
     def on_select_order(row):
         logger.info(f"[DEBUG] on_select_order: row={row}")
         if row and len(row) > 0:
@@ -600,7 +606,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         logger.info(f"[DEBUG] on_select_order: fallback")
         return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), order_state.value, orders_table_data.value
 
-    create_btn.click(fn=lambda: show_main(), outputs=[start_screen, orders_list_screen, main_order_screen, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price, order_state, orders_table_data] + components_ui_inputs + [order_id_hidden])
+    create_btn.click(fn=lambda: show_main(), outputs=[start_screen, orders_list_screen, main_order_screen, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price] + components_ui_inputs + [comment_box, save_comment_status, order_id_hidden, order_state, order_id_state])
     load_btn.click(fn=show_orders, outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_radio, load_error])
     # Собираем все input-компоненты в правильном порядке для outputs
     all_inputs = [
@@ -610,7 +616,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     load_selected_btn.click(
         fn=load_selected_order,
         inputs=[orders_radio],
-        outputs=[load_error, orders_list_screen, main_order_screen, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price, order_state, order_id_state] + components_ui_inputs + [order_id_hidden]
+        outputs=[load_error, orders_list_screen, main_order_screen, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price] + components_ui_inputs + [comment_box, save_comment_status, order_id_hidden, order_state, order_id_state]
     )
     back_to_start_btn.click(fn=show_start, outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_table_data])
     # Удаляю orders_table.select(on_select_order, outputs=[...]) как устаревший и неиспользуемый
@@ -772,3 +778,28 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         inputs=[order_id_hidden] + components_ui_inputs,
         outputs=[save_components_status, order_id_hidden]
     )
+
+    async def save_comment_handler(order_id_hidden_value, comment_value):
+        logger.info(f"[DEBUG] save_comment_handler: order_id_hidden_value={order_id_hidden_value}")
+        try:
+            order_id = int(order_id_hidden_value)
+            if not order_id or order_id <= 0:
+                return "Ошибка: Некорректный ID заказа!"
+        except Exception as e:
+            logger.error(f"Ошибка преобразования order_id_hidden_value: {e}")
+            return f"Ошибка: Некорректный ID заказа!"
+        payload = {"id": order_id, "comment": comment_value}
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(f"{BACKEND_URL}/api/save_order/", json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("success"):
+                    return "Комментарий успешно сохранён!"
+                else:
+                    return f"Ошибка: {data.get('error', 'Неизвестная ошибка от бэкенда.')}"
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении комментария: {e}", exc_info=True)
+            return f"Ошибка: {e}"
+
+    save_comment_btn.click(fn=save_comment_handler, inputs=[order_id_hidden, comment_box], outputs=[save_comment_status])

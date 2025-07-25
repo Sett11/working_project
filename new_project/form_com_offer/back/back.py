@@ -179,6 +179,21 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
 async def save_order_endpoint(payload: dict, db: AsyncSession = Depends(get_session)):
     logger.info(f"Получен запрос на эндпоинт /api/save_order/ (сохранение/обновление заказа). Payload: {json.dumps(payload, ensure_ascii=False)}")
     try:
+        # --- Новый режим: только комментарий ---
+        if list(payload.keys()) == ["id", "comment"] or ("id" in payload and "comment" in payload and len(payload) == 2):
+            order_id = payload["id"]
+            comment = payload["comment"]
+            result = await db.execute(select(crud.models.Order).filter_by(id=order_id))
+            order = result.scalars().first()
+            if not order:
+                logger.error(f"Заказ с id={order_id} не найден для обновления комментария!")
+                return {"success": False, "error": f"Заказ с id={order_id} не найден!"}
+            order_data = json.loads(order.order_data)
+            order_data["comment"] = comment
+            order.order_data = json.dumps(order_data, ensure_ascii=False)
+            await db.commit()
+            logger.info(f"Комментарий для заказа id={order_id} успешно обновлён.")
+            return {"success": True, "order_id": order.id, "updated": True}
         # Определяем режим: только КП, только components, или оба
         has_kp = 'client_data' in payload and 'order_params' in payload and 'aircon_params' in payload
         has_components = 'components' in payload
@@ -255,7 +270,8 @@ async def get_orders_list(db: AsyncSession = Depends(get_session)):
                 "client_name": client_data.get("full_name", ""),
                 "address": client_data.get("address", ""),
                 "created_at": order.created_at.strftime("%Y-%m-%d"),
-                "status": order.status
+                "status": order.status,
+                "comment": order_data.get("comment", "")
             })
         logger.info(f"Отправлен список заказов: {result}")
         return result
@@ -277,6 +293,7 @@ async def get_order_by_id(order_id: int = Path(...), db: AsyncSession = Depends(
         order_data["status"] = order.status
         order_data["pdf_path"] = order.pdf_path
         order_data["created_at"] = order.created_at.strftime("%Y-%m-%d")
+        # comment уже будет в order_data, если есть
         return order_data
     except Exception as e:
         logger.error(f"Ошибка при получении заказа по id: {e}", exc_info=True)
