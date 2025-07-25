@@ -411,6 +411,15 @@ def fill_components_fields_from_order(order, components_catalog):
             updates.append(gr.update(value=0.0))
     return updates
 
+def read_notes_md():
+    notes_path = os.path.join(os.path.dirname(__file__), 'notes.md')
+    try:
+        with open(notes_path, encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        logger.error(f"Ошибка чтения notes.md: {e}")
+        return "Инструкция временно недоступна."
+
 with gr.Blocks(title="Автоматизация продаж кондиционеров", theme=gr.themes.Ocean()) as interface:
     order_state = gr.State(get_placeholder_order())
     order_id_state = gr.State(None)  # Новый state для id заказа
@@ -514,13 +523,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
 
         # Новая вкладка "Инструкция пользователя"
         with gr.Tab("Инструкция пользователя"):
-            gr.Markdown("""
-            # Подробная инструкция по использованию приложения
-            Итак, вы находитесь в главном окне приложения.
-            Вы можете выбрать заказ из списка заказов, либо создать новый заказ.
-            Для создания нового заказа нажмите на кнопку "Создать заказ".
-            Для выбора заказа из списка заказов нажмите на кнопку "Выбрать заказ".
-            """)
+            gr.Markdown(read_notes_md())
         
         # 1. Удаляю вкладку/группу 'Сохранить заказ' и все связанные с ней элементы
         # (Удаляю Tab/Group с save_order_status, save_order_btn, delete_order_btn)
