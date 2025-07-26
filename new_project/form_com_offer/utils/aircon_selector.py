@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db import models
 from utils.mylogger import Logger
-from typing import List, Optional
 
 # Инициализация логгера для подбора кондиционеров.
 # log_file указывается без папки logs, чтобы использовать дефолтную директорию логов.

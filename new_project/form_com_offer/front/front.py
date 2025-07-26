@@ -116,22 +116,19 @@ async def generate_kp(client_name, phone, mail, address, date, area, type_room, 
         qty = components_inputs[i+1]
         length = components_inputs[i+2]
         i += 3
-        try:
-            qty = int(qty) if qty else 0
-        except Exception:
-            qty = 0
-        try:
-            length = float(length) if length else 0.0
-        except Exception:
-            length = 0.0
+        is_measurable = "труба" in component_data["name"].lower() or "кабель" in component_data["name"].lower() or "теплоизоляция" in component_data["name"].lower() or "шланг" in component_data["name"].lower() or "провод" in component_data["name"].lower()
         if is_selected:
-            comp_item = {"name": component_data["name"], "price": component_data.get("price", 0), "currency": COMPONENTS_CATALOG.get("catalog_info", {}).get("currency", "BYN"), "qty": qty}
-            if "труба" in comp_item["name"].lower() or "кабель" in comp_item["name"].lower() or "теплоизоляция" in comp_item["name"].lower() or "шланг" in comp_item["name"].lower():
+            comp_item = {"name": component_data["name"], "price": component_data.get("price", 0), "currency": COMPONENTS_CATALOG.get("catalog_info", {}).get("currency", "BYN")}
+            if is_measurable:
                 comp_item["unit"] = "м."
-                comp_item["length"] = length
+                comp_item["qty"] = 0
+                comp_item["length"] = float(length) if length else 0.0
             else:
                 comp_item["unit"] = "шт."
-            if comp_item["qty"] > 0 or comp_item.get("length", 0) > 0:
+                comp_item["qty"] = int(qty) if qty else 0
+                comp_item["length"] = 0.0
+            # Добавляем только если qty > 0 или length > 0
+            if comp_item["qty"] > 0 or comp_item["length"] > 0:
                 selected_components.append(comp_item)
     illumination_map = {"Слабая": 0, "Средняя": 1, "Сильная": 2}
     activity_map = {"Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
@@ -495,14 +492,16 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                 label_text = f"{comp['name']}"
                                 checkbox = gr.Checkbox(label=label_text)
                             with gr.Column(scale=2):
-                                qty_input = gr.Number(label="Кол-во (шт)", minimum=0, step=1)
+                                if is_measurable:
+                                    qty_input = gr.Number(label="Кол-во (шт)", visible=False)
+                                else:
+                                    qty_input = gr.Number(label="Кол-во (шт)", minimum=0, step=1)
                             with gr.Column(scale=2):
                                 if is_measurable:
                                     length_input = gr.Number(label="Длина (м)", minimum=0, step=0.1)
                                 else:
                                     length_input = gr.Number(visible=False)
                             components_ui_inputs.extend([checkbox, qty_input, length_input])
-            # (Удаляю кнопку 'Загрузить комплектующие из заказа')
             save_components_status = gr.Textbox(label="Статус сохранения комплектующих", interactive=False)
             save_components_btn = gr.Button("Сохранить комплектующие", variant="primary")
 
@@ -738,16 +737,20 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         for component_data in COMPONENTS_CATALOG.get("components", []):
             is_selected, qty, length = components_inputs[i], components_inputs[i+1], components_inputs[i+2]
             i += 3
+            is_measurable = "труба" in component_data["name"].lower() or "кабель" in component_data["name"].lower() or "теплоизоляция" in component_data["name"].lower() or "шланг" in component_data["name"].lower() or "провод" in component_data["name"].lower()
             comp_item = {
                 "name": component_data["name"], "price": component_data.get("price", 0),
                 "currency": COMPONENTS_CATALOG.get("catalog_info", {}).get("currency", "BYN"),
-                "qty": int(qty) if qty else 0, "selected": is_selected, "length": 0.0
+                "selected": is_selected
             }
-            if "труба" in comp_item["name"].lower() or "кабель" in comp_item["name"].lower() or "теплоизоляция" in comp_item["name"].lower() or "шланг" in comp_item["name"].lower():
+            if is_measurable:
                 comp_item["unit"] = "м."
+                comp_item["qty"] = 0
                 comp_item["length"] = float(length) if length else 0.0
             else:
                 comp_item["unit"] = "шт."
+                comp_item["qty"] = int(qty) if qty else 0
+                comp_item["length"] = 0.0
             selected_components.append(comp_item)
         payload = {"components": selected_components, "status": "completely filled"}
         if order_id is not None and str(order_id).isdigit():

@@ -199,15 +199,19 @@ def generate_commercial_offer_pdf(
             
             for comp in components:
                 price = float(comp.get('price', 0))
-                qty = int(comp.get('qty', 1))
+                unit = comp.get('unit', 'шт.')
+                if unit == 'м.':
+                    qty_or_length = float(comp.get('length', 0.0))
+                else:
+                    qty_or_length = int(comp.get('qty', 0))
                 discount = float(comp.get('discount_percent', 0))
-                total_with_discount = price * qty * (1 - discount / 100)
+                total_with_discount = price * qty_or_length * (1 - discount / 100)
                 total_components += total_with_discount
                 
                 comp_table_data.append([
                     Paragraph(comp.get('name', ''), styleTableCell),
-                    Paragraph(comp.get('unit', 'шт.'), styleTableCell),
-                    Paragraph(str(qty), styleTableCell),
+                    Paragraph(unit, styleTableCell),
+                    Paragraph(str(qty_or_length), styleTableCell),
                     Paragraph(f"{price:.2f}", styleTableCell),
                     Paragraph(f"{discount:.2f}", styleTableCell),
                     Paragraph(f"{total_with_discount:.2f}", styleTableCell)
