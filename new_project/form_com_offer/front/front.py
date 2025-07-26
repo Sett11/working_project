@@ -488,7 +488,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                 image_path = get_component_image_path(comp.get('image_path'))
                                 gr.Image(value=image_path, label="Фото", height=80, width=80, interactive=False)
                             with gr.Column(scale=5):
-                                is_measurable = "труба" in comp["name"].lower() or "кабель" in comp["name"].lower() or "теплоизоляция" in comp["name"].lower() or "шланг" in comp["name"].lower() or "провод" in comp["name"].lower()
+                                is_measurable = "труба" in comp["name"].lower() or "кабель" in comp["name"].lower() or "теплоизоляция" in comp["name"].lower() or "шланг" in comp["name"].lower() or "провод" in comp["name"].lower() or comp["category"] == "Кабель-каналы"
                                 label_text = f"{comp['name']}"
                                 checkbox = gr.Checkbox(label=label_text)
                             with gr.Column(scale=2):

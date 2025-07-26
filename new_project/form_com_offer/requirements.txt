@@ -28,5 +28,3 @@ greenlet
 nest_asyncio
 filelock
 colorama
-# PyYAML — оставить, если gradio/fastapi требуют (иначе можно удалить)
-# Если потребуется websockets, openpyxl, pandas, numpy, tqdm и др. — добавить по необходимости

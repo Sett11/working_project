@@ -7,6 +7,14 @@
 """
 from front.front import interface, logger
 import nest_asyncio
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+login = os.getenv("GRADIO_LOGIN")
+password = os.getenv("GRADIO_PASSWORD")
+
 nest_asyncio.apply()
 
 # Основная точка входа в приложение.
@@ -20,6 +28,7 @@ if __name__ == "__main__":
     # server_name="0.0.0.0" делает приложение доступным для других устройств в той же сети.
     # server_port=7860 указывает порт, на котором будет работать приложение.
     try:
+        # interface.launch(server_name="0.0.0.0", server_port=7860, auth=(login, password), auth_message="Введите логин и пароль для доступа к приложению")
         interface.launch(server_name="0.0.0.0", server_port=7860)
         logger.info("Gradio интерфейс успешно запущен.")
     except Exception as e:
