@@ -28,8 +28,8 @@ if __name__ == "__main__":
     # server_name="0.0.0.0" делает приложение доступным для других устройств в той же сети.
     # server_port=7860 указывает порт, на котором будет работать приложение.
     try:
-        # interface.launch(server_name="0.0.0.0", server_port=7860, auth=(login, password), auth_message="Введите логин и пароль для доступа к приложению")
-        interface.launch(server_name="0.0.0.0", server_port=7860)
+        interface.launch(server_name="0.0.0.0", server_port=7860, auth=(login, password), auth_message="Введите логин и пароль для доступа к приложению")
+        # interface.launch(server_name="0.0.0.0", server_port=7860)
         logger.info("Gradio интерфейс успешно запущен.")
     except Exception as e:
         logger.error(f"Произошла ошибка при запуске Gradio интерфейса: {e}", exc_info=True)
