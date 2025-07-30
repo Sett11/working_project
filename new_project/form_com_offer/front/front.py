@@ -498,7 +498,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                     qty_input = gr.Number(label="Кол-во (шт)", minimum=0, step=1)
                             with gr.Column(scale=2):
                                 if is_measurable:
-                                    length_input = gr.Number(label="Длина (м)", minimum=0, step=0.1)
+                                    length_input = gr.Number(label="Длина (м)", minimum=0, step=0.1 if comp["category"] != "Теплоизоляция" else 2)
                                 else:
                                     length_input = gr.Number(visible=False)
                             components_ui_inputs.extend([checkbox, qty_input, length_input])
