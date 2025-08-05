@@ -63,13 +63,9 @@ class AirConditioner(Base):
     brand = Column(String, index=True, nullable=True)  # Бренд
     series = Column(String, nullable=True)  # Серия
     cooling_power_kw = Column(Float, nullable=True)  # Мощность охлаждения (кВт)
-    heating_power_kw = Column(Float, nullable=True)  # Мощность обогрева (кВт)
-    pipe_diameter = Column(String, nullable=True)  # Диаметр труб
     energy_efficiency_class = Column(String, nullable=True)  # Класс энергоэффективности
     retail_price_byn = Column(Float, nullable=True)  # Розничная цена (BYN)
     description = Column(Text, nullable=True)  # Описание
-    air_description = Column(Text, nullable=True)  # Описание для подбора
-    representative_image = Column(String, nullable=True)  # Путь к изображению
     is_inverter = Column(Boolean, default=False)  # Признак инверторного компрессора
     has_wifi = Column(Boolean, default=False)  # Признак наличия Wi-Fi
     mount_type = Column(String, nullable=True)  # Тип монтажа

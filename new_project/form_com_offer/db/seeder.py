@@ -13,7 +13,7 @@ from sqlalchemy import select, func, delete
 
 logger = Logger(name=__name__, log_file="db.log")
 
-AIRS_CATALOG_PATH = 'docs/airs_catalog.json'
+AIRS_CATALOG_PATH = 'docs/airs.json'
 COMPONENTS_CATALOG_PATH = 'docs/components_catalog.json'
 
 
@@ -57,7 +57,7 @@ async def seed_data():
                     # --- ПРОВЕРКА ОБЯЗАТЕЛЬНЫХ ПОЛЕЙ ---
                     record_id = air_con_data.get("id", "Unknown")
                     model_name = air_con_data.get("model_name")
-                    if not model_name:
+                    if not model_name or model_name.strip() == "moke":
                         logger.warning(f"Пропуск записи с ID {record_id}: отсутствует model_name")
                         skipped_count += 1
                         continue
@@ -72,40 +72,41 @@ async def seed_data():
                         skipped_count += 1
                         continue
                     
-                    # --- НОВАЯ ЛОГИКА ИЗВЛЕЧЕНИЯ ДАННЫХ ---
+                    # --- НОВАЯ ЛОГИКА ИЗВЛЕЧЕНИЯ ДАННЫХ ИЗ ПЛОСКОЙ СТРУКТУРЫ ---
                     
-                    specs = air_con_data.get("specifications", {})
-                    pricing = air_con_data.get("pricing", {})
-                    features = [f.lower() for f in specs.get("features", [])] # Приводим все фичи к нижнему регистру для удобства
+                    # Определяем наличие инвертора и Wi-Fi по полям is_inverter и has_wifi
+                    # Обрабатываем случаи, когда поля содержат пустые строки или невалидные значения
+                    is_inverter_raw = air_con_data.get("is_inverter", False)
+                    has_wifi_raw = air_con_data.get("has_wifi", False)
+                    
+                    # Преобразуем в булево значение
+                    if isinstance(is_inverter_raw, bool):
+                        is_inverter = is_inverter_raw
+                    elif isinstance(is_inverter_raw, str) and is_inverter_raw.strip():
+                        is_inverter = is_inverter_raw.lower() in ['true', '1', 'yes', 'да']
+                    else:
+                        is_inverter = False
+                        
+                    if isinstance(has_wifi_raw, bool):
+                        has_wifi = has_wifi_raw
+                    elif isinstance(has_wifi_raw, str) and has_wifi_raw.strip():
+                        has_wifi = has_wifi_raw.lower() in ['true', '1', 'yes', 'да']
+                    else:
+                        has_wifi = False
 
-                    # Определяем наличие инвертора и Wi-Fi по списку features
-                    is_inverter = any("инвертор" in f for f in features)
-                    has_wifi = any("wi-fi" in f or "wifi" in f for f in features)
-
-                    # Определяем тип монтажа по полю type, если оно есть
-                    mount_type_map = {
-                        "Nastennyy": "настенный",
-                        "Kassetnyy": "кассетный",
-                        "Potolochnyy": "потолочный",
-                        "Napolnyy": "напольный",
-                        "Kolonnyy": "колонный"
-                    }
-                    mount_type = mount_type_map.get(air_con_data.get("type"))
+                    # Определяем тип монтажа по полю mount_type
+                    mount_type_raw = air_con_data.get("mount_type")
+                    mount_type = mount_type_raw if mount_type_raw and mount_type_raw.strip() else None
                     
-                    # Собираем класс энергоэффективности из двух полей в одну строку
-                    eer = specs.get("energy_efficiency_eer_seer", "N/A")
-                    cop = specs.get("energy_efficiency_cop_scop", "N/A")
-                    energy_class = f"Охлаждение: {eer} / Обогрев: {cop}"
+                    # Класс энергоэффективности из поля class
+                    energy_class_raw = air_con_data.get("class", "N/A")
+                    energy_class = energy_class_raw if energy_class_raw and energy_class_raw.strip() else "N/A"
                     
-                    # Собираем описание из ключевых характеристик
-                    description_parts = [f"Бренд: {air_con_data.get('brand')}, Серия: {air_con_data.get('series')}"]
-                    if features:
-                        description_parts.append("Особенности: " + ", ".join(specs.get("features")))
-                    
-                    description = ". ".join(description_parts)
+                    # Описание из поля description
+                    description = air_con_data.get("description", "")
 
                     # --- ОБРАБОТКА ЦЕНЫ ---
-                    retail_price_raw = pricing.get("retail_price_byn")
+                    retail_price_raw = air_con_data.get("retail_price_byn")
                     retail_price_byn = None
                     if retail_price_raw is not None:
                         if isinstance(retail_price_raw, (int, float)):
@@ -125,18 +126,18 @@ async def seed_data():
                         model_name=model_name,  # Используем проверенное значение
                         brand=air_con_data.get("brand"),
                         series=air_con_data.get("series"),
-                        # Пути к спецификациям
-                        cooling_power_kw=specs.get("cooling_power_kw"),
-                        heating_power_kw=specs.get("heating_power_kw"),
-                        pipe_diameter=specs.get("pipe_diameter_mm"), # Путь изменился
-                        energy_efficiency_class=energy_class, # Используем собранную строку
-                        # Пути к ценам
-                        retail_price_byn=retail_price_byn,  # Используем обработанную цену
-                        # Описание и картинка
-                        description=description, # Используем новое собранное описание
-                        air_description=None, # Старое поле больше не нужно
-                        representative_image=air_con_data.get("representative_image"), # Путь остался прежним
-                        # Новые, более надежные флаги
+                        # Прямые пути к полям в новой структуре
+                        cooling_power_kw=air_con_data.get("cooling_power_kw"),
+                        heating_power_kw=None,  # В новой структуре нет heating_power_kw
+                        pipe_diameter=None,  # В новой структуре нет pipe_diameter
+                        energy_efficiency_class=energy_class,
+                        # Цена
+                        retail_price_byn=retail_price_byn,
+                        # Описание
+                        description=description,
+                        air_description=None,  # Старое поле больше не нужно
+                        representative_image=None,  # В новой структуре нет representative_image
+                        # Новые флаги
                         is_inverter=is_inverter,
                         has_wifi=has_wifi,
                         mount_type=mount_type

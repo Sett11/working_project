@@ -38,13 +38,9 @@ class AirConditionerBase(BaseModel):
     brand: Optional[str] = None
     series: Optional[str] = None
     cooling_power_kw: Optional[float] = None
-    heating_power_kw: Optional[float] = None
-    pipe_diameter: Optional[str] = None
     energy_efficiency_class: Optional[str] = None
     retail_price_byn: Optional[float] = None
     description: Optional[str] = None
-    air_description: Optional[str] = None
-    representative_image: Optional[str] = None
     is_inverter: Optional[bool] = False
     has_wifi: Optional[bool] = False
     mount_type: Optional[str] = None

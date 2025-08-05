@@ -113,14 +113,14 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
             ac_dict = schemas.AirConditioner.from_orm(ac).dict()
             specs = []
             if ac_dict.get('cooling_power_kw'): specs.append(f"Охлаждение: {ac_dict['cooling_power_kw']} кВт")
-            if ac_dict.get('heating_power_kw'): specs.append(f"Обогрев: {ac_dict['heating_power_kw']} кВт")
             if ac_dict.get('energy_efficiency_class'): specs.append(f"Класс: {ac_dict['energy_efficiency_class']}")
             if ac_dict.get('is_inverter'): specs.append("Инверторный")
             if ac_dict.get('has_wifi'): specs.append("Wi-Fi")
             description = ac_dict.get('description', '')
-            if "Особенности: " in description:
-                features_str = description.split("Особенности: ")[-1]
-                specs.extend([f.strip() for f in features_str.split(',')])
+            # В новой структуре описание уже содержит всю информацию
+            # Добавляем описание как есть, если оно есть
+            if description:
+                specs.append(description)
             variant_items.append({
                 'name': f"{ac_dict.get('brand', '')} {ac_dict.get('model_name', '')}",
                 'manufacturer': ac_dict.get('brand', ''),

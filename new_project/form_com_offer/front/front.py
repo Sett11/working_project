@@ -452,7 +452,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     installation_price = gr.Number(label="Стоимость монтажа (BYN)", minimum=0, step=1, value=get_placeholder_order()["order_params"]["installation_price"])
             gr.Markdown("### 3. Требования к кондиционеру")
             with gr.Row():
-                brand = gr.Dropdown(["Любой", "LESSAR", "DANTEX", "AUX", "QuattroClima", "Tosot", "NiceME"], label="Бренд", value=get_placeholder_order()["aircon_params"]["brand"])
+                brand = gr.Dropdown(["Любой", "Midea", "Dantex", "Vetero"], label="Бренд", value=get_placeholder_order()["aircon_params"]["brand"])
                 price = gr.Slider(0, 10000, value=get_placeholder_order()["aircon_params"]["price_limit"], label="Верхний порог стоимости (BYN)")
                 inverter = gr.Checkbox(label="Инверторный компрессор", value=get_placeholder_order()["aircon_params"]["inverter"])
                 wifi = gr.Checkbox(label="Wi-Fi управление", value=get_placeholder_order()["aircon_params"]["wifi"])

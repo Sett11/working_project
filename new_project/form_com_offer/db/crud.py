@@ -2,7 +2,6 @@
 Модуль для выполнения CRUD-операций (Create, Read, Update, Delete) с базой данных.
 
 Здесь определены функции для взаимодействия с моделями SQLAlchemy:
-- User (пользователь)
 - Client (клиент)
 - AirConditioner (кондиционер)
 - Component (комплектующее)
@@ -16,14 +15,7 @@ from sqlalchemy import select
 from . import models, schemas
 from utils.mylogger import Logger
 import json
-# TODO: Добавить и настроить безопасное хеширование паролей.
-# from passlib.context import CryptContext
 
-# Инициализация контекста для хеширования паролей (пока отключено).
-# pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# Инициализация логгера для операций с базой данных.
-# log_file указывается без папки logs, чтобы использовать дефолтную директорию логов.
 logger = Logger(name=__name__, log_file="db.log")
 
 
