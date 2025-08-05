@@ -452,7 +452,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     installation_price = gr.Number(label="Стоимость монтажа (BYN)", minimum=0, step=1, value=get_placeholder_order()["order_params"]["installation_price"])
             gr.Markdown("### 3. Требования к кондиционеру")
             with gr.Row():
-                brand = gr.Dropdown(["Любой", "Midea", "Dantex", "Vetero"], label="Бренд", value=get_placeholder_order()["aircon_params"]["brand"])
+                brand = gr.Dropdown(["Любой", "Midea", "Dantex", "Vetero", "Electrolux", "Toshiba"], label="Бренд", value=get_placeholder_order()["aircon_params"]["brand"])
                 price = gr.Slider(0, 10000, value=get_placeholder_order()["aircon_params"]["price_limit"], label="Верхний порог стоимости (BYN)")
                 inverter = gr.Checkbox(label="Инверторный компрессор", value=get_placeholder_order()["aircon_params"]["inverter"])
                 wifi = gr.Checkbox(label="Wi-Fi управление", value=get_placeholder_order()["aircon_params"]["wifi"])
@@ -519,6 +519,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             gr.Markdown("### Генерация коммерческого предложения")
             pdf_output = gr.File(label="Скачать коммерческое предложение")
             generate_btn = gr.Button("Сформировать КП", variant="primary")
+            gr.Markdown("### Управление заказом")
+            delete_btn = gr.Button("Удалить заказ", variant="stop", size="sm")
 
         # Новая вкладка "Инструкция пользователя"
         with gr.Tab("Инструкция пользователя"):
@@ -819,3 +821,35 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             return f"Ошибка: {e}"
 
     save_comment_btn.click(fn=save_comment_handler, inputs=[order_id_hidden, comment_box], outputs=[save_comment_status])
+
+    # Обработчик для удаления заказа
+    async def delete_order_handler(order_id_hidden_value):
+        """Обработчик удаления заказа"""
+        logger.info(f"[DEBUG] delete_order_handler: order_id_hidden_value={order_id_hidden_value}")
+        try:
+            order_id = int(order_id_hidden_value)
+            if not order_id or order_id <= 0:
+                return "Ошибка: Некорректный ID заказа!", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), None, get_placeholder_order()
+        except Exception as e:
+            logger.error(f"Ошибка преобразования order_id_hidden_value: {e}")
+            return "Ошибка: Некорректный ID заказа!", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), None, get_placeholder_order()
+        
+        try:
+            result = await delete_order(order_id)
+            if result.get("success"):
+                logger.info(f"Заказ {order_id} успешно удален")
+                # Возвращаемся на корневую страницу и сбрасываем состояние
+                return "Заказ успешно удален! Перенаправление на главную страницу...", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), None, get_placeholder_order()
+            else:
+                error_msg = result.get("error", "Неизвестная ошибка при удалении заказа")
+                logger.error(f"Ошибка удаления заказа {order_id}: {error_msg}")
+                return f"Ошибка: {error_msg}", gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order_id, None
+        except Exception as e:
+            logger.error(f"Ошибка при удалении заказа: {e}", exc_info=True)
+            return f"Ошибка: {e}", gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order_id, None
+
+    delete_btn.click(
+        fn=delete_order_handler,
+        inputs=[order_id_hidden],
+        outputs=[aircons_output, start_screen, orders_list_screen, main_order_screen, order_id_hidden, order_state]
+    )
