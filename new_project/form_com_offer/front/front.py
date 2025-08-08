@@ -130,12 +130,11 @@ async def generate_kp(client_name, phone, mail, address, date, area, type_room, 
             # Добавляем только если qty > 0 или length > 0
             if comp_item["qty"] > 0 or comp_item["length"] > 0:
                 selected_components.append(comp_item)
-    illumination_map = {"Слабая": 0, "Средняя": 1, "Сильная": 2}
-    activity_map = {"Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
+    # Оставляем illumination и activity как строки, бэкенд сам преобразует
     payload = {
         "client_data": {"full_name": client_name, "phone": phone, "email": mail, "address": address},
         "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": date, "installation_price": installation_price},
-        "aircon_params": {"wifi": wifi, "inverter": inverter, "price_limit": price, "brand": brand, "mount_type": mount_type, "area": area, "ceiling_height": ceiling_height, "illumination": illumination_map.get(illumination, 1), "num_people": num_people, "activity": activity_map.get(activity, 0), "num_computers": num_computers, "num_tvs": num_tvs, "other_power": other_power},
+        "aircon_params": {"wifi": wifi, "inverter": inverter, "price_limit": price, "brand": brand, "mount_type": mount_type, "area": area, "ceiling_height": ceiling_height, "illumination": illumination, "num_people": num_people, "activity": activity, "num_computers": num_computers, "num_tvs": num_tvs, "other_power": other_power},
         "components": selected_components
     }
     try:
@@ -163,9 +162,8 @@ async def generate_kp(client_name, phone, mail, address, date, area, type_room, 
 async def select_aircons(name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type,
                    ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand):
     logger.info(f"Подбор кондиционеров для клиента: {name}")
-    illumination_map = {"Слабая": 0, "Средняя": 1, "Сильная": 2}
-    activity_map = {"Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
-    payload = {"client_data": {"full_name": name, "phone": phone, "email": mail, "address": address}, "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": date}, "aircon_params": {"wifi": wifi, "inverter": inverter, "price_limit": price, "brand": brand, "mount_type": mount_type, "area": area, "ceiling_height": ceiling_height, "illumination": illumination_map.get(illumination, 1), "num_people": num_people, "activity": activity_map.get(activity, 0), "num_computers": num_computers, "num_tvs": num_tvs, "other_power": other_power}}
+    # Оставляем illumination и activity как строки, бэкенд сам преобразует
+    payload = {"client_data": {"full_name": name, "phone": phone, "email": mail, "address": address}, "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": date}, "aircon_params": {"wifi": wifi, "inverter": inverter, "price_limit": price, "brand": brand, "mount_type": mount_type, "area": area, "ceiling_height": ceiling_height, "illumination": illumination, "num_people": num_people, "activity": activity, "num_computers": num_computers, "num_tvs": num_tvs, "other_power": other_power}}
     try:
         logger.info(f"Отправка запроса на эндпоинт /api/select_aircons/ на бэкенде.")
         async with httpx.AsyncClient() as client:
@@ -284,7 +282,7 @@ def fill_fields_from_order(order):
         order_params.get("discount", 0),
         aircon_params.get("wifi", False),
         aircon_params.get("inverter", False),
-        aircon_params.get("price_limit", 3000),
+        aircon_params.get("price_limit", 10000),
         aircon_params.get("mount_type", "Любой"),
         aircon_params.get("ceiling_height", 2.7),
         aircon_params.get("illumination", "Средняя"),
@@ -324,7 +322,7 @@ def fill_fields_from_order_diff(order, placeholder):
         (order_params.get("discount", 0), ph_order_params.get("discount", 0)),
         (aircon_params.get("wifi", False), ph_aircon_params.get("wifi", False)),
         (aircon_params.get("inverter", False), ph_aircon_params.get("inverter", False)),
-        (aircon_params.get("price_limit", 3000), ph_aircon_params.get("price_limit", 3000)),
+        (aircon_params.get("price_limit", 10000), ph_aircon_params.get("price_limit", 10000)),
         (aircon_params.get("mount_type", "Любой"), ph_aircon_params.get("mount_type", "Любой")),
         (aircon_params.get("ceiling_height", 2.7), ph_aircon_params.get("ceiling_height", 2.7)),
         (aircon_params.get("illumination", "Средняя"), ph_aircon_params.get("illumination", "Средняя")),
@@ -447,13 +445,13 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 with gr.Column():
                     gr.Markdown("### 2. Параметры заказа")
                     type_room = gr.Dropdown(["квартира", "дом", "офис", "производство"], label="Тип помещения", value=get_placeholder_order()["order_params"]["room_type"])
-                    area = gr.Slider(10, 200, label="Площадь помещения (м²)", value=get_placeholder_order()["order_params"]["room_area"])
+                    area = gr.Slider(10, 160, label="Площадь помещения (м²)", value=get_placeholder_order()["order_params"]["room_area"])
                     discount = gr.Slider(0, 50, label="Индивидуальная скидка (%)", value=get_placeholder_order()["order_params"]["discount"])
                     installation_price = gr.Number(label="Стоимость монтажа (BYN)", minimum=0, step=1, value=get_placeholder_order()["order_params"]["installation_price"])
             gr.Markdown("### 3. Требования к кондиционеру")
             with gr.Row():
                 brand = gr.Dropdown(["Любой", "Midea", "Dantex", "Vetero", "Electrolux", "Toshiba", "Hisense", "Mitsubishi", "Samsung", "TCL"], label="Бренд", value=get_placeholder_order()["aircon_params"]["brand"])
-                price = gr.Slider(0, 20000, value=get_placeholder_order()["aircon_params"]["price_limit"], label="Верхний порог стоимости (BYN)")
+                price = gr.Slider(0, 22000, value=get_placeholder_order()["aircon_params"]["price_limit"], label="Верхний порог стоимости (BYN)")
                 inverter = gr.Checkbox(label="Инверторный компрессор", value=get_placeholder_order()["aircon_params"]["inverter"])
                 wifi = gr.Checkbox(label="Wi-Fi управление", value=get_placeholder_order()["aircon_params"]["wifi"])
             with gr.Row():
@@ -703,6 +701,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     ):
         # Сохраняем только данные для КП (без комплектующих)
         order_id = order_id_hidden_value
+        # Оставляем illumination и activity как строки, бэкенд сам преобразует
         payload = {
             "client_data": {"full_name": client_name, "phone": phone, "email": mail, "address": address},
             "order_params": {"room_area": area, "room_type": type_room, "discount": discount, "visit_date": fix_date(date), "installation_price": installation_price},

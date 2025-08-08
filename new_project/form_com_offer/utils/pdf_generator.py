@@ -63,8 +63,8 @@ def generate_commercial_offer_pdf(
         styleH = ParagraphStyle('Heading1', parent=styles['Heading1'], fontName='Arial-Bold', fontSize=16, alignment=1)
         styleN = ParagraphStyle('Normal', parent=styles['Normal'], fontName='Arial', fontSize=11)
         styleBold = ParagraphStyle('Bold', parent=styleN, fontName='Arial-Bold')
-        styleTableHeader = ParagraphStyle('TableHeader', parent=styles['Normal'], alignment=1, fontSize=9, fontName='Arial-Bold')
-        styleTableCell = ParagraphStyle('TableCell', parent=styles['Normal'], fontSize=9, fontName='Arial')
+        styleTableHeader = ParagraphStyle('TableHeader', parent=styles['Normal'], alignment=1, fontSize=8, fontName='Arial-Bold')
+        styleTableCell = ParagraphStyle('TableCell', parent=styles['Normal'], fontSize=7, fontName='Arial')
         styleSmall = ParagraphStyle('Small', parent=styles['Normal'], fontSize=8, fontName='Arial')
         styleVariantTitle = ParagraphStyle('VariantTitle', parent=styles['Heading2'], fontName='Arial-Bold', fontSize=12, spaceAfter=6)
         styleVariantDesc = ParagraphStyle('VariantDesc', parent=styles['Normal'], fontName='Arial', fontSize=10, spaceAfter=12)
@@ -157,8 +157,16 @@ def generate_commercial_offer_pdf(
                     if ac.get('short_description'):
                         specs_text += f"\n{ac['short_description']}"
                     
+                    # Ограничиваем длину названия и характеристик
+                    name_text = ac.get('name', '')
+                    if len(name_text) > 50:
+                        name_text = name_text[:47] + "..."
+                    
+                    if len(specs_text) > 200:
+                        specs_text = specs_text[:197] + "..."
+                    
                     ac_table_data.append([
-                        Paragraph(ac.get('name', ''), styleTableCell),
+                        Paragraph(name_text, styleTableCell),
                         Paragraph(specs_text, styleTableCell),
                         Paragraph(ac.get('unit', 'шт.'), styleTableCell),
                         Paragraph(str(qty), styleTableCell),
@@ -178,7 +186,8 @@ def generate_commercial_offer_pdf(
                     ('ALIGN', (4,1), (6,-1), 'RIGHT'),
                     ('ALIGN', (3,0), (3,-1), 'CENTER'),
                     ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('WRAP', (1,1), (1,-1), True),  # Перенос текста в колонке характеристик
+                    ('WRAP', (0,1), (1,-1), True),  # Перенос текста в колонках названия и характеристик
+                    ('FONTSIZE', (0,1), (-1,-1), 8),  # Уменьшаем размер шрифта для данных
                 ]))
                 story.append(ac_table)
                 story.append(Spacer(1, 15))
@@ -302,7 +311,78 @@ def generate_commercial_offer_pdf(
             return file_path
         except Exception as e:
             logger.error(f"Ошибка при генерации PDF: {e}", exc_info=True)
-            raise
+            # Попробуем упростить таблицу кондиционеров, убрав некоторые колонки
+            logger.info("Попытка упростить таблицу кондиционеров...")
+            try:
+                # Создаем упрощенную версию без колонки характеристик
+                story_simple = []
+                story_simple.extend(story[:len(story)-2])  # Берем все до таблицы кондиционеров
+                
+                # Упрощенная таблица кондиционеров
+                for variant in aircon_variants:
+                    if variant.get('title'):
+                        story_simple.append(Paragraph(variant['title'], styleVariantTitle))
+                    
+                    if variant.get('items'):
+                        simple_table_data = [[
+                            Paragraph("Наименование товара", styleTableHeader),
+                            Paragraph("Ед. изм.", styleTableHeader),
+                            Paragraph("Кол-во", styleTableHeader),
+                            Paragraph("Цена за ед., BYN", styleTableHeader),
+                            Paragraph("Скидка, %", styleTableHeader),
+                            Paragraph("Сумма с учетом скидки, BYN", styleTableHeader)
+                        ]]
+                        
+                        for ac in variant['items']:
+                            price = float(ac.get('price', 0))
+                            qty = int(ac.get('qty', 1))
+                            discount = float(ac.get('discount_percent', 0))
+                            total_with_discount = price * qty * (1 - discount / 100)
+                            
+                            name_text = ac.get('name', '')
+                            if len(name_text) > 60:
+                                name_text = name_text[:57] + "..."
+                            
+                            simple_table_data.append([
+                                Paragraph(name_text, styleTableCell),
+                                Paragraph(ac.get('unit', 'шт.'), styleTableCell),
+                                Paragraph(str(qty), styleTableCell),
+                                Paragraph(f"{price:.2f}", styleTableCell),
+                                Paragraph(f"{discount:.2f}", styleTableCell),
+                                Paragraph(f"{total_with_discount:.2f}", styleTableCell)
+                            ])
+                        
+                        simple_table = Table(simple_table_data, colWidths=[80*mm, 20*mm, 15*mm, 25*mm, 15*mm, 25*mm])
+                        simple_table.setStyle(TableStyle([
+                            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+                            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+                            ('ALIGN', (3,1), (5,-1), 'RIGHT'),
+                            ('ALIGN', (2,0), (2,-1), 'CENTER'),
+                            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                            ('WRAP', (0,1), (0,-1), True),
+                            ('FONTSIZE', (0,1), (-1,-1), 7),
+                        ]))
+                        story_simple.append(simple_table)
+                        story_simple.append(Spacer(1, 15))
+                
+                # Добавляем остальные части
+                story_simple.extend(story[len(story)-2:])
+                
+                # Создаем новый документ
+                doc_simple = SimpleDocTemplate(
+                    file_path,
+                    pagesize=A4,
+                    rightMargin=15*mm,
+                    leftMargin=15*mm,
+                    topMargin=10*mm,
+                    bottomMargin=15*mm
+                )
+                doc_simple.build(story_simple)
+                logger.info(f"PDF-файл '{file_path}' успешно сгенерирован с упрощенной таблицей.")
+                return file_path
+            except Exception as e2:
+                logger.error(f"Ошибка при генерации упрощенного PDF: {e2}", exc_info=True)
+                raise e
     except Exception as e:
         logger.error(f"Ошибка при генерации PDF: {e}", exc_info=True)
         raise

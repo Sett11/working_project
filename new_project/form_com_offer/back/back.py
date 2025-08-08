@@ -57,9 +57,21 @@ async def select_aircons_endpoint(payload: dict, db: AsyncSession = Depends(get_
                 return {"error": f"Заказ с id={order_id} не найден!"}
             order_data = json.loads(order.order_data)
             aircon_params = order_data.get("aircon_params", {})
+            client_full_name = order_data.get("client_data", {}).get('full_name', 'N/A')
         else:
             aircon_params = payload.get("aircon_params", {})
-        client_full_name = payload.get("client_data", {}).get('full_name', 'N/A')
+            client_full_name = payload.get("client_data", {}).get('full_name', 'N/A')
+        
+        # Преобразуем illumination из строки в число, если нужно
+        if isinstance(aircon_params.get('illumination'), str):
+            illumination_map = {"Слабая": 0, "Средняя": 1, "Сильная": 2}
+            aircon_params['illumination'] = illumination_map.get(aircon_params['illumination'], 1)
+        
+        # Преобразуем activity из строки в число, если нужно
+        if isinstance(aircon_params.get('activity'), str):
+            activity_map = {"Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
+            aircon_params['activity'] = activity_map.get(aircon_params['activity'], 0)
+        
         logger.info(f"Начат подбор кондиционеров для клиента: {client_full_name}")
         selected_aircons = await select_aircons(db, aircon_params)
         logger.info(f"Подобрано {len(selected_aircons)} кондиционеров.")
@@ -90,13 +102,14 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
             order_params = order_data.get("order_params", {})
             aircon_params = order_data.get("aircon_params", {})
             components = order_data.get("components", [])
+            client_full_name = client_data.get('full_name', 'N/A')
         else:
             client_data = payload.get("client_data", {})
             order_params = payload.get("order_params", {})
             aircon_params = payload.get("aircon_params", {})
             components = payload.get("components", [])
+            client_full_name = client_data.get('full_name', 'N/A')
         discount = order_params.get("discount", 0)
-        client_full_name = client_data.get('full_name', 'N/A')
         # 1. Создание или поиск клиента
         client_phone = client_data.get("phone")
         if not client_phone:
@@ -105,6 +118,16 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
         if not client:
             client = await crud.create_client(db, schemas.ClientCreate(**client_data))
         # 2. Подбор кондиционеров
+        # Преобразуем illumination из строки в число, если нужно
+        if isinstance(aircon_params.get('illumination'), str):
+            illumination_map = {"Слабая": 0, "Средняя": 1, "Сильная": 2}
+            aircon_params['illumination'] = illumination_map.get(aircon_params['illumination'], 1)
+        
+        # Преобразуем activity из строки в число, если нужно
+        if isinstance(aircon_params.get('activity'), str):
+            activity_map = {"Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
+            aircon_params['activity'] = activity_map.get(aircon_params['activity'], 0)
+        
         selected_aircons = await select_aircons(db, aircon_params)
         # --- Формируем варианты для PDF ---
         aircon_variants = []
