@@ -1,3 +1,4 @@
+# utils/pdf_generator.py
 """
 Модуль генерации PDF-файлов коммерческих предложений.
 Использует библиотеку reportlab для создания PDF-документов.
@@ -5,36 +6,70 @@
 import datetime
 import os
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import mm
-from utils.mylogger import Logger
-from reportlab.pdfbase.ttfonts import TTFont
+# Импортируем registerFontFamily
 from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 import re
 import asyncio
 
+# Импортируем logger, предполагая, что он определен в utils.mylogger
+# Если структура другая, нужно скорректировать импорт.
+# Например, если файл mylogger.py находится в той же папке, что и pdf_generator.py:
+# from .mylogger import Logger
+# Для текущей структуры предположим, что mylogger.py в папке utils
+from utils.mylogger import Logger
+
 logger = Logger("pdf_generator", "pdf_generator.log")
 
-# Регистрация шрифтов
-FONT_PATH = os.path.join(os.path.dirname(__file__), 'fonts', 'arial.ttf')
-FONT_BOLD_PATH = os.path.join(os.path.dirname(__file__), 'fonts', 'arialbd.ttf')
+# --- Регистрация шрифтов ---
+# Определяем пути к файлам шрифтов
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FONT_DIR = os.path.join(BASE_DIR, 'fonts')
+FONT_PATH = os.path.join(FONT_DIR, 'arial.ttf')
+FONT_BOLD_PATH = os.path.join(FONT_DIR, 'arialbd.ttf')
 
-if not os.path.exists(FONT_PATH):
-    logger.error(f"Файл шрифта {FONT_PATH} не найден! Скопируйте arial.ttf из C:/Windows/Fonts.")
-else:
-    pdfmetrics.registerFont(TTFont('Arial', FONT_PATH))
+# Инициализируем флаг успешной регистрации
+FONTS_REGISTERED = False
 
-if not os.path.exists(FONT_BOLD_PATH):
-    logger.error(f"Файл жирного шрифта {FONT_BOLD_PATH} не найден! Скопируйте arialbd.ttf из C:/Windows/Fonts.")
+try:
+    # Проверяем существование файлов шрифтов
+    if not os.path.exists(FONT_PATH):
+        logger.error(f"Файл шрифта {FONT_PATH} не найден! Скопируйте arial.ttf из C:/Windows/Fonts.")
+    elif not os.path.exists(FONT_BOLD_PATH):
+        logger.error(f"Файл жирного шрифта {FONT_BOLD_PATH} не найден! Скопируйте arialbd.ttf из C:/Windows/Fonts.")
+    else:
+        # Регистрируем шрифты
+        pdfmetrics.registerFont(TTFont('Arial', FONT_PATH))
+        pdfmetrics.registerFont(TTFont('Arial-Bold', FONT_BOLD_PATH))
+        
+        # Регистрируем семейство шрифтов - КЛЮЧЕВОЙ МОМЕНТ
+        pdfmetrics.registerFontFamily('Arial', normal='Arial', bold='Arial-Bold')
+        
+        FONTS_REGISTERED = True
+        logger.info("Шрифты Arial успешно зарегистрированы.")
+        
+except Exception as e:
+    logger.error(f"Ошибка при регистрации шрифтов: {e}")
+
+# Определяем имена шрифтов для использования в стилях
+if FONTS_REGISTERED:
+    FONT_NAME_NORMAL = 'Arial'
+    FONT_NAME_BOLD = 'Arial' # Используем семейство + bold=True
 else:
-    pdfmetrics.registerFont(TTFont('Arial-Bold', FONT_BOLD_PATH))
+    # Fallback на встроенные шрифты, если Arial не зарегистрирован
+    logger.warning("Используются встроенные шрифты Helvetica как fallback.")
+    FONT_NAME_NORMAL = 'Helvetica'
+    FONT_NAME_BOLD = 'Helvetica-Bold'
+# --- Конец регистрации шрифтов ---
 
 def generate_commercial_offer_pdf(
     client_data: dict,
     order_params: dict,
-    aircon_variants: list,  # Изменено на варианты кондиционеров
+    aircon_variants: list,
     components: list,
     discount_percent: float,
     offer_number: str = None,
@@ -42,10 +77,14 @@ def generate_commercial_offer_pdf(
 ) -> str:
     """
     Генерирует PDF-файл коммерческого предложения по заданным данным.
-    Все значения, которые могут быть None, приводятся к строке для Paragraph/split.
+    Все значения, которые могут быть None, приводятся к строке для Paragraph.
     Логирует входные данные и ошибки.
     """
-    logger.info(f"Генерация PDF КП. client_data={client_data}, order_params={order_params}, aircon_variants={aircon_variants}, components={components}, discount_percent={discount_percent}, offer_number={offer_number}")
+    logger.info(f"Генерация PDF КП. client_data={client_data}, order_params={order_params}, "
+                f"aircon_variants={len(aircon_variants) if aircon_variants else 0}, "
+                f"components={len(components) if components else 0}, discount_percent={discount_percent}, "
+                f"offer_number={offer_number}")
+
     try:
         # Создаем директорию для сохранения
         abs_save_dir = os.path.abspath(save_dir)
@@ -58,16 +97,89 @@ def generate_commercial_offer_pdf(
         file_name = f"КП_{offer_number}.pdf"
         file_path = os.path.join(abs_save_dir, file_name)
 
-        # Стили документа
+        # --- Стили документа ---
         styles = getSampleStyleSheet()
-        styleH = ParagraphStyle('Heading1', parent=styles['Heading1'], fontName='Arial-Bold', fontSize=16, alignment=1)
-        styleN = ParagraphStyle('Normal', parent=styles['Normal'], fontName='Arial', fontSize=11)
-        styleBold = ParagraphStyle('Bold', parent=styleN, fontName='Arial-Bold')
-        styleTableHeader = ParagraphStyle('TableHeader', parent=styles['Normal'], alignment=1, fontSize=8, fontName='Arial-Bold')
-        styleTableCell = ParagraphStyle('TableCell', parent=styles['Normal'], fontSize=7, fontName='Arial')
-        styleSmall = ParagraphStyle('Small', parent=styles['Normal'], fontSize=8, fontName='Arial')
-        styleVariantTitle = ParagraphStyle('VariantTitle', parent=styles['Heading2'], fontName='Arial-Bold', fontSize=12, spaceAfter=6)
-        styleVariantDesc = ParagraphStyle('VariantDesc', parent=styles['Normal'], fontName='Arial', fontSize=10, spaceAfter=12)
+        
+        # Создаем стили с учетом зарегистрированных шрифтов
+        styleH = ParagraphStyle(
+            'CustomHeading1',
+            parent=styles['Heading1'],
+            fontName=FONT_NAME_NORMAL, # Используем базовое имя
+            fontSize=16,
+            alignment=1, # Center
+            spaceAfter=12,
+            # ВАЖНО: Используем bold=True, если шрифты зарегистрированы правильно
+            bold=True if FONTS_REGISTERED else None # Для Helvetica-Bold это не нужно
+        )
+        
+        styleN = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontName=FONT_NAME_NORMAL,
+            fontSize=11,
+            spaceAfter=6
+        )
+        
+        styleBold = ParagraphStyle(
+            'CustomBold',
+            parent=styleN,
+            fontName=FONT_NAME_NORMAL, # Используем базовое имя
+            bold=True if FONTS_REGISTERED else None # Активируем bold через флаг
+        )
+        
+        styleTableHeader = ParagraphStyle(
+            'CustomTableHeader',
+            parent=styles['Normal'],
+            fontName=FONT_NAME_NORMAL,
+            fontSize=8,
+            alignment=1, # Center
+            spaceAfter=3,
+            bold=True if FONTS_REGISTERED else None
+        )
+        
+        styleTableCell = ParagraphStyle(
+            'CustomTableCell',
+            parent=styles['Normal'],
+            fontName=FONT_NAME_NORMAL,
+            fontSize=7,
+            spaceAfter=3
+        )
+        
+        styleSmall = ParagraphStyle(
+            'CustomSmall',
+            parent=styles['Normal'],
+            fontName=FONT_NAME_NORMAL,
+            fontSize=8,
+            spaceAfter=3
+        )
+        
+        styleVariantTitle = ParagraphStyle(
+            'CustomVariantTitle',
+            parent=styles['Heading2'],
+            fontName=FONT_NAME_NORMAL,
+            fontSize=12,
+            spaceAfter=6,
+            bold=True if FONTS_REGISTERED else None
+        )
+        
+        styleVariantDesc = ParagraphStyle(
+            'CustomVariantDesc',
+            parent=styles['Normal'],
+            fontName=FONT_NAME_NORMAL,
+            fontSize=10,
+            spaceAfter=6
+        )
+        
+        styleTotalNote = ParagraphStyle(
+            'CustomTotalNote',
+            parent=styles['Normal'],
+            fontName=FONT_NAME_NORMAL,
+            fontSize=9,
+            spaceAfter=0,
+            spaceBefore=0,
+            bold=True if FONTS_REGISTERED else None
+        )
+        # --- Конец стилей ---
 
         doc = SimpleDocTemplate(
             file_path,
@@ -81,14 +193,14 @@ def generate_commercial_offer_pdf(
 
         # --- Шапка документа ---
         story.append(Paragraph("ООО «Эвериз Сервис»", styleBold))
-        story.append(Paragraph("г. Минск, ул. Орловская, 40, пом. 25б, 220030", styleN))  # Исправлен адрес
+        story.append(Paragraph("г. Минск, ул. Орловская, 40, пом. 25б, 220030", styleN))
         story.append(Paragraph("УНП 192812488", styleN))
         story.append(Paragraph("BY29 MTBK 3012 0001 0933 0013 0402", styleN))
         story.append(Paragraph("в ЗАО «МТБанк», БИК MTBKBY22", styleN))
         story.append(Spacer(1, 10))
         
         # Обновленный заголовок с номером КП
-        story.append(Paragraph(f"<b>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ № {offer_number} от {today}г.</b>", styleH))
+        story.append(Paragraph(f"КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ № {offer_number} от {today}г.", styleH))
         story.append(Spacer(1, 12))
         
         # --- Информация о клиенте и исполнителе ---
@@ -103,32 +215,38 @@ def generate_commercial_offer_pdf(
         client_info_rows = []
         for label, value in client_info_data:
             client_info_rows.append([
-                Paragraph(f"<b>{label}</b>", styleN), 
+                Paragraph(f"{label}", styleBold), # Используем styleBold для меток
                 Paragraph(str(value or ''), styleN)
             ])
 
         if client_data.get('email'):
             client_info_rows.insert(3, [
-                Paragraph("<b>Email:</b>", styleN), 
+                Paragraph("Email:", styleBold),
                 Paragraph(str(client_data.get('email')), styleN)
             ])
 
         # Создаем таблицу
         client_table = Table(client_info_rows, colWidths=[40*mm, 140*mm])
+        client_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), FONT_NAME_NORMAL),
+            ('FONTSIZE', (0, 0), (-1, -1), 11),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ]))
         story.append(client_table)
         story.append(Spacer(1, 15))
 
         # --- Варианты кондиционеров ---
-        for variant in aircon_variants:
+        for variant_idx, variant in enumerate(aircon_variants):
             # Заголовок варианта
             if variant.get('title'):
                 story.append(Paragraph(variant['title'], styleVariantTitle))
             
-            # Описание варианта с графическими значками
-            if variant.get('description'):
-                # Заменяем маркеры на графические символы
-                desc = variant['description'].replace('●', '•').replace('–', '•')
-                story.append(Paragraph(desc, styleVariantDesc))
+            # Описание варианта (если нужно)
+            # if variant.get('description'):
+            #     desc = variant['description'].replace('●', '•').replace('–', '•')
+            #     story.append(Paragraph(desc, styleVariantDesc))
             
             # Таблица кондиционеров для варианта
             if variant.get('items'):
@@ -150,20 +268,19 @@ def generate_commercial_offer_pdf(
                     discount = float(ac.get('discount_percent', 0))
                     total_with_discount = price * qty * (1 - discount / 100)
                     
-                    # Формируем характеристики и описание
-                    specs_text = ""
-                    if ac.get('specifications'):
-                        specs_text = ", ".join([str(s) for s in ac['specifications']])
-                    if ac.get('short_description'):
-                        specs_text += f"\n{ac['short_description']}"
+                    # Формируем характеристики
+                    specs_list = ac.get('specifications', [])
+                    # Объединяем список в строку, заменяя переносы строк на пробелы или точки
+                    specs_text = ". ".join([str(s).replace('\n', ' ') for s in specs_list if s])
                     
-                    # Ограничиваем длину названия и характеристик
+                    # Ограничиваем длину для предотвращения переполнения ячейки
+                    if len(specs_text) > 300:
+                        specs_text = specs_text[:297] + "..."
+
+                    # Ограничиваем длину названия
                     name_text = ac.get('name', '')
-                    if len(name_text) > 50:
-                        name_text = name_text[:47] + "..."
-                    
-                    if len(specs_text) > 200:
-                        specs_text = specs_text[:197] + "..."
+                    if len(name_text) > 60:
+                        name_text = name_text[:57] + "..."
                     
                     ac_table_data.append([
                         Paragraph(name_text, styleTableCell),
@@ -178,16 +295,21 @@ def generate_commercial_offer_pdf(
                 
                 ac_table = Table(
                     ac_table_data, 
-                    colWidths=[45*mm, 50*mm, 15*mm, 15*mm, 20*mm, 15*mm, 25*mm, 20*mm]
+                    colWidths=[45*mm, 50*mm, 15*mm, 15*mm, 20*mm, 15*mm, 25*mm, 20*mm],
+                    repeatRows=1 # Повторять заголовок на новых страницах
                 )
                 ac_table.setStyle(TableStyle([
                     ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+                    ('FONTNAME', (0,0), (-1,0), FONT_NAME_NORMAL),
+                    ('FONTNAME', (0,1), (-1,-1), FONT_NAME_NORMAL),
+                    ('FONTSIZE', (0,0), (-1,-1), 7),
                     ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-                    ('ALIGN', (4,1), (6,-1), 'RIGHT'),
-                    ('ALIGN', (3,0), (3,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('WRAP', (0,1), (1,-1), True),  # Перенос текста в колонках названия и характеристик
-                    ('FONTSIZE', (0,1), (-1,-1), 8),  # Уменьшаем размер шрифта для данных
+                    ('ALIGN', (0,0), (-1,-1), 'LEFT'), # По умолчанию выравнивание влево
+                    ('ALIGN', (3,1), (3,-1), 'CENTER'), # Кол-во - по центру
+                    ('ALIGN', (4,1), (6,-1), 'RIGHT'), # Цена, Скидка, Сумма - вправо
+                    ('ALIGN', (0,0), (-1,0), 'CENTER'), # Заголовки - по центру
+                    ('VALIGN', (0,0), (-1,-1), 'TOP'), # Вертикальное выравнивание вверх
+                    ('WORDWRAP', (0,1), (-1,-1)), # Перенос слов во всех ячейках данных
                 ]))
                 story.append(ac_table)
                 story.append(Spacer(1, 15))
@@ -195,7 +317,7 @@ def generate_commercial_offer_pdf(
         # --- Таблица комплектующих ---
         total_components = 0
         if components:
-            story.append(Paragraph("<b>Комплектующие и материалы:</b>", styleBold))
+            story.append(Paragraph("Комплектующие и материалы:", styleBold))
             story.append(Spacer(1, 8))
             comp_table_data = [[
                 Paragraph("Наименование", styleTableHeader),
@@ -235,31 +357,45 @@ def generate_commercial_offer_pdf(
             
             comp_table = Table(
                 comp_table_data, 
-                colWidths=[60*mm, 20*mm, 15*mm, 25*mm, 15*mm, 25*mm]
+                colWidths=[60*mm, 20*mm, 15*mm, 25*mm, 15*mm, 25*mm],
+                repeatRows=1
             )
             comp_table.setStyle(TableStyle([
                 ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+                ('FONTNAME', (0,0), (-1,0), FONT_NAME_NORMAL),
+                ('FONTNAME', (0,1), (-1,-1), FONT_NAME_NORMAL),
+                ('FONTSIZE', (0,0), (-1,-1), 7),
                 ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-                ('ALIGN', (3,1), (5,-1), 'RIGHT'),
-                ('ALIGN', (2,0), (2,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('SPAN', (0,-1), (4,-1)),
+                ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                ('ALIGN', (2,1), (2,-1), 'CENTER'), # Кол-во - по центру
+                ('ALIGN', (3,1), (5,-1), 'RIGHT'), # Цена, Скидка, Сумма - вправо
+                ('ALIGN', (0,0), (-1,0), 'CENTER'), # Заголовки - по центру
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                ('SPAN', (0,-1), (4,-1)), # Объединяем ячейки для "Итого"
                 ('BACKGROUND', (0,-1), (-1,-1), colors.white),
-                ('FONTNAME', (0,-1), (-1,-1), 'Arial-Bold'),
+                # Применяем жирный шрифт к итоговой строке
+                ('FONTNAME', (0,-1), (-1,-1), FONT_NAME_NORMAL),
+                ('FONTNAME', (5,-1), (5,-1), FONT_NAME_NORMAL), # Или можно оставить тот же
+                # Управление bold через стиль Paragraph, не через TableStyle
             ]))
             story.append(comp_table)
             story.append(Spacer(1, 15))
 
         # --- Блок работ ---
-        # Явно приводим installation_price к числу и логируем
         installation_price = 0.0
         try:
-            installation_price = float(order_params.get('installation_price', 0) or 0)
-        except Exception as e:
-            logger.error(f"Ошибка преобразования installation_price: {e}")
+            installation_price_val = order_params.get('installation_price', 0)
+            # Обрабатываем возможные None или пустые строки
+            if installation_price_val is not None and installation_price_val != '':
+                installation_price = float(installation_price_val)
+            else:
+                installation_price = 0.0
+        except (ValueError, TypeError) as e:
+            logger.error(f"Ошибка преобразования installation_price '{order_params.get('installation_price')}': {e}")
             installation_price = 0.0
+            
         logger.info(f"Стоимость работ (installation_price): {installation_price}")
-        # Всегда отображаем блок работ
+        
         work_table_data = [
             [Paragraph("Монтажные работы", styleTableCell), Paragraph(f"{installation_price:.2f}", styleTableCell)]
         ]
@@ -268,121 +404,54 @@ def generate_commercial_offer_pdf(
             colWidths=[140*mm, 30*mm]
         )
         work_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), FONT_NAME_NORMAL),
+            ('FONTSIZE', (0,0), (-1,-1), 7),
             ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('ALIGN', (0,0), (0,0), 'LEFT'),
             ('ALIGN', (1,0), (1,0), 'RIGHT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
         story.append(work_table)
         story.append(Spacer(1, 15))
 
         # --- Расчет итоговой суммы ---
-        # Суммируем только комплектующие и работы, кондиционеры не суммируются
         total_pay = total_components + installation_price
         
         # --- Итоговая сумма ---
-        styleTotalNote = ParagraphStyle('TotalNote', parent=styleBold, fontSize=9, spaceAfter=0, spaceBefore=0)
         total_table = Table([
             [
-                Paragraph(f"<b>ИТОГО К ОПЛАТЕ:</b>", styleBold),
-                Paragraph(f"<b>{total_pay:.2f} BYN</b>", styleBold),
-                Paragraph(f"<b>+ стоимость выбранного кондиционера</b>", styleTotalNote)
+                Paragraph(f"ИТОГО К ОПЛАТЕ:", styleBold),
+                Paragraph(f"{total_pay:.2f} BYN", styleBold),
+                Paragraph(f"+ стоимость выбранного кондиционера", styleTotalNote)
             ]
         ], colWidths=[80*mm, 50*mm, 70*mm])
         total_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), FONT_NAME_NORMAL),
+            ('FONTSIZE', (0,0), (1,0), 11), # Размер шрифта для основной суммы
+            ('FONTSIZE', (2,0), (2,0), 9),  # Меньший размер для примечания
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (0,0), (0,0), 'LEFT'),
             ('ALIGN', (1,0), (1,0), 'RIGHT'),
             ('ALIGN', (2,0), (2,0), 'RIGHT'),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
-            ('TOPPADDING', (0,0), (-1,-1), 2),
+            ('LINEBELOW', (0,0), (1,0), 1, colors.black), # Линия под итогом
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
         ]))
         story.append(total_table)
         story.append(Spacer(1, 20))
 
         # --- Условия и примечания ---
-        story.append(Paragraph("<b>Условия поставки и монтажа:</b>", styleBold))
+        story.append(Paragraph("Условия поставки и монтажа:", styleBold))
         story.append(Paragraph("• Монтаж осуществляется в течение 3-5 рабочих дней после оплаты", styleSmall))
         story.append(Paragraph("• Гарантия на оборудование - 3 года, на монтажные работы - 2 года", styleSmall))
         story.append(Paragraph("• Цены указаны без учета НДС", styleSmall))
         story.append(Spacer(1, 10))
 
         # --- Сохранение PDF ---
-        try:
-            doc.build(story)
-            logger.info(f"PDF-файл '{file_path}' успешно сгенерирован.")
-            return file_path
-        except Exception as e:
-            logger.error(f"Ошибка при генерации PDF: {e}", exc_info=True)
-            # Попробуем упростить таблицу кондиционеров, убрав некоторые колонки
-            logger.info("Попытка упростить таблицу кондиционеров...")
-            try:
-                # Создаем упрощенную версию без колонки характеристик
-                story_simple = []
-                story_simple.extend(story[:len(story)-2])  # Берем все до таблицы кондиционеров
-                
-                # Упрощенная таблица кондиционеров
-                for variant in aircon_variants:
-                    if variant.get('title'):
-                        story_simple.append(Paragraph(variant['title'], styleVariantTitle))
-                    
-                    if variant.get('items'):
-                        simple_table_data = [[
-                            Paragraph("Наименование товара", styleTableHeader),
-                            Paragraph("Ед. изм.", styleTableHeader),
-                            Paragraph("Кол-во", styleTableHeader),
-                            Paragraph("Цена за ед., BYN", styleTableHeader),
-                            Paragraph("Скидка, %", styleTableHeader),
-                            Paragraph("Сумма с учетом скидки, BYN", styleTableHeader)
-                        ]]
-                        
-                        for ac in variant['items']:
-                            price = float(ac.get('price', 0))
-                            qty = int(ac.get('qty', 1))
-                            discount = float(ac.get('discount_percent', 0))
-                            total_with_discount = price * qty * (1 - discount / 100)
-                            
-                            name_text = ac.get('name', '')
-                            if len(name_text) > 60:
-                                name_text = name_text[:57] + "..."
-                            
-                            simple_table_data.append([
-                                Paragraph(name_text, styleTableCell),
-                                Paragraph(ac.get('unit', 'шт.'), styleTableCell),
-                                Paragraph(str(qty), styleTableCell),
-                                Paragraph(f"{price:.2f}", styleTableCell),
-                                Paragraph(f"{discount:.2f}", styleTableCell),
-                                Paragraph(f"{total_with_discount:.2f}", styleTableCell)
-                            ])
-                        
-                        simple_table = Table(simple_table_data, colWidths=[80*mm, 20*mm, 15*mm, 25*mm, 15*mm, 25*mm])
-                        simple_table.setStyle(TableStyle([
-                            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-                            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-                            ('ALIGN', (3,1), (5,-1), 'RIGHT'),
-                            ('ALIGN', (2,0), (2,-1), 'CENTER'),
-                            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                            ('WRAP', (0,1), (0,-1), True),
-                            ('FONTSIZE', (0,1), (-1,-1), 7),
-                        ]))
-                        story_simple.append(simple_table)
-                        story_simple.append(Spacer(1, 15))
-                
-                # Добавляем остальные части
-                story_simple.extend(story[len(story)-2:])
-                
-                # Создаем новый документ
-                doc_simple = SimpleDocTemplate(
-                    file_path,
-                    pagesize=A4,
-                    rightMargin=15*mm,
-                    leftMargin=15*mm,
-                    topMargin=10*mm,
-                    bottomMargin=15*mm
-                )
-                doc_simple.build(story_simple)
-                logger.info(f"PDF-файл '{file_path}' успешно сгенерирован с упрощенной таблицей.")
-                return file_path
-            except Exception as e2:
-                logger.error(f"Ошибка при генерации упрощенного PDF: {e2}", exc_info=True)
-                raise e
+        doc.build(story)
+        logger.info(f"PDF-файл '{file_path}' успешно сгенерирован.")
+        return file_path
+
     except Exception as e:
         logger.error(f"Ошибка при генерации PDF: {e}", exc_info=True)
         raise
@@ -393,6 +462,5 @@ async def generate_commercial_offer_pdf_async(*args, **kwargs):
     Асинхронная обёртка для generate_commercial_offer_pdf.
     Вызывает sync-функцию в отдельном потоке через asyncio.to_thread,
     чтобы не блокировать event loop.
-    Используйте только для вызова из async-кода (например, FastAPI backend).
     """
     return await asyncio.to_thread(generate_commercial_offer_pdf, *args, **kwargs)

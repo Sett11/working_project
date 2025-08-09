@@ -12,7 +12,7 @@ import datetime
 
 # Инициализация логгера
 logger = Logger(name=__name__, log_file="frontend.log")
-BACKEND_URL = "http://backend:8000"
+BACKEND_URL = "http://backend:8001"
 COMPONENTS_CATALOG_PATH = os.path.join(os.path.dirname(__file__), '../docs/components_catalog.json')
 PLACEHOLDER_IMAGE = os.path.abspath(os.path.join(os.path.dirname(__file__), '../docs/images_comp/placeholder.jpg'))
 
