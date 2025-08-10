@@ -10,7 +10,8 @@ services:
     ports:
       - "8001:8001"
     depends_on:
-      - db
+      db:
+        condition: service_healthy  # Ждём готовности БД
     environment:
       - DATABASE_URL=${DATABASE_URL}
     restart: always
@@ -18,7 +19,6 @@ services:
   frontend:
     build: .
     container_name: ${COMPOSE_PROJECT_NAME}_frontend
-    # Запускаем Gradio через main.py
     command: python main.py
     volumes:
       - .:/app
@@ -33,6 +33,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_db
     volumes:
       - postgres_data:/var/lib/postgresql/data/
+      - ./db/init:/docker-entrypoint-initdb.d  # Скрипты инициализации
     ports:
       - "${POSTGRES_PORT}:${POSTGRES_PORT}"
     environment:
@@ -40,6 +41,11 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     restart: always
+    healthcheck:  # Добавляем проверку готовности
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres_data:
