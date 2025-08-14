@@ -444,7 +444,7 @@ def generate_commercial_offer_pdf(
         story.append(Paragraph("Условия поставки и монтажа:", styleBold))
         story.append(Paragraph("• Монтаж осуществляется в течение 3-5 рабочих дней после оплаты", styleSmall))
         story.append(Paragraph("• Гарантия на оборудование - 3 года, на монтажные работы - 2 года", styleSmall))
-        story.append(Paragraph("• Цены указаны без учета НДС", styleSmall))
+        story.append(Paragraph("• Цены указаны с учетом НДС", styleSmall))
         story.append(Spacer(1, 10))
 
         # --- Сохранение PDF ---
