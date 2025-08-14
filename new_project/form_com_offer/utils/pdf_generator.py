@@ -23,7 +23,18 @@ import asyncio
 # Для текущей структуры предположим, что mylogger.py в папке utils
 from utils.mylogger import Logger
 
+# Импортируем CRUD операции для работы со счетчиком КП
+try:
+    from db import crud
+except ImportError:
+    # Если импорт не удался, создаем заглушку
+    crud = None
+
 logger = Logger("pdf_generator", "pdf_generator.log")
+
+
+# --- Константы ---
+# Порядковый номер КП теперь получается из базы данных
 
 # --- Регистрация шрифтов ---
 # Определяем пути к файлам шрифтов
@@ -66,14 +77,15 @@ else:
     FONT_NAME_BOLD = 'Helvetica-Bold'
 # --- Конец регистрации шрифтов ---
 
-def generate_commercial_offer_pdf(
+async def generate_commercial_offer_pdf(
     client_data: dict,
     order_params: dict,
     aircon_variants: list,
     components: list,
     discount_percent: float,
     offer_number: str = None,
-    save_dir: str = "commercial_offer_pdf"
+    save_dir: str = "commercial_offer_pdf",
+    db_session = None
 ) -> str:
     """
     Генерирует PDF-файл коммерческого предложения по заданным данным.
@@ -90,12 +102,16 @@ def generate_commercial_offer_pdf(
         abs_save_dir = os.path.abspath(save_dir)
         os.makedirs(abs_save_dir, exist_ok=True)
 
-        # Формируем имя файла
-        today = datetime.date.today().strftime("%d_%m")
-        safe_full_name = re.sub(r'[^\w]', '_', client_data.get('full_name',''))[:20]
-        offer_number = offer_number or f"{today}_{safe_full_name}"
+        # Формируем имя файла с полной датой (включая год)
+        today = datetime.date.today()
+        today_str = today.strftime("%d_%m_%Y")
+        safe_full_name = re.sub(r'[^\w]', '_', client_data.get('full_name',''))
+        
+        # Используем дату с годом в названии файла
+        offer_number = offer_number or f"{today_str}_{safe_full_name}"
         file_name = f"КП_{offer_number}.pdf"
         file_path = os.path.join(abs_save_dir, file_name)
+        logger.info(f"Сформировано имя файла: {file_name}")
 
         # --- Стили документа ---
         styles = getSampleStyleSheet()
@@ -199,8 +215,20 @@ def generate_commercial_offer_pdf(
         story.append(Paragraph("в ЗАО «МТБанк», БИК MTBKBY22", styleN))
         story.append(Spacer(1, 10))
         
-        # Обновленный заголовок с номером КП
-        story.append(Paragraph(f"КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ № {offer_number} от {today}г.", styleH))
+        # Обновленный заголовок с номером КП и полной датой (включая год)
+        # Получаем номер КП из базы данных или используем fallback
+        current_offer_number = 1  # Fallback значение
+        if db_session and crud:
+            try:
+                current_offer_number = await crud.increment_offer_counter(db_session)
+                logger.info(f"Получен номер КП из БД: {current_offer_number}")
+            except Exception as e:
+                logger.error(f"Ошибка при получении номера КП из БД: {e}")
+                current_offer_number = 1
+        else:
+            logger.warning("Сессия БД не передана или CRUD недоступен, используется fallback номер")
+        
+        story.append(Paragraph(f"КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ № {current_offer_number} {client_data.get('full_name', '')} от {today_str} г.", styleH))
         story.append(Spacer(1, 12))
         
         # --- Информация о клиенте и исполнителе ---
@@ -242,11 +270,6 @@ def generate_commercial_offer_pdf(
             # Заголовок варианта
             if variant.get('title'):
                 story.append(Paragraph(variant['title'], styleVariantTitle))
-            
-            # Описание варианта (если нужно)
-            # if variant.get('description'):
-            #     desc = variant['description'].replace('●', '•').replace('–', '•')
-            #     story.append(Paragraph(desc, styleVariantDesc))
             
             # Таблица кондиционеров для варианта
             if variant.get('items'):
@@ -324,8 +347,8 @@ def generate_commercial_offer_pdf(
                 Paragraph("Ед. изм.", styleTableHeader),
                 Paragraph("Кол-во", styleTableHeader),
                 Paragraph("Цена за ед., BYN", styleTableHeader),
-                Paragraph("Скидка, %", styleTableHeader),
-                Paragraph("Сумма с учетом скидки, BYN", styleTableHeader)
+                # Убран столбец "Скидка, %" для комплектующих
+                Paragraph("Сумма, BYN", styleTableHeader)  # Убрано "с учетом скидки"
             ]]
             
             for comp in components:
@@ -335,29 +358,30 @@ def generate_commercial_offer_pdf(
                     qty_or_length = float(comp.get('length', 0.0))
                 else:
                     qty_or_length = int(comp.get('qty', 0))
-                discount = float(comp.get('discount_percent', 0))
-                total_with_discount = price * qty_or_length * (1 - discount / 100)
-                total_components += total_with_discount
+                
+                # Убрана скидка для комплектующих - считаем полную стоимость
+                total_without_discount = price * qty_or_length
+                total_components += total_without_discount
                 
                 comp_table_data.append([
                     Paragraph(comp.get('name', ''), styleTableCell),
                     Paragraph(unit, styleTableCell),
                     Paragraph(str(qty_or_length), styleTableCell),
                     Paragraph(f"{price:.2f}", styleTableCell),
-                    Paragraph(f"{discount:.2f}", styleTableCell),
-                    Paragraph(f"{total_with_discount:.2f}", styleTableCell)
+                    # Убран столбец скидки
+                    Paragraph(f"{total_without_discount:.2f}", styleTableCell)  # Полная стоимость без скидки
                 ])
             
             # Итоговая строка для комплектующих
             comp_table_data.append([
                 Paragraph("Итого", styleTableHeader),
-                '', '', '', '',
+                '', '', '',
                 Paragraph(f"{total_components:.2f}", styleTableHeader)
             ])
             
             comp_table = Table(
                 comp_table_data, 
-                colWidths=[60*mm, 20*mm, 15*mm, 25*mm, 15*mm, 25*mm],
+                colWidths=[60*mm, 20*mm, 15*mm, 25*mm, 25*mm],  # Уменьшено количество столбцов
                 repeatRows=1
             )
             comp_table.setStyle(TableStyle([
@@ -368,14 +392,14 @@ def generate_commercial_offer_pdf(
                 ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
                 ('ALIGN', (0,0), (-1,-1), 'LEFT'),
                 ('ALIGN', (2,1), (2,-1), 'CENTER'), # Кол-во - по центру
-                ('ALIGN', (3,1), (5,-1), 'RIGHT'), # Цена, Скидка, Сумма - вправо
+                ('ALIGN', (3,1), (4,-1), 'RIGHT'), # Цена и Сумма - вправо
                 ('ALIGN', (0,0), (-1,0), 'CENTER'), # Заголовки - по центру
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('SPAN', (0,-1), (4,-1)), # Объединяем ячейки для "Итого"
+                ('SPAN', (0,-1), (3,-1)), # Объединяем ячейки для "Итого"
                 ('BACKGROUND', (0,-1), (-1,-1), colors.white),
                 # Применяем жирный шрифт к итоговой строке
                 ('FONTNAME', (0,-1), (-1,-1), FONT_NAME_NORMAL),
-                ('FONTNAME', (5,-1), (5,-1), FONT_NAME_NORMAL), # Или можно оставить тот же
+                ('FONTNAME', (4,-1), (4,-1), FONT_NAME_NORMAL), # Или можно оставить тот же
                 # Управление bold через стиль Paragraph, не через TableStyle
             ]))
             story.append(comp_table)
@@ -460,7 +484,6 @@ def generate_commercial_offer_pdf(
 async def generate_commercial_offer_pdf_async(*args, **kwargs):
     """
     Асинхронная обёртка для generate_commercial_offer_pdf.
-    Вызывает sync-функцию в отдельном потоке через asyncio.to_thread,
-    чтобы не блокировать event loop.
+    Теперь основная функция тоже асинхронная, поэтому просто передаем вызов.
     """
-    return await asyncio.to_thread(generate_commercial_offer_pdf, *args, **kwargs)
+    return await generate_commercial_offer_pdf(*args, **kwargs)

@@ -183,6 +183,27 @@ async def seed_data():
             else:
                 logger.info("Таблица комплектующих уже содержит данные. Наполнение не требуется.")
 
+            # --- 3. Инициализация счетчика КП ---
+            logger.info("Инициализация счетчика коммерческих предложений...")
+            try:
+                # Проверяем, существует ли уже счетчик
+                stmt_counter = select(models.OfferCounter).filter_by(id=0)
+                result = await db.execute(stmt_counter)
+                existing_counter = result.scalar_one_or_none()
+                
+                if not existing_counter:
+                    # Создаем новый счетчик с начальным номером 0
+                    counter = models.OfferCounter(id=0, current_number=0)
+                    db.add(counter)
+                    await db.commit()
+                    logger.info("Счетчик КП инициализирован с номером 0.")
+                else:
+                    logger.info(f"Счетчик КП уже существует с номером {existing_counter.current_number}.")
+                    
+            except Exception as counter_error:
+                logger.error(f"Ошибка при инициализации счетчика КП: {counter_error}")
+                await db.rollback()
+
         except Exception as e:
             logger.error(f"Произошла ошибка во время наполнения БД: {e}", exc_info=True)
             await db.rollback()

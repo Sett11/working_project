@@ -208,3 +208,81 @@ async def update_order_by_id(db: AsyncSession, order_id: int, order_update: sche
         logger.error(f"Ошибка при обновлении заказа id={order_id}: {e}", exc_info=True)
         await db.rollback()
         raise
+
+# --- CRUD-операции для счетчика КП (OfferCounter) ---
+
+async def get_or_create_offer_counter(db: AsyncSession) -> models.OfferCounter:
+    """
+    Получение или создание счетчика номеров КП.
+    Если счетчик не существует, создается с номером 0.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+
+    Returns:
+        models.OfferCounter: Объект счетчика КП.
+    """
+    logger.info("[CRUD] get_or_create_offer_counter: получение/создание счетчика КП")
+    
+    # Пытаемся найти существующий счетчик
+    result = await db.execute(select(models.OfferCounter).filter_by(id=0))
+    counter = result.scalar_one_or_none()
+    
+    if not counter:
+        # Создаем новый счетчик, если не найден
+        counter = models.OfferCounter(id=0, current_number=0)
+        db.add(counter)
+        await db.commit()
+        await db.refresh(counter)
+        logger.info("[CRUD] get_or_create_offer_counter: создан новый счетчик с номером 0")
+    else:
+        logger.info(f"[CRUD] get_or_create_offer_counter: найден существующий счетчик с номером {counter.current_number}")
+    
+    return counter
+
+async def increment_offer_counter(db: AsyncSession) -> int:
+    """
+    Увеличение счетчика номеров КП на 1 и возврат нового номера.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+
+    Returns:
+        int: Новый номер КП.
+    """
+    logger.info("[CRUD] increment_offer_counter: увеличение счетчика КП")
+    
+    try:
+        # Получаем или создаем счетчик
+        counter = await get_or_create_offer_counter(db)
+        
+        # Увеличиваем номер
+        counter.current_number += 1
+        
+        # Сохраняем изменения
+        await db.commit()
+        await db.refresh(counter)
+        
+        logger.info(f"[CRUD] increment_offer_counter: новый номер КП = {counter.current_number}")
+        return counter.current_number
+        
+    except Exception as e:
+        logger.error(f"[CRUD] increment_offer_counter: ошибка при увеличении счетчика: {e}", exc_info=True)
+        await db.rollback()
+        raise
+
+async def get_current_offer_number(db: AsyncSession) -> int:
+    """
+    Получение текущего номера КП без увеличения.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+
+    Returns:
+        int: Текущий номер КП.
+    """
+    logger.info("[CRUD] get_current_offer_number: получение текущего номера КП")
+    
+    counter = await get_or_create_offer_counter(db)
+    logger.info(f"[CRUD] get_current_offer_number: текущий номер КП = {counter.current_number}")
+    return counter.current_number

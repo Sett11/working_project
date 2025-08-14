@@ -89,4 +89,13 @@ class Component(Base):
     description = Column(Text, nullable=True)  # Описание
     image_url = Column(String, nullable=True)  # Путь к изображению
 
-logger.info("Все модели базы данных (Client, Order, AirConditioner, Component) успешно определены.")
+class OfferCounter(Base):
+    """
+    Модель для хранения счетчика номеров коммерческих предложений.
+    """
+    __tablename__ = 'offer_counters'
+    id = Column(Integer, primary_key=True, index=True)  # Уникальный идентификатор счетчика
+    current_number = Column(Integer, default=1)  # Текущий номер КП
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Время последнего обновления
+
+logger.info("Все модели базы данных (Client, Order, AirConditioner, Component, OfferCounter) успешно определены.")

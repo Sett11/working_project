@@ -92,4 +92,14 @@ class FullOrderCreate(BaseModel):
     components: list
     status: Optional[str] = "draft"
 
+class OfferCounterBase(BaseModel):
+    current_number: int
+
+class OfferCounterCreate(OfferCounterBase):
+    pass
+
+class OfferCounter(OfferCounterBase, OrmBase):
+    id: int
+    updated_at: Optional[date] = None
+
 logger.info("Pydantic-схемы успешно определены.")

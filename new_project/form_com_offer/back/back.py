@@ -166,7 +166,7 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
                 comp_new.setdefault('unit', 'шт.')
                 comp_new.setdefault('discount_percent', discount)
                 components_for_pdf.append(comp_new)
-        today = datetime.date.today().strftime('%d_%m')
+        today = datetime.date.today().strftime('%d_%m_%Y')
         # 2. Имя клиента для offer_number: только запрещённые для имени файла символы заменяем на '_', буквы и пробелы оставляем
         import re
         safe_name = re.sub(r'[\\/:*?"<>|]', '_', client_full_name).strip()[:20]
@@ -175,7 +175,7 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
         pdf_path = await generate_commercial_offer_pdf_async(
             client_data=client_data, order_params=order_params,
             aircon_variants=aircon_variants, components=components_for_pdf,
-            discount_percent=discount, offer_number=offer_number
+            discount_percent=discount, offer_number=offer_number, db_session=db
         )
         # --- Меняем статус заказа на completed, если заказ найден по id ---
         if 'order' in locals() and order is not None:
