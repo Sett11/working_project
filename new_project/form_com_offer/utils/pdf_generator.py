@@ -107,9 +107,20 @@ async def generate_commercial_offer_pdf(
         today_str = today.strftime("%d_%m_%Y")
         safe_full_name = re.sub(r'[^\w]', '_', client_data.get('full_name',''))
         
-        # Используем дату с годом в названии файла
-        offer_number = offer_number or f"{today_str}_{safe_full_name}"
-        file_name = f"КП_{offer_number}.pdf"
+        # Получаем номер КП из базы данных или используем fallback
+        current_offer_number = 1  # Fallback значение
+        if db_session and crud:
+            try:
+                current_offer_number = await crud.increment_offer_counter(db_session)
+                logger.info(f"Получен номер КП из БД: {current_offer_number}")
+            except Exception as e:
+                logger.error(f"Ошибка при получении номера КП из БД: {e}")
+                current_offer_number = 1
+        else:
+            logger.warning("Сессия БД не передана или CRUD недоступен, используется fallback номер")
+        
+        # Формируем имя файла с номером КП
+        file_name = f"КП_№ {current_offer_number}_от_{today_str}_{safe_full_name}.pdf"
         file_path = os.path.join(abs_save_dir, file_name)
         logger.info(f"Сформировано имя файла: {file_name}")
 
@@ -216,18 +227,7 @@ async def generate_commercial_offer_pdf(
         story.append(Spacer(1, 10))
         
         # Обновленный заголовок с номером КП и полной датой (включая год)
-        # Получаем номер КП из базы данных или используем fallback
-        current_offer_number = 1  # Fallback значение
-        if db_session and crud:
-            try:
-                current_offer_number = await crud.increment_offer_counter(db_session)
-                logger.info(f"Получен номер КП из БД: {current_offer_number}")
-            except Exception as e:
-                logger.error(f"Ошибка при получении номера КП из БД: {e}")
-                current_offer_number = 1
-        else:
-            logger.warning("Сессия БД не передана или CRUD недоступен, используется fallback номер")
-        
+        # Используем уже полученный номер КП
         story.append(Paragraph(f"КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ № {current_offer_number} {client_data.get('full_name', '')} от {today_str} г.", styleH))
         story.append(Spacer(1, 12))
         
