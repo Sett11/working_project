@@ -377,6 +377,9 @@ def update_components_tab(order_state):
 # --- Новый подход: управление экранами через screen_state и gr.Group(visible=...) ---
 
 components_ui_inputs = []  # <-- ВНЕ интерфейса, глобально!
+# ВАЖНО: фиксируем порядок компонентов так, как он отображается в UI,
+# чтобы при сохранении индексы inputs соответствовали именно этому порядку
+components_catalog_for_ui = []
 
 # --- Новый хелпер для подгрузки комплектующих ---
 def fill_components_fields_from_order(order, components_catalog):
@@ -500,6 +503,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                 else:
                                     length_input = gr.Number(visible=False)
                             components_ui_inputs.extend([checkbox, qty_input, length_input])
+                            # Фиксируем порядок каталога, соответствующий UI
+                            components_catalog_for_ui.append(comp)
             save_components_status = gr.Textbox(label="Статус сохранения комплектующих", interactive=False)
             save_components_btn = gr.Button("Сохранить комплектующие", variant="primary")
 
@@ -735,10 +740,19 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         order_id = order_id_hidden_value
         selected_components = []
         i = 0
-        for component_data in COMPONENTS_CATALOG.get("components", []):
+        # Итерируемся в порядке, совпадающем с UI
+        for component_data in components_catalog_for_ui if len(components_catalog_for_ui) == len(COMPONENTS_CATALOG.get("components", [])) else COMPONENTS_CATALOG.get("components", []):
             is_selected, qty, length = components_inputs[i], components_inputs[i+1], components_inputs[i+2]
             i += 3
-            is_measurable = "труба" in component_data["name"].lower() or "кабель" in component_data["name"].lower() or "теплоизоляция" in component_data["name"].lower() or "шланг" in component_data["name"].lower() or "провод" in component_data["name"].lower()
+            # Учитываем ключевые слова и категорию "Кабель-каналы"
+            is_measurable = (
+                "труба" in component_data["name"].lower() or
+                "кабель" in component_data["name"].lower() or
+                "теплоизоляция" in component_data["name"].lower() or
+                "шланг" in component_data["name"].lower() or
+                "провод" in component_data["name"].lower() or
+                component_data.get("category") == "Кабель-каналы"
+            )
             comp_item = {
                 "name": component_data["name"], "price": component_data.get("price", 0),
                 "currency": COMPONENTS_CATALOG.get("catalog_info", {}).get("currency", "BYN"),
@@ -752,6 +766,15 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 comp_item["unit"] = "шт."
                 comp_item["qty"] = int(qty) if qty else 0
                 comp_item["length"] = 0.0
+            # Подробное логирование для проверки корректного сопоставления и сохранения
+            try:
+                logger.info(
+                    f"[DEBUG] save_components_handler item: name='{comp_item['name']}', category='{component_data.get('category')}', "
+                    f"is_measurable={is_measurable}, selected={is_selected}, unit='{comp_item['unit']}', "
+                    f"qty={comp_item['qty']}, length={comp_item['length']}"
+                )
+            except Exception:
+                pass
             selected_components.append(comp_item)
         payload = {"components": selected_components, "status": "completely filled"}
         if order_id is not None and str(order_id).isdigit():
