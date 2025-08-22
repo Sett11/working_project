@@ -594,6 +594,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             compose_generate_kp_btn = gr.Button("Сгенерировать КП", variant="primary")
             compose_kp_status = gr.Textbox(label="Статус генерации КП", interactive=False)
             compose_pdf_output = gr.File(label="Скачать коммерческое предложение")
+            
+
 
         # Вкладка "Инструкция пользователя"
         with gr.Tab("Инструкция пользователя"):
@@ -1216,14 +1218,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 if data.get("success"):
                     order_id = data.get("order_id")
                     msg = f"Данные составного заказа успешно сохранены! ID: {order_id}"
-                    return msg, order_id
+                    return msg, order_id, order_id
                 else:
                     error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
-                    return f"Ошибка: {error_msg}", order_id_hidden_value
+                    return f"Ошибка: {error_msg}", order_id_hidden_value, order_id_hidden_value
                     
         except Exception as e:
             logger.error(f"Ошибка при сохранении составного заказа: {e}", exc_info=True)
-            return f"Ошибка: {e}", order_id_hidden_value
+            return f"Ошибка: {e}", order_id_hidden_value, order_id_hidden_value
 
     async def select_compose_aircons_handler(order_id_hidden_value):
         """Обработчик подбора кондиционеров для составного заказа"""
@@ -1354,6 +1356,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     return (
                         msg,  # compose_save_status
                         order_id,  # compose_order_id_hidden
+                        order_id,  # order_id_hidden
                         client_name,  # compose_name (данные клиента не меняются)
                         client_phone,  # compose_phone (данные клиента не меняются)
                         client_mail,  # compose_mail (данные клиента не меняются)
@@ -1379,12 +1382,12 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 else:
                     error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
                     placeholder = get_placeholder_order()
-                    return f"Ошибка: {error_msg}", order_id, client_name, client_phone, client_mail, client_address, visit_date, float(placeholder["order_params"]["room_area"]), placeholder["order_params"]["room_type"], discount, placeholder["aircon_params"]["wifi"], placeholder["aircon_params"]["inverter"], float(placeholder["aircon_params"]["price_limit"]), placeholder["aircon_params"]["mount_type"], float(placeholder["aircon_params"]["ceiling_height"]), placeholder["aircon_params"]["illumination"], int(placeholder["aircon_params"]["num_people"]), placeholder["aircon_params"]["activity"], int(placeholder["aircon_params"]["num_computers"]), int(placeholder["aircon_params"]["num_tvs"]), float(placeholder["aircon_params"]["other_power"]), placeholder["aircon_params"]["brand"], float(placeholder["order_params"]["installation_price"])
+                    return f"Ошибка: {error_msg}", order_id, order_id, client_name, client_phone, client_mail, client_address, visit_date, float(placeholder["order_params"]["room_area"]), placeholder["order_params"]["room_type"], discount, placeholder["aircon_params"]["wifi"], placeholder["aircon_params"]["inverter"], float(placeholder["aircon_params"]["price_limit"]), placeholder["aircon_params"]["mount_type"], float(placeholder["aircon_params"]["ceiling_height"]), placeholder["aircon_params"]["illumination"], int(placeholder["aircon_params"]["num_people"]), placeholder["aircon_params"]["activity"], int(placeholder["aircon_params"]["num_computers"]), int(placeholder["aircon_params"]["num_tvs"]), float(placeholder["aircon_params"]["other_power"]), placeholder["aircon_params"]["brand"], float(placeholder["order_params"]["installation_price"])
                     
         except Exception as e:
             logger.error(f"Ошибка при добавлении кондиционера: {e}", exc_info=True)
             placeholder = get_placeholder_order()
-            return f"Ошибка: {e}", order_id, client_name, client_phone, client_mail, client_address, visit_date, float(placeholder["order_params"]["room_area"]), placeholder["order_params"]["room_type"], discount, placeholder["aircon_params"]["wifi"], placeholder["aircon_params"]["inverter"], float(placeholder["aircon_params"]["price_limit"]), placeholder["aircon_params"]["mount_type"], float(placeholder["aircon_params"]["ceiling_height"]), placeholder["aircon_params"]["illumination"], int(placeholder["aircon_params"]["num_people"]), placeholder["aircon_params"]["activity"], int(placeholder["aircon_params"]["num_computers"]), int(placeholder["aircon_params"]["num_tvs"]), float(placeholder["aircon_params"]["other_power"]), placeholder["aircon_params"]["brand"], float(placeholder["order_params"]["installation_price"])
+            return f"Ошибка: {e}", order_id, order_id, client_name, client_phone, client_mail, client_address, visit_date, float(placeholder["order_params"]["room_area"]), placeholder["order_params"]["room_type"], discount, placeholder["aircon_params"]["wifi"], placeholder["aircon_params"]["inverter"], float(placeholder["aircon_params"]["price_limit"]), placeholder["aircon_params"]["mount_type"], float(placeholder["aircon_params"]["ceiling_height"]), placeholder["aircon_params"]["illumination"], int(placeholder["aircon_params"]["num_people"]), placeholder["aircon_params"]["activity"], int(placeholder["aircon_params"]["num_computers"]), int(placeholder["aircon_params"]["num_tvs"]), float(placeholder["aircon_params"]["other_power"]), placeholder["aircon_params"]["brand"], float(placeholder["order_params"]["installation_price"])
 
     # Обработчик для удаления заказа
     async def delete_order_handler(order_id_hidden_value):
@@ -1473,7 +1476,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price, 
                compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity, 
                compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price],
-        outputs=[compose_save_status, compose_order_id_hidden]
+        outputs=[compose_save_status, compose_order_id_hidden, order_id_hidden]
     )
     
     compose_select_btn.click(
@@ -1488,7 +1491,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price, 
                compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity, 
                compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price],
-        outputs=[compose_save_status, compose_order_id_hidden, compose_name, compose_phone, compose_mail, compose_address, compose_date,
+        outputs=[compose_save_status, compose_order_id_hidden, order_id_hidden, compose_name, compose_phone, compose_mail, compose_address, compose_date,
                 compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price,
                 compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity,
                 compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price]
