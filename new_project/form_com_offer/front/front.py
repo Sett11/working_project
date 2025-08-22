@@ -1345,35 +1345,42 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     placeholder = get_placeholder_order()
                     
                     # Возвращаем сообщение, ID заказа и обновленные значения полей (очищенные)
+                    # Порядок должен точно соответствовать outputs в compose_add_aircon_btn.click()
+                    # Используем дефолтные значения из get_placeholder_order()
                     return (
-                        msg, 
-                        order_id,
-                        # Данные клиента остаются без изменений (включая visit_date и discount)
-                        client_name, client_phone, client_mail, client_address, visit_date, discount,
-                        # Поля помещения очищаются к дефолтным значениям (возвращаем правильные типы для Gradio)
-                        50.0,  # compose_area (float для слайдера)
-                        "",    # compose_type_room (строка для текстбокса)
-                        False, # compose_wifi (bool для чекбокса)
-                        False, # compose_inverter (bool для чекбокса)
-                        10000.0, # compose_price (float для слайдера)
-                        "Любой", # compose_mount_type (строка для дропдауна)
-                        2.7,   # compose_ceiling_height (float для слайдера)
-                        "Средняя", # compose_illumination (строка для дропдауна)
-                        1,     # compose_num_people (int для слайдера)
-                        "Сидячая работа", # compose_activity (строка для дропдауна)
-                        0,     # compose_num_computers (int для слайдера)
-                        0,     # compose_num_tvs (int для слайдера)
-                        0.0,   # compose_other_power (float для слайдера)
-                        "Любой", # compose_brand (строка для дропдауна)
-                        666.0  # compose_installation_price (float для number поля)
+                        msg,  # compose_save_status
+                        order_id,  # compose_order_id_hidden
+                        client_name,  # compose_name (данные клиента не меняются)
+                        client_phone,  # compose_phone (данные клиента не меняются)
+                        client_mail,  # compose_mail (данные клиента не меняются)
+                        client_address,  # compose_address (данные клиента не меняются)
+                        visit_date,  # compose_date (данные клиента не меняются)
+                        float(placeholder["order_params"]["room_area"]),  # compose_area
+                        placeholder["order_params"]["room_type"],  # compose_type_room
+                        discount,  # compose_discount (данные клиента не меняются)
+                        placeholder["aircon_params"]["wifi"],  # compose_wifi
+                        placeholder["aircon_params"]["inverter"],  # compose_inverter
+                        float(placeholder["aircon_params"]["price_limit"]),  # compose_price
+                        placeholder["aircon_params"]["mount_type"],  # compose_mount_type
+                        float(placeholder["aircon_params"]["ceiling_height"]),  # compose_ceiling_height
+                        placeholder["aircon_params"]["illumination"],  # compose_illumination
+                        int(placeholder["aircon_params"]["num_people"]),  # compose_num_people
+                        placeholder["aircon_params"]["activity"],  # compose_activity
+                        int(placeholder["aircon_params"]["num_computers"]),  # compose_num_computers
+                        int(placeholder["aircon_params"]["num_tvs"]),  # compose_num_tvs
+                        float(placeholder["aircon_params"]["other_power"]),  # compose_other_power
+                        placeholder["aircon_params"]["brand"],  # compose_brand
+                        float(placeholder["order_params"]["installation_price"])  # compose_installation_price
                     )
                 else:
                     error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
-                    return f"Ошибка: {error_msg}", order_id, client_name, client_phone, client_mail, client_address, visit_date, discount, 50.0, "", False, False, 10000.0, "Любой", 2.7, "Средняя", 1, "Сидячая работа", 0, 0, 0.0, "Любой", 666.0
+                    placeholder = get_placeholder_order()
+                    return f"Ошибка: {error_msg}", order_id, client_name, client_phone, client_mail, client_address, visit_date, float(placeholder["order_params"]["room_area"]), placeholder["order_params"]["room_type"], discount, placeholder["aircon_params"]["wifi"], placeholder["aircon_params"]["inverter"], float(placeholder["aircon_params"]["price_limit"]), placeholder["aircon_params"]["mount_type"], float(placeholder["aircon_params"]["ceiling_height"]), placeholder["aircon_params"]["illumination"], int(placeholder["aircon_params"]["num_people"]), placeholder["aircon_params"]["activity"], int(placeholder["aircon_params"]["num_computers"]), int(placeholder["aircon_params"]["num_tvs"]), float(placeholder["aircon_params"]["other_power"]), placeholder["aircon_params"]["brand"], float(placeholder["order_params"]["installation_price"])
                     
         except Exception as e:
             logger.error(f"Ошибка при добавлении кондиционера: {e}", exc_info=True)
-            return f"Ошибка: {e}", order_id, client_name, client_phone, client_mail, client_address, visit_date, discount, 50.0, "", False, False, 10000.0, "Любой", 2.7, "Средняя", 1, "Сидячая работа", 0, 0, 0.0, "Любой", 666.0
+            placeholder = get_placeholder_order()
+            return f"Ошибка: {e}", order_id, client_name, client_phone, client_mail, client_address, visit_date, float(placeholder["order_params"]["room_area"]), placeholder["order_params"]["room_type"], discount, placeholder["aircon_params"]["wifi"], placeholder["aircon_params"]["inverter"], float(placeholder["aircon_params"]["price_limit"]), placeholder["aircon_params"]["mount_type"], float(placeholder["aircon_params"]["ceiling_height"]), placeholder["aircon_params"]["illumination"], int(placeholder["aircon_params"]["num_people"]), placeholder["aircon_params"]["activity"], int(placeholder["aircon_params"]["num_computers"]), int(placeholder["aircon_params"]["num_tvs"]), float(placeholder["aircon_params"]["other_power"]), placeholder["aircon_params"]["brand"], float(placeholder["order_params"]["installation_price"])
 
     # Обработчик для удаления заказа
     async def delete_order_handler(order_id_hidden_value):
