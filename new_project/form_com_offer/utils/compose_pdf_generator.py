@@ -261,37 +261,19 @@ async def generate_compose_commercial_offer_pdf(
                     # Формируем характеристики как в обычном КП
                     specs_list = []
                     
-                    # 1. Мощность охлаждения
+                    # 1. Бренд (добавляем первым)
+                    brand = ac.get('brand', '')
+                    if brand:
+                        specs_list.append(brand)
+                    
+                    # 2. Мощность охлаждения
                     if ac.get('cooling_power_kw'):
                         specs_list.append(f"Охлаждение: {ac['cooling_power_kw']:.2f} кВт")
                     
-                    # 2. Класс энергоэффективности
-                    if ac.get('energy_efficiency_class'):
-                        specs_list.append(f"Класс: {ac['energy_efficiency_class']}")
-                    
-                    # 3. Инверторный
-                    if ac.get('is_inverter'):
-                        specs_list.append("Инверторный")
-                    
-                    # 4. Wi-Fi
-                    if ac.get('has_wifi'):
-                        specs_list.append("Wi-Fi")
-                    
-                    # 5. Полное описание модели
-                    model_name = ac.get('model_name', '')
-                    if model_name:
-                        # Убираем бренд из начала названия модели, если он там есть
-                        brand = ac.get('brand', '')
-                        if brand and model_name.startswith(brand):
-                            # Убираем бренд и лишние пробелы
-                            description = model_name[len(brand):].strip()
-                            if description.startswith(' '):
-                                description = description[1:]
-                        else:
-                            description = model_name
-                        
-                        if description:
-                            specs_list.append(description)
+                    # 3. Полное описание модели (description) - основная информация
+                    description = ac.get('description', '')
+                    if description:
+                        specs_list.append(description)
                     
                     specs_text = ". ".join(specs_list)
                     
