@@ -253,6 +253,7 @@ async def generate_compose_commercial_offer_pdf(
                 
                 for ac in selected_aircons:  # Показываем все подобранные варианты
                     # Теперь ac - это словарь, а не объект модели
+                    logger.info(f"Обрабатываем кондиционер: {ac}")
                     price = float(ac.get('retail_price_byn', 0) or 0)
                     qty = 1
                     discount = float(discount_percent or 0)
@@ -272,10 +273,12 @@ async def generate_compose_commercial_offer_pdf(
                     
                     # 3. Полное описание модели (description) - основная информация
                     description = ac.get('description', '')
+                    logger.info(f"Description для кондиционера: '{description}'")
                     if description:
                         specs_list.append(description)
                     
                     specs_text = ". ".join(specs_list)
+                    logger.info(f"Итоговые характеристики: '{specs_text}'")
                     
                     # Увеличиваем лимит длины для характеристик
                     if len(specs_text) > 800:

@@ -683,7 +683,8 @@ async def select_compose_aircons(payload: dict, db: AsyncSession = Depends(get_s
                 "retail_price_byn": ac.retail_price_byn,
                 "is_inverter": ac.is_inverter,
                 "has_wifi": ac.has_wifi,
-                "mount_type": ac.mount_type
+                "mount_type": ac.mount_type,
+                "description": ac.description  # Добавляем поле description
             }
             for ac in selected_aircons
         ]
