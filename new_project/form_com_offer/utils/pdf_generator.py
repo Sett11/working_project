@@ -355,7 +355,7 @@ async def generate_commercial_offer_pdf(
                 price = float(comp.get('price', 0))
                 unit = comp.get('unit', 'шт.')
                 if unit == 'м.':
-                    qty_or_length = float(comp.get('length', 0.0))
+                    qty_or_length = int(comp.get('length', 0))
                 else:
                     qty_or_length = int(comp.get('qty', 0))
                 

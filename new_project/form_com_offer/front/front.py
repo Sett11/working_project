@@ -122,11 +122,11 @@ async def generate_kp(client_name, phone, mail, address, date, area, type_room, 
             if is_measurable:
                 comp_item["unit"] = "м."
                 comp_item["qty"] = 0
-                comp_item["length"] = float(length) if length else 0.0
+                comp_item["length"] = int(length) if length else 0
             else:
                 comp_item["unit"] = "шт."
                 comp_item["qty"] = int(qty) if qty else 0
-                comp_item["length"] = 0.0
+                comp_item["length"] = 0
             # Добавляем только если qty > 0 или length > 0
             if comp_item["qty"] > 0 or comp_item["length"] > 0:
                 selected_components.append(comp_item)
@@ -270,7 +270,7 @@ def get_placeholder_order():
             "other_power": 0
         },
         "components": [
-            {"selected": False, "qty": 1, "length": 0.1} for _ in COMPONENTS_CATALOG.get("components", [])
+            {"selected": False, "qty": 1, "length": 1} for _ in COMPONENTS_CATALOG.get("components", [])
         ],
         "comment": "Оставьте комментарий..."
     }
@@ -380,7 +380,7 @@ def update_components_tab(order_state):
                 break
         updates.append(gr.update(value=found.get("selected", False) if found else False))
         updates.append(gr.update(value=int(found.get("qty", 0)) if found else 0))
-        updates.append(gr.update(value=float(found.get("length", 0.0)) if found else 0.0))
+        updates.append(gr.update(value=int(found.get("length", 0)) if found else 0))
     logger.info(f"[DEBUG] update_components_tab: обновляю {len(updates)} полей комплектующих (по имени, нечувствительно к регистру и пробелам)")
     return updates
 
@@ -412,7 +412,7 @@ def fill_components_fields_from_order(order, components_catalog):
         if found and found.get("selected"):
             updates.append(gr.update(value=True))
             updates.append(gr.update(value=int(found.get("qty", 0))))
-            updates.append(gr.update(value=float(found.get("length", 0.0))))
+            updates.append(gr.update(value=int(found.get("length", 0))))
         else:
             updates.append(gr.update(value=False))
             updates.append(gr.update(value=0))
@@ -509,7 +509,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                     qty_input = gr.Number(label="Кол-во (шт)", minimum=0, step=1)
                             with gr.Column(scale=2):
                                 if is_measurable:
-                                    length_input = gr.Number(label="Длина (м)", minimum=0, step=0.1 if comp["category"] != "Теплоизоляция" else 2)
+                                    length_input = gr.Number(label="Длина (м)", minimum=0, step=1)
                                 else:
                                     length_input = gr.Number(visible=False)
                             components_ui_inputs.extend([checkbox, qty_input, length_input])
@@ -970,11 +970,11 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             if is_measurable:
                 comp_item["unit"] = "м."
                 comp_item["qty"] = 0
-                comp_item["length"] = float(length) if length else 0.0
+                comp_item["length"] = int(length) if length else 0
             else:
                 comp_item["unit"] = "шт."
                 comp_item["qty"] = int(qty) if qty else 0
-                comp_item["length"] = 0.0
+                comp_item["length"] = 0
             # Подробное логирование для проверки корректного сопоставления и сохранения
             try:
                 logger.info(
@@ -1343,7 +1343,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 data = resp.json()
                 
                 if data.get("success"):
-                    msg = f"Кондиционер #{data.get('aircon_count', 0)} успешно добавлен к заказу!"
+                    msg = f"Пожалуйста, введите данные для следующего кондиционера"
                     
                     # Получаем дефолтные значения для очистки полей
                     placeholder = get_placeholder_order()
