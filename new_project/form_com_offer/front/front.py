@@ -327,22 +327,22 @@ def fill_fields_from_order_diff(order, placeholder):
         (client.get("email", ""), ph_client.get("email", "")),
         (client.get("address", ""), ph_client.get("address", "")),
         (order_params.get("visit_date", ""), ph_order_params.get("visit_date", "")),
-        (float(order_params.get("room_area", 50)), float(ph_order_params.get("room_area", 50))),
+        (order_params.get("room_area", 50), ph_order_params.get("room_area", 50)),
         (order_params.get("room_type", None), ph_order_params.get("room_type", None)),
-        (int(order_params.get("discount", 0)), int(ph_order_params.get("discount", 0))),
+        (order_params.get("discount", 0), ph_order_params.get("discount", 0)),
         (aircon_params.get("wifi", False), ph_aircon_params.get("wifi", False)),
         (aircon_params.get("inverter", False), ph_aircon_params.get("inverter", False)),
-        (float(aircon_params.get("price_limit", 10000)), float(ph_aircon_params.get("price_limit", 10000))),
+        (aircon_params.get("price_limit", 10000), ph_aircon_params.get("price_limit", 10000)),
         (aircon_params.get("mount_type", "Любой"), ph_aircon_params.get("mount_type", "Любой")),
-        (float(aircon_params.get("ceiling_height", 2.7)), float(ph_aircon_params.get("ceiling_height", 2.7))),
+        (aircon_params.get("ceiling_height", 2.7), ph_aircon_params.get("ceiling_height", 2.7)),
         (aircon_params.get("illumination", "Средняя"), ph_aircon_params.get("illumination", "Средняя")),
-        (int(aircon_params.get("num_people", 1)), int(ph_aircon_params.get("num_people", 1))),
+        (aircon_params.get("num_people", 1), ph_aircon_params.get("num_people", 1)),
         (aircon_params.get("activity", "Сидячая работа"), ph_aircon_params.get("activity", "Сидячая работа")),
-        (int(aircon_params.get("num_computers", 0)), int(ph_aircon_params.get("num_computers", 0))),
-        (int(aircon_params.get("num_tvs", 0)), int(ph_aircon_params.get("num_tvs", 0))),
-        (float(aircon_params.get("other_power", 0)), float(ph_aircon_params.get("other_power", 0))),
+        (aircon_params.get("num_computers", 0), ph_aircon_params.get("num_computers", 0)),
+        (aircon_params.get("num_tvs", 0), ph_aircon_params.get("num_tvs", 0)),
+        (aircon_params.get("other_power", 0), ph_aircon_params.get("other_power", 0)),
         (aircon_params.get("brand", None), ph_aircon_params.get("brand", None)),
-        (float(order_params.get("installation_price", 0)), float(ph_order_params.get("installation_price", 0)))
+        (order_params.get("installation_price", 0), ph_order_params.get("installation_price", 0))
     ]
     updates = []
     for v, ph in values:
@@ -626,7 +626,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         logger.info(f"[DEBUG] load_selected_order: selected={selected}")
         if not selected:
             logger.info(f"[DEBUG] load_selected_order: error - не выбран заказ")
-            return [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(21)] + [gr.update() for _ in components_ui_inputs] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()] + [gr.update() for _ in range(21)] + [gr.update(value=""), gr.update(value=None), gr.update(value=""), gr.update(value="")]
+            return [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(22)] + [gr.update() for _ in components_ui_inputs] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()] + [gr.update() for _ in range(22)] + [gr.update(value=""), gr.update(value=None), gr.update(value=""), gr.update(value="")]
         
         # Извлекаем ID и тип заказа из строки
         parts = selected.split("|")
@@ -645,8 +645,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             placeholder = get_placeholder_order()
             updates, comp_updates, comment_value = fill_fields_from_order_diff(order, placeholder)
             comp_updates = fill_components_fields_from_order(order, COMPONENTS_CATALOG)
-            # Возвращаем: ... все поля ... comment_box, save_comment_status, order_id_hidden, order_state, order_id_state
-            return [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + comp_updates + [gr.update(value=comment_value), gr.update(value=""), gr.update(value=order.get("id")), gr.update(value=order), gr.update(value=order.get("id"))]
+            # Возвращаем: load_error(1), orders_list_screen(1), main_order_screen(1), обычные_поля(22), components, comment(5), compose_поля(22), compose_статусы(4)
+            return [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + comp_updates + [gr.update(value=comment_value), gr.update(value=""), gr.update(value=order.get("id")), gr.update(value=order), gr.update(value=order.get("id"))] + [gr.update() for _ in range(22)] + [gr.update(value=""), gr.update(value=None), gr.update(value=""), gr.update(value="")]
 
     async def load_compose_order(order_id):
         """Загружает составной заказ в вкладку 'Формирование составного заказа'"""
@@ -666,9 +666,39 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             
             # Извлекаем данные клиента и скидку
             client_data = compose_order_data.get("client_data", {})
-            # Извлекаем discount и visit_date из первого кондиционера
+            # Извлекаем данные из последнего кондиционера
             airs = compose_order_data.get("airs", [])
-            first_air_order_params = airs[0].get("order_params", {}) if airs else {}
+            last_air = airs[-1] if airs else {}
+            last_air_order_params = last_air.get("order_params", {})
+            last_air_aircon_params = last_air.get("aircon_params", {})
+            
+            logger.info(f"[DEBUG] load_compose_order: last_air_order_params={last_air_order_params}")
+            logger.info(f"[DEBUG] load_compose_order: last_air_aircon_params={last_air_aircon_params}")
+            
+            # Безопасное преобразование типов
+            def safe_float(value):
+                if value is None or value == "":
+                    return 0.0
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    return 0.0
+            
+            def safe_int(value):
+                if value is None or value == "":
+                    return 0
+                try:
+                    return int(float(value))  # Сначала float, потом int для случаев типа "15.0"
+                except (ValueError, TypeError):
+                    return 0
+            
+            def safe_bool(value):
+                if value is None or value == "":
+                    return False
+                try:
+                    return bool(value)
+                except (ValueError, TypeError):
+                    return False
             
             # ИСПРАВЛЯЕМ порядок полей для составного заказа согласно outputs строка 804:
             # compose_name, compose_phone, compose_mail, compose_address, compose_date, compose_discount, 
@@ -680,23 +710,23 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 gr.update(value=client_data.get("phone", "")),      # 2. compose_phone
                 gr.update(value=client_data.get("email", "")),      # 3. compose_mail
                 gr.update(value=client_data.get("address", "")),    # 4. compose_address
-                gr.update(value=first_air_order_params.get("visit_date", "")),  # 5. compose_date
-                gr.update(value=int(first_air_order_params.get("discount", 0))),   # 6. compose_discount
-                gr.update(value=50),      # 7. compose_area
-                gr.update(value=""),      # 8. compose_type_room
-                gr.update(value=False),   # 9. compose_wifi
-                gr.update(value=False),   # 10. compose_inverter
-                gr.update(value=10000),   # 11. compose_price
-                gr.update(value="Любой"), # 12. compose_mount_type
-                gr.update(value=2.7),     # 13. compose_ceiling_height
-                gr.update(value="Средняя"), # 14. compose_illumination
-                gr.update(value=1),       # 15. compose_num_people
-                gr.update(value="Сидячая работа"), # 16. compose_activity
-                gr.update(value=0),       # 17. compose_num_computers
-                gr.update(value=0),       # 18. compose_num_tvs
-                gr.update(value=0),       # 19. compose_other_power
-                gr.update(value="Любой"), # 20. compose_brand
-                gr.update(value=0),       # 21. compose_installation_price
+                gr.update(value=last_air_order_params.get("visit_date", "")),  # 5. compose_date
+                gr.update(value=safe_int(last_air_order_params.get("discount", 0))),   # 6. compose_discount
+                gr.update(value=safe_float(last_air_aircon_params.get("area", 50))),      # 7. compose_area
+                gr.update(value=last_air_order_params.get("room_type", "")),      # 8. compose_type_room
+                gr.update(value=safe_bool(last_air_aircon_params.get("wifi", False))),   # 9. compose_wifi
+                gr.update(value=safe_bool(last_air_aircon_params.get("inverter", False))),   # 10. compose_inverter
+                gr.update(value=safe_float(last_air_aircon_params.get("price_limit", 10000))),   # 11. compose_price
+                gr.update(value=last_air_aircon_params.get("mount_type", "Любой")), # 12. compose_mount_type
+                gr.update(value=safe_float(last_air_aircon_params.get("ceiling_height", 2.7))),     # 13. compose_ceiling_height
+                gr.update(value=last_air_aircon_params.get("illumination", "Средняя")), # 14. compose_illumination
+                gr.update(value=safe_int(last_air_aircon_params.get("num_people", 1))),       # 15. compose_num_people
+                gr.update(value=last_air_aircon_params.get("activity", "Сидячая работа")), # 16. compose_activity
+                gr.update(value=safe_int(last_air_aircon_params.get("num_computers", 0))),       # 17. compose_num_computers
+                gr.update(value=safe_int(last_air_aircon_params.get("num_tvs", 0))),       # 18. compose_num_tvs
+                gr.update(value=safe_float(last_air_aircon_params.get("other_power", 0))),       # 19. compose_other_power
+                gr.update(value=last_air_aircon_params.get("brand", "Любой")), # 20. compose_brand
+                gr.update(value=safe_float(last_air_order_params.get("installation_price", 0))),       # 21. compose_installation_price
             ]
             
             # Загружаем комплектующие
@@ -1067,6 +1097,15 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                        ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price):
         """Обработчик сохранения данных составного заказа"""
         logger.info(f"[DEBUG] save_compose_order_handler: order_id_hidden_value={order_id_hidden_value}")
+        logger.info(f"[DEBUG] save_compose_order_handler: room_area={room_area} (type: {type(room_area)})")
+        logger.info(f"[DEBUG] save_compose_order_handler: discount={discount} (type: {type(discount)})")
+        logger.info(f"[DEBUG] save_compose_order_handler: price_limit={price_limit} (type: {type(price_limit)})")
+        logger.info(f"[DEBUG] save_compose_order_handler: ceiling_height={ceiling_height} (type: {type(ceiling_height)})")
+        logger.info(f"[DEBUG] save_compose_order_handler: num_people={num_people} (type: {type(num_people)})")
+        logger.info(f"[DEBUG] save_compose_order_handler: num_computers={num_computers} (type: {type(num_computers)})")
+        logger.info(f"[DEBUG] save_compose_order_handler: num_tvs={num_tvs} (type: {type(num_tvs)})")
+        logger.info(f"[DEBUG] save_compose_order_handler: other_power={other_power} (type: {type(other_power)})")
+        logger.info(f"[DEBUG] save_compose_order_handler: installation_price={installation_price} (type: {type(installation_price)})")
         
         # Проверка обязательных полей
         if not client_name or not client_phone:
@@ -1082,27 +1121,52 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 "address": client_address or ""
             }
             
+            # Безопасное преобразование типов
+            def safe_float(value):
+                if value is None or value == "":
+                    return 0.0
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    return 0.0
+            
+            def safe_int(value):
+                if value is None or value == "":
+                    return 0
+                try:
+                    return int(float(value))  # Сначала float, потом int для случаев типа "15.0"
+                except (ValueError, TypeError):
+                    return 0
+            
+            def safe_bool(value):
+                if value is None or value == "":
+                    return False
+                try:
+                    return bool(value)
+                except (ValueError, TypeError):
+                    return False
+            
             order_params = {
                 "visit_date": visit_date,
-                "room_area": float(room_area) if room_area else 0,
+                "room_area": safe_float(room_area),
                 "room_type": room_type,
-                "discount": int(discount) if discount else 0,
-                "installation_price": float(installation_price) if installation_price else 0
+                "discount": safe_int(discount),
+                "installation_price": safe_float(installation_price)
             }
             
             aircon_params = {
-                "area": float(room_area) if room_area else 0,
-                "ceiling_height": float(ceiling_height) if ceiling_height else 2.7,
+                "area": safe_float(room_area),
+                "ceiling_height": safe_float(ceiling_height) if ceiling_height else 2.7,
                 "illumination": illumination,
-                "num_people": int(num_people) if num_people else 1,
+                "num_people": safe_int(num_people) if num_people else 1,
                 "activity": activity,
-                "num_computers": int(num_computers) if num_computers else 0,
-                "num_tvs": int(num_tvs) if num_tvs else 0,
-                "other_power": float(other_power) if other_power else 0,
+                "num_computers": safe_int(num_computers),
+                "num_tvs": safe_int(num_tvs),
+                "other_power": safe_float(other_power),
                 "brand": brand,
-                "price_limit": float(price_limit) if price_limit else 22000,
-                "inverter": bool(inverter),
-                "wifi": bool(wifi),
+                "price_limit": safe_float(price_limit) if price_limit else 22000,
+                "inverter": safe_bool(inverter),
+                "wifi": safe_bool(wifi),
                 "mount_type": mount_type
             }
             
@@ -1130,6 +1194,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     "client_data": client_data,
                     "airs": [first_air],  # Сразу добавляем первый кондиционер
                     "components": [],
+                    "comment": "Оставьте комментарий...",  # Добавляем поле комментария
                     "status": "partially filled"  # Изменяем статус на partially filled
                 }
                 
@@ -1189,6 +1254,15 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                     ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price):
         """Обработчик добавления следующего кондиционера"""
         logger.info(f"[DEBUG] add_next_aircon_handler: order_id_hidden_value={order_id_hidden_value}")
+        logger.info(f"[DEBUG] add_next_aircon_handler: room_area={room_area} (type: {type(room_area)})")
+        logger.info(f"[DEBUG] add_next_aircon_handler: discount={discount} (type: {type(discount)})")
+        logger.info(f"[DEBUG] add_next_aircon_handler: price_limit={price_limit} (type: {type(price_limit)})")
+        logger.info(f"[DEBUG] add_next_aircon_handler: ceiling_height={ceiling_height} (type: {type(ceiling_height)})")
+        logger.info(f"[DEBUG] add_next_aircon_handler: num_people={num_people} (type: {type(num_people)})")
+        logger.info(f"[DEBUG] add_next_aircon_handler: num_computers={num_computers} (type: {type(num_computers)})")
+        logger.info(f"[DEBUG] add_next_aircon_handler: num_tvs={num_tvs} (type: {type(num_tvs)})")
+        logger.info(f"[DEBUG] add_next_aircon_handler: other_power={other_power} (type: {type(other_power)})")
+        logger.info(f"[DEBUG] add_next_aircon_handler: installation_price={installation_price} (type: {type(installation_price)})")
         
         try:
             order_id = int(order_id_hidden_value)
@@ -1199,29 +1273,54 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             return f"Ошибка: Некорректный ID составного заказа!", None
         
         try:
+            # Безопасное преобразование типов
+            def safe_float(value):
+                if value is None or value == "":
+                    return 0.0
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    return 0.0
+            
+            def safe_int(value):
+                if value is None or value == "":
+                    return 0
+                try:
+                    return int(float(value))  # Сначала float, потом int для случаев типа "15.0"
+                except (ValueError, TypeError):
+                    return 0
+            
+            def safe_bool(value):
+                if value is None or value == "":
+                    return False
+                try:
+                    return bool(value)
+                except (ValueError, TypeError):
+                    return False
+            
             # Формируем данные нового кондиционера
             aircon_params = {
-                "area": float(room_area) if room_area else 0,
-                "ceiling_height": float(ceiling_height) if ceiling_height else 2.7,
+                "area": safe_float(room_area),
+                "ceiling_height": safe_float(ceiling_height) if ceiling_height else 2.7,
                 "illumination": illumination,
-                "num_people": int(num_people) if num_people else 1,
+                "num_people": safe_int(num_people) if num_people else 1,
                 "activity": activity,
-                "num_computers": int(num_computers) if num_computers else 0,
-                "num_tvs": int(num_tvs) if num_tvs else 0,
-                "other_power": float(other_power) if other_power else 0,
+                "num_computers": safe_int(num_computers),
+                "num_tvs": safe_int(num_tvs),
+                "other_power": safe_float(other_power),
                 "brand": brand,
-                "price_limit": float(price_limit) if price_limit else 22000,
-                "inverter": bool(inverter),
-                "wifi": bool(wifi),
+                "price_limit": safe_float(price_limit) if price_limit else 22000,
+                "inverter": safe_bool(inverter),
+                "wifi": safe_bool(wifi),
                 "mount_type": mount_type
             }
             
             order_params = {
                 "visit_date": visit_date,
-                "room_area": float(room_area) if room_area else 0,
+                "room_area": safe_float(room_area),
                 "room_type": room_type,
-                "discount": int(discount) if discount else 0,
-                "installation_price": float(installation_price) if installation_price else 0
+                "discount": safe_int(discount),
+                "installation_price": safe_float(installation_price)
             }
             
             new_aircon_order = {
@@ -1251,30 +1350,30 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                         order_id,
                         # Данные клиента остаются без изменений (включая visit_date и discount)
                         client_name, client_phone, client_mail, client_address, visit_date, discount,
-                        # Поля помещения очищаются к дефолтным значениям
-                        placeholder["order_params"]["room_area"],
-                        placeholder["order_params"]["room_type"],
-                        placeholder["aircon_params"]["wifi"],
-                        placeholder["aircon_params"]["inverter"],
-                        placeholder["aircon_params"]["price_limit"],
-                        placeholder["aircon_params"]["mount_type"],
-                        placeholder["aircon_params"]["ceiling_height"],
-                        placeholder["aircon_params"]["illumination"],
-                        placeholder["aircon_params"]["num_people"],
-                        placeholder["aircon_params"]["activity"],
-                        placeholder["aircon_params"]["num_computers"],
-                        placeholder["aircon_params"]["num_tvs"],
-                        placeholder["aircon_params"]["other_power"],
-                        placeholder["aircon_params"]["brand"],
-                        placeholder["order_params"]["installation_price"]
+                        # Поля помещения очищаются к дефолтным значениям (возвращаем правильные типы для Gradio)
+                        50.0,  # compose_area (float для слайдера)
+                        "",    # compose_type_room (строка для текстбокса)
+                        False, # compose_wifi (bool для чекбокса)
+                        False, # compose_inverter (bool для чекбокса)
+                        10000.0, # compose_price (float для слайдера)
+                        "Любой", # compose_mount_type (строка для дропдауна)
+                        2.7,   # compose_ceiling_height (float для слайдера)
+                        "Средняя", # compose_illumination (строка для дропдауна)
+                        1,     # compose_num_people (int для слайдера)
+                        "Сидячая работа", # compose_activity (строка для дропдауна)
+                        0,     # compose_num_computers (int для слайдера)
+                        0,     # compose_num_tvs (int для слайдера)
+                        0.0,   # compose_other_power (float для слайдера)
+                        "Любой", # compose_brand (строка для дропдауна)
+                        666.0  # compose_installation_price (float для number поля)
                     )
                 else:
                     error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
-                    return f"Ошибка: {error_msg}", order_id
+                    return f"Ошибка: {error_msg}", order_id, client_name, client_phone, client_mail, client_address, visit_date, discount, 50.0, "", False, False, 10000.0, "Любой", 2.7, "Средняя", 1, "Сидячая работа", 0, 0, 0.0, "Любой", 666.0
                     
         except Exception as e:
             logger.error(f"Ошибка при добавлении кондиционера: {e}", exc_info=True)
-            return f"Ошибка: {e}", order_id
+            return f"Ошибка: {e}", order_id, client_name, client_phone, client_mail, client_address, visit_date, discount, 50.0, "", False, False, 10000.0, "Любой", 2.7, "Средняя", 1, "Сидячая работа", 0, 0, 0.0, "Любой", 666.0
 
     # Обработчик для удаления заказа
     async def delete_order_handler(order_id_hidden_value):

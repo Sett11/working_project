@@ -224,6 +224,7 @@ async def generate_compose_commercial_offer_pdf(
 
         # --- Варианты кондиционеров для каждой комнаты ---
         total_aircon_price = 0
+        total_installation_price = 0
         
         for i, aircon_result in enumerate(aircon_results.get("aircon_results", [])):
             # Получаем данные о комнате
@@ -313,9 +314,17 @@ async def generate_compose_commercial_offer_pdf(
                 ]))
                 story.append(ac_table)
                 
-                # Добавляем цену первого (самого дешевого) варианта к общей сумме
+                # Суммируем стоимость кондиционеров (для отображения отдельно)
                 if selected_aircons and selected_aircons[0].get('retail_price_byn'):
                     total_aircon_price += selected_aircons[0]['retail_price_byn'] * (1 - discount_percent / 100)
+                
+                # Суммируем стоимость монтажа для каждого кондиционера
+                installation_price_val = order_params.get('installation_price', 0)
+                if installation_price_val is not None and installation_price_val != '':
+                    try:
+                        total_installation_price += float(installation_price_val)
+                    except (ValueError, TypeError):
+                        logger.error(f"Ошибка преобразования installation_price для комнаты {room_type}")
             
             story.append(Spacer(1, 15))
 
@@ -383,48 +392,40 @@ async def generate_compose_commercial_offer_pdf(
                 story.append(comp_table)
                 story.append(Spacer(1, 15))
 
-        # --- Блок работ (точно как в оригинале) ---
-        installation_price = 0.0
-        try:
-            # Берем стоимость монтажа из первого кондиционера
-            installation_price_val = airs[0].get("order_params", {}).get('installation_price', 0)
-            if installation_price_val is not None and installation_price_val != '':
-                installation_price = float(installation_price_val)
-            else:
-                installation_price = 0.0
-        except (ValueError, TypeError) as e:
-            logger.error(f"Ошибка преобразования installation_price: {e}")
-            installation_price = 0.0
-            
-        logger.info(f"Стоимость работ (installation_price): {installation_price}")
+        # --- Блок работ (стоимость монтажа уже учтена в цикле выше) ---
+        logger.info(f"Общая стоимость монтажа: {total_installation_price:.2f}")
+        logger.info(f"Стоимость кондиционеров: {total_aircon_price:.2f}")
         
-        work_table_data = [
-            [Paragraph("Монтажные работы", styleTableCell), Paragraph(f"{installation_price:.2f}", styleTableCell)]
-        ]
-        work_table = Table(
-            work_table_data, 
-            colWidths=[140*mm, 30*mm]
-        )
-        work_table.setStyle(TableStyle([
-            ('FONTNAME', (0,0), (-1,-1), FONT_NAME_NORMAL),
-            ('FONTSIZE', (0,0), (-1,-1), 7),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-            ('ALIGN', (0,0), (0,0), 'LEFT'),
-            ('ALIGN', (1,0), (1,0), 'RIGHT'),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ]))
-        story.append(work_table)
-        story.append(Spacer(1, 15))
+        # Отображаем общую стоимость монтажа
+        if total_installation_price > 0:
+            work_table_data = [
+                [Paragraph("Монтажные работы (общая стоимость)", styleTableCell), Paragraph(f"{total_installation_price:.2f}", styleTableCell)]
+            ]
+            work_table = Table(
+                work_table_data, 
+                colWidths=[140*mm, 30*mm]
+            )
+            work_table.setStyle(TableStyle([
+                ('FONTNAME', (0,0), (-1,-1), FONT_NAME_NORMAL),
+                ('FONTSIZE', (0,0), (-1,-1), 7),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+                ('ALIGN', (0,0), (0,0), 'LEFT'),
+                ('ALIGN', (1,0), (1,0), 'RIGHT'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ]))
+            story.append(work_table)
+            story.append(Spacer(1, 15))
 
         # --- Расчет итоговой суммы ---
-        total_pay = total_components + installation_price + total_aircon_price
+        # Итоговая сумма = комплектующие + монтаж (кондиционеры НЕ включаются)
+        total_pay = total_components + total_installation_price
         
-        # --- Итоговая сумма (точно как в оригинале) ---
+        # --- Итоговая сумма ---
         total_table = Table([
             [
                 Paragraph(f"ИТОГО К ОПЛАТЕ:", styleBold),
                 Paragraph(f"{total_pay:.2f} BYN", styleBold),
-                Paragraph(f"включая стоимость кондиционеров", styleTotalNote)
+                Paragraph(f"+ стоимость выбранных кондиционеров", styleTotalNote)
             ]
         ], colWidths=[80*mm, 50*mm, 70*mm])
         total_table.setStyle(TableStyle([
@@ -440,6 +441,26 @@ async def generate_compose_commercial_offer_pdf(
             ('TOPPADDING', (0,0), (-1,-1), 4),
         ]))
         story.append(total_table)
+        
+        # Добавляем информацию о стоимости кондиционеров отдельно
+        if total_aircon_price > 0:
+            aircon_cost_table = Table([
+                [
+                    Paragraph(f"Стоимость выбранных кондиционеров:", styleBold),
+                    Paragraph(f"{total_aircon_price:.2f} BYN", styleBold)
+                ]
+            ], colWidths=[130*mm, 50*mm])
+            aircon_cost_table.setStyle(TableStyle([
+                ('FONTNAME', (0,0), (-1,-1), FONT_NAME_NORMAL),
+                ('FONTSIZE', (0,0), (-1,-1), 10),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('ALIGN', (0,0), (0,0), 'LEFT'),
+                ('ALIGN', (1,0), (1,0), 'RIGHT'),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+                ('TOPPADDING', (0,0), (-1,-1), 4),
+            ]))
+            story.append(aircon_cost_table)
+        
         story.append(Spacer(1, 20))
 
         # --- Условия и примечания (точно как в оригинале) ---

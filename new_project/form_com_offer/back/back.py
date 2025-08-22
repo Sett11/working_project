@@ -393,7 +393,7 @@ async def get_all_orders_list(db: AsyncSession = Depends(get_session)):
                 "address": client_data.get("address", ""),
                 "created_at": order.created_at.strftime("%Y-%m-%d"),
                 "status": order.status,
-                "comment": ""  # У составных заказов пока нет комментариев
+                "comment": compose_order_data.get("comment", "")  # Загружаем комментарий для составных заказов
             })
         
         # Сортируем по дате создания (новые выше)
@@ -479,8 +479,8 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
         # Проверяем, есть ли обновление последнего кондиционера
         update_last_aircon = payload.get("update_last_aircon")
         
-        # Проверяем обязательные поля (только если нет update_last_aircon)
-        if not update_last_aircon and (not client_data.get("full_name") or not client_data.get("phone")):
+        # Проверяем обязательные поля (только если есть client_data и нет update_last_aircon)
+        if client_data and not update_last_aircon and (not client_data.get("full_name") or not client_data.get("phone")):
             return {"success": False, "error": "Имя клиента и телефон обязательны"}
         
         # Ищем или создаем клиента (только если есть client_data)
@@ -535,8 +535,48 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
                     # Обновляем параметры последнего кондиционера
                     last_air = airs[-1]
                     logger.info(f"Обновляем кондиционер с ID: {last_air.get('id')}")
-                    last_air["order_params"] = update_last_aircon.get("order_params", {})
-                    last_air["aircon_params"] = update_last_aircon.get("aircon_params", {})
+                    
+                    # Безопасное преобразование типов для order_params
+                    order_params = update_last_aircon.get("order_params", {})
+                    safe_order_params = {}
+                    for key, value in order_params.items():
+                        if key in ["room_area", "installation_price"]:
+                            try:
+                                safe_order_params[key] = float(value) if value is not None else 0.0
+                            except (ValueError, TypeError):
+                                safe_order_params[key] = 0.0
+                        elif key == "discount":
+                            try:
+                                safe_order_params[key] = int(float(value)) if value is not None else 0
+                            except (ValueError, TypeError):
+                                safe_order_params[key] = 0
+                        else:
+                            safe_order_params[key] = value
+                    
+                    # Безопасное преобразование типов для aircon_params
+                    aircon_params = update_last_aircon.get("aircon_params", {})
+                    safe_aircon_params = {}
+                    for key, value in aircon_params.items():
+                        if key in ["area", "ceiling_height", "other_power", "price_limit"]:
+                            try:
+                                safe_aircon_params[key] = float(value) if value is not None else 0.0
+                            except (ValueError, TypeError):
+                                safe_aircon_params[key] = 0.0
+                        elif key in ["num_people", "num_computers", "num_tvs"]:
+                            try:
+                                safe_aircon_params[key] = int(float(value)) if value is not None else 0
+                            except (ValueError, TypeError):
+                                safe_aircon_params[key] = 0
+                        elif key in ["inverter", "wifi"]:
+                            try:
+                                safe_aircon_params[key] = bool(value) if value is not None else False
+                            except (ValueError, TypeError):
+                                safe_aircon_params[key] = False
+                        else:
+                            safe_aircon_params[key] = value
+                    
+                    last_air["order_params"] = safe_order_params
+                    last_air["aircon_params"] = safe_aircon_params
                     order.compose_order_data = json.dumps(existing_data, ensure_ascii=False)
                     order.status = status_update or order.status
                     logger.info(f"Обновлен последний кондиционер составного заказа id={order.id}")
