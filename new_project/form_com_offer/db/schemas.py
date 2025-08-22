@@ -69,6 +69,7 @@ class OrderBase(BaseModel):
     status: Optional[str] = "draft"
     pdf_path: Optional[str] = None
     order_data: dict
+    order_type: Optional[str] = "Order"
 
 class OrderCreate(OrderBase):
     client_id: int
@@ -101,5 +102,27 @@ class OfferCounterCreate(OfferCounterBase):
 class OfferCounter(OfferCounterBase, OrmBase):
     id: int
     updated_at: Optional[date] = None
+
+# --- Новая схема для составных заказов ---
+class ComposeOrderBase(BaseModel):
+    status: Optional[str] = "draft"
+    pdf_path: Optional[str] = None
+    compose_order_data: dict  # Данные составного заказа
+    order_type: Optional[str] = "Compose"
+
+class ComposeOrderCreate(ComposeOrderBase):
+    client_id: int
+    created_at: date
+
+class ComposeOrder(ComposeOrderBase, OrmBase):
+    id: int
+    created_at: date
+    client: Client
+
+class ComposeOrderPayload(BaseModel):
+    client_data: ClientCreate
+    airs: list  # Список кондиционеров с автоинкрементными ID
+    components: list  # Комплектующие для всего заказа
+    status: Optional[str] = "draft"
 
 logger.info("Pydantic-схемы успешно определены.")

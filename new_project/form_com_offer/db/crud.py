@@ -66,6 +66,36 @@ async def create_client(db: AsyncSession, client: schemas.ClientCreate) -> model
         raise
 
 
+async def get_or_create_client(db: AsyncSession, client_data: dict) -> models.Client:
+    """
+    Получение существующего клиента по телефону или создание нового.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+        client_data (dict): Данные клиента.
+
+    Returns:
+        models.Client: Объект клиента (существующий или новый).
+    """
+    logger.info(f"[CRUD] get_or_create_client: {client_data}")
+    
+    phone = client_data.get("phone")
+    if not phone:
+        raise ValueError("Номер телефона обязателен для поиска/создания клиента")
+    
+    # Сначала пытаемся найти существующего клиента по телефону
+    existing_client = await get_client_by_phone(db, phone)
+    if existing_client:
+        logger.info(f"[CRUD] get_or_create_client: найден существующий клиент id={existing_client.id}")
+        return existing_client
+    
+    # Если клиент не найден, создаем нового
+    logger.info(f"[CRUD] get_or_create_client: создаем нового клиента")
+    client_schema = schemas.ClientCreate(**client_data)
+    new_client = await create_client(db, client_schema)
+    return new_client
+
+
 # --- CRUD-операции для Продуктов (Product) ---
 
 async def get_air_conditioners(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[models.AirConditioner]:
@@ -286,3 +316,143 @@ async def get_current_offer_number(db: AsyncSession) -> int:
     counter = await get_or_create_offer_counter(db)
     logger.info(f"[CRUD] get_current_offer_number: текущий номер КП = {counter.current_number}")
     return counter.current_number
+
+# --- CRUD-операции для составных заказов (ComposeOrder) ---
+
+async def create_compose_order(db: AsyncSession, compose_order: schemas.ComposeOrderCreate) -> models.ComposeOrder:
+    """
+    Создание нового составного заказа.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+        compose_order (schemas.ComposeOrderCreate): Данные для создания составного заказа.
+
+    Returns:
+        models.ComposeOrder: Созданный составной заказ.
+    """
+    logger.info(f"[CRUD] create_compose_order: создание составного заказа для клиента id={compose_order.client_id}")
+    
+    try:
+        db_compose_order = models.ComposeOrder(
+            client_id=compose_order.client_id,
+            created_at=compose_order.created_at,
+            status=compose_order.status,
+            pdf_path=compose_order.pdf_path,
+            compose_order_data=json.dumps(compose_order.compose_order_data, ensure_ascii=False)
+        )
+        db.add(db_compose_order)
+        await db.commit()
+        await db.refresh(db_compose_order)
+        logger.info(f"[CRUD] create_compose_order: составной заказ создан с id={db_compose_order.id}")
+        return db_compose_order
+    except Exception as e:
+        logger.error(f"[CRUD] create_compose_order: ошибка при создании составного заказа: {e}", exc_info=True)
+        await db.rollback()
+        raise
+
+async def get_compose_order(db: AsyncSession, compose_order_id: int) -> models.ComposeOrder:
+    """
+    Получение составного заказа по ID.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+        compose_order_id (int): ID составного заказа.
+
+    Returns:
+        models.ComposeOrder: Составной заказ или None.
+    """
+    logger.info(f"[CRUD] get_compose_order: получение составного заказа id={compose_order_id}")
+    
+    result = await db.execute(select(models.ComposeOrder).where(models.ComposeOrder.id == compose_order_id))
+    compose_order = result.scalar_one_or_none()
+    
+    if compose_order:
+        logger.info(f"[CRUD] get_compose_order: составной заказ id={compose_order_id} найден")
+    else:
+        logger.warning(f"[CRUD] get_compose_order: составной заказ id={compose_order_id} не найден")
+    
+    return compose_order
+
+async def get_compose_orders(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[models.ComposeOrder]:
+    """
+    Получение списка составных заказов.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+        skip (int): Количество записей для пропуска.
+        limit (int): Максимальное количество записей.
+
+    Returns:
+        list[models.ComposeOrder]: Список составных заказов.
+    """
+    logger.info(f"[CRUD] get_compose_orders: получение списка составных заказов (skip={skip}, limit={limit})")
+    
+    result = await db.execute(select(models.ComposeOrder).offset(skip).limit(limit))
+    compose_orders = result.scalars().all()
+    
+    logger.info(f"[CRUD] get_compose_orders: получено {len(compose_orders)} составных заказов")
+    return compose_orders
+
+async def update_compose_order(db: AsyncSession, compose_order_id: int, compose_order_update: schemas.ComposeOrderBase) -> models.ComposeOrder:
+    """
+    Обновление составного заказа.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+        compose_order_id (int): ID составного заказа.
+        compose_order_update (schemas.ComposeOrderBase): Данные для обновления.
+
+    Returns:
+        models.ComposeOrder: Обновленный составной заказ или None.
+    """
+    logger.info(f"[CRUD] update_compose_order: обновление составного заказа id={compose_order_id}")
+    
+    result = await db.execute(select(models.ComposeOrder).where(models.ComposeOrder.id == compose_order_id))
+    db_compose_order = result.scalar_one_or_none()
+    
+    if not db_compose_order:
+        logger.warning(f"[CRUD] update_compose_order: составной заказ id={compose_order_id} не найден")
+        return None
+    
+    try:
+        db_compose_order.status = compose_order_update.status
+        db_compose_order.pdf_path = compose_order_update.pdf_path
+        db_compose_order.compose_order_data = json.dumps(compose_order_update.compose_order_data, ensure_ascii=False)
+        await db.commit()
+        await db.refresh(db_compose_order)
+        logger.info(f"[CRUD] update_compose_order: составной заказ id={compose_order_id} успешно обновлен")
+        return db_compose_order
+    except Exception as e:
+        logger.error(f"[CRUD] update_compose_order: ошибка при обновлении составного заказа id={compose_order_id}: {e}", exc_info=True)
+        await db.rollback()
+        raise
+
+async def delete_compose_order(db: AsyncSession, compose_order_id: int) -> bool:
+    """
+    Удаление составного заказа.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+        compose_order_id (int): ID составного заказа.
+
+    Returns:
+        bool: True если заказ удален, False если не найден.
+    """
+    logger.info(f"[CRUD] delete_compose_order: удаление составного заказа id={compose_order_id}")
+    
+    result = await db.execute(select(models.ComposeOrder).where(models.ComposeOrder.id == compose_order_id))
+    db_compose_order = result.scalar_one_or_none()
+    
+    if not db_compose_order:
+        logger.warning(f"[CRUD] delete_compose_order: составной заказ id={compose_order_id} не найден")
+        return False
+    
+    try:
+        await db.delete(db_compose_order)
+        await db.commit()
+        logger.info(f"[CRUD] delete_compose_order: составной заказ id={compose_order_id} успешно удален")
+        return True
+    except Exception as e:
+        logger.error(f"[CRUD] delete_compose_order: ошибка при удалении составного заказа id={compose_order_id}: {e}", exc_info=True)
+        await db.rollback()
+        raise

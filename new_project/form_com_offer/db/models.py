@@ -39,6 +39,7 @@ class Client(Base):
     email = Column(String, nullable=True)  # Email клиента
     address = Column(String, nullable=True)  # Адрес клиента
     orders = relationship("Order", back_populates="client")  # Связь с заказами клиента
+    compose_orders = relationship("ComposeOrder", back_populates="client")  # Связь с составными заказами клиента
 
 class Order(Base):
     """
@@ -49,6 +50,7 @@ class Order(Base):
     status = Column(String, default='draft')  # Статус заказа: 'draft' или 'ready'
     pdf_path = Column(String, nullable=True)  # Путь к PDF-файлу (если есть)
     order_data = Column(Text, nullable=False)  # Все данные заказа в формате JSON (строка)
+    order_type = Column(String, default='Order')  # Тип заказа: 'Order' или 'Compose'
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата создания заказа
     client_id = Column(Integer, ForeignKey('clients.id'))  # Внешний ключ на клиента
     client = relationship("Client", back_populates="orders")  # Объект клиента
@@ -98,4 +100,18 @@ class OfferCounter(Base):
     current_number = Column(Integer, default=1)  # Текущий номер КП
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Время последнего обновления
 
-logger.info("Все модели базы данных (Client, Order, AirConditioner, Component, OfferCounter) успешно определены.")
+class ComposeOrder(Base):
+    """
+    Модель составного заказа (несколько кондиционеров для одного клиента).
+    """
+    __tablename__ = 'compose_orders'
+    id = Column(Integer, primary_key=True, index=True)  # Уникальный идентификатор составного заказа
+    status = Column(String, default='draft')  # Статус заказа: 'draft' или 'ready'
+    pdf_path = Column(String, nullable=True)  # Путь к PDF-файлу (если есть)
+    compose_order_data = Column(Text, nullable=False)  # Все данные составного заказа в формате JSON (строка)
+    order_type = Column(String, default='Compose')  # Тип заказа: 'Order' или 'Compose'
+    created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата создания заказа
+    client_id = Column(Integer, ForeignKey('clients.id'))  # Внешний ключ на клиента
+    client = relationship("Client", back_populates="compose_orders")  # Объект клиента
+
+logger.info("Все модели базы данных (Client, Order, AirConditioner, Component, OfferCounter, ComposeOrder) успешно определены.")

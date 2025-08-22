@@ -206,11 +206,28 @@ async def save_order_endpoint(payload: dict, db: AsyncSession = Depends(get_sess
         if list(payload.keys()) == ["id", "comment"] or ("id" in payload and "comment" in payload and len(payload) == 2):
             order_id = payload["id"]
             comment = payload["comment"]
+            
+            # Сначала ищем в обычных заказах
             result = await db.execute(select(crud.models.Order).filter_by(id=order_id))
             order = result.scalars().first()
+            
+            # Если не найден в обычных заказах, ищем в составных
             if not order:
-                logger.error(f"Заказ с id={order_id} не найден для обновления комментария!")
-                return {"success": False, "error": f"Заказ с id={order_id} не найден!"}
+                result = await db.execute(select(crud.models.ComposeOrder).filter_by(id=order_id))
+                compose_order = result.scalars().first()
+                if not compose_order:
+                    logger.error(f"Заказ с id={order_id} не найден для обновления комментария!")
+                    return {"success": False, "error": f"Заказ с id={order_id} не найден!"}
+                
+                # Обновляем комментарий для составного заказа
+                compose_order_data = json.loads(compose_order.compose_order_data)
+                compose_order_data["comment"] = comment
+                compose_order.compose_order_data = json.dumps(compose_order_data, ensure_ascii=False)
+                await db.commit()
+                logger.info(f"Комментарий для составного заказа id={order_id} успешно обновлён.")
+                return {"success": True, "order_id": compose_order.id, "updated": True}
+            
+            # Обновляем комментарий для обычного заказа
             order_data = json.loads(order.order_data)
             order_data["comment"] = comment
             order.order_data = json.dumps(order_data, ensure_ascii=False)
@@ -290,6 +307,7 @@ async def get_orders_list(db: AsyncSession = Depends(get_session)):
             client_data = order_data.get("client_data", {})
             result.append({
                 "id": order.id,
+                "order_type": order.order_type or "Order",  # Добавляем тип заказа
                 "client_name": client_data.get("full_name", ""),
                 "address": client_data.get("address", ""),
                 "created_at": order.created_at.strftime("%Y-%m-%d"),
@@ -300,6 +318,91 @@ async def get_orders_list(db: AsyncSession = Depends(get_session)):
         return result
     except Exception as e:
         logger.error(f"Ошибка при получении списка заказов: {e}", exc_info=True)
+        return {"error": str(e)}
+
+# --- Эндпоинт: получить список всех составных заказов ---
+@app.get("/api/compose_orders/")
+async def get_compose_orders_list(db: AsyncSession = Depends(get_session)):
+    """
+    Возвращает список всех составных заказов для фронта.
+    """
+    try:
+        result = await db.execute(select(crud.models.ComposeOrder))
+        compose_orders = result.scalars().all()
+        logger.info(f"Всего составных заказов в базе: {len(compose_orders)}")
+        result = []
+        for order in compose_orders:
+            compose_order_data = json.loads(order.compose_order_data)
+            client_data = compose_order_data.get("client_data", {})
+            result.append({
+                "id": order.id,
+                "order_type": order.order_type or "Compose",  # Тип составного заказа
+                "client_name": client_data.get("full_name", ""),
+                "address": client_data.get("address", ""),
+                "created_at": order.created_at.strftime("%Y-%m-%d"),
+                "status": order.status,
+                "comment": ""  # У составных заказов пока нет комментариев
+            })
+        logger.info(f"Отправлен список составных заказов: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Ошибка при получении списка составных заказов: {e}", exc_info=True)
+        return {"error": str(e)}
+
+# --- Эндпоинт: получить объединенный список всех заказов ---
+@app.get("/api/all_orders/")
+async def get_all_orders_list(db: AsyncSession = Depends(get_session)):
+    """
+    Возвращает объединенный список всех заказов (обычных и составных) для фронта.
+    """
+    try:
+        # Получаем обычные заказы
+        result = await db.execute(select(crud.models.Order))
+        orders = result.scalars().all()
+        
+        # Получаем составные заказы
+        result = await db.execute(select(crud.models.ComposeOrder))
+        compose_orders = result.scalars().all()
+        
+        logger.info(f"Всего заказов в базе: {len(orders)} обычных, {len(compose_orders)} составных")
+        
+        all_orders = []
+        
+        # Добавляем обычные заказы
+        for order in orders:
+            order_data = json.loads(order.order_data)
+            client_data = order_data.get("client_data", {})
+            all_orders.append({
+                "id": order.id,
+                "order_type": order.order_type or "Order",
+                "client_name": client_data.get("full_name", ""),
+                "address": client_data.get("address", ""),
+                "created_at": order.created_at.strftime("%Y-%m-%d"),
+                "status": order.status,
+                "comment": order_data.get("comment", "")
+            })
+        
+        # Добавляем составные заказы
+        for order in compose_orders:
+            compose_order_data = json.loads(order.compose_order_data)
+            client_data = compose_order_data.get("client_data", {})
+            all_orders.append({
+                "id": order.id,
+                "order_type": order.order_type or "Compose",
+                "client_name": client_data.get("full_name", ""),
+                "address": client_data.get("address", ""),
+                "created_at": order.created_at.strftime("%Y-%m-%d"),
+                "status": order.status,
+                "comment": ""  # У составных заказов пока нет комментариев
+            })
+        
+        # Сортируем по дате создания (новые выше)
+        all_orders.sort(key=lambda x: x["created_at"], reverse=True)
+        
+        logger.info(f"Отправлен объединенный список заказов: {len(all_orders)} заказов")
+        return all_orders
+    except Exception as e:
+        logger.error(f"Ошибка при получении объединенного списка заказов: {e}", exc_info=True)
         return {"error": str(e)}
 
 # --- Эндпоинт: получить заказ по ID ---
@@ -322,6 +425,25 @@ async def get_order_by_id(order_id: int = Path(...), db: AsyncSession = Depends(
         logger.error(f"Ошибка при получении заказа по id: {e}", exc_info=True)
         return {"error": str(e)}
 
+# --- Эндпоинт: получить составной заказ по ID ---
+@app.get("/api/compose_order/{order_id}")
+async def get_compose_order_by_id(order_id: int = Path(...), db: AsyncSession = Depends(get_session)):
+    try:
+        result = await db.execute(select(crud.models.ComposeOrder).filter_by(id=order_id))
+        order = result.scalars().first()
+        if not order:
+            return {"error": "Составной заказ не найден"}
+        # Возвращаем compose_order_data как есть (словарь)
+        compose_order_data = json.loads(order.compose_order_data)
+        compose_order_data["id"] = order.id
+        compose_order_data["status"] = order.status
+        compose_order_data["pdf_path"] = order.pdf_path
+        compose_order_data["created_at"] = order.created_at.strftime("%Y-%m-%d")
+        return compose_order_data
+    except Exception as e:
+        logger.error(f"Ошибка при получении составного заказа по id: {e}", exc_info=True)
+        return {"error": str(e)}
+
 # --- Эндпоинт: удалить заказ по ID ---
 @app.delete("/api/order/{order_id}")
 async def delete_order(order_id: int = Path(...), db: AsyncSession = Depends(get_session)):
@@ -336,4 +458,324 @@ async def delete_order(order_id: int = Path(...), db: AsyncSession = Depends(get
         return {"success": True}
     except Exception as e:
         logger.error(f"Ошибка при удалении заказа: {e}", exc_info=True)
+        return {"error": str(e)}
+
+# --- Эндпоинты для составных заказов ---
+
+@app.post("/api/save_compose_order/")
+async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_session)):
+    """
+    Сохраняет или обновляет составной заказ с новой структурой данных (airs + components).
+    """
+    logger.info(f"Получен запрос на сохранение составного заказа: {json.dumps(payload, ensure_ascii=False)}")
+    try:
+        compose_order_data = payload.get("compose_order_data", {})
+        client_data = compose_order_data.get("client_data", {})
+        
+        # Проверяем, есть ли обновление комплектующих
+        components_update = payload.get("components")
+        status_update = payload.get("status")
+        
+        # Проверяем, есть ли обновление последнего кондиционера
+        update_last_aircon = payload.get("update_last_aircon")
+        
+        # Проверяем обязательные поля (только если нет update_last_aircon)
+        if not update_last_aircon and (not client_data.get("full_name") or not client_data.get("phone")):
+            return {"success": False, "error": "Имя клиента и телефон обязательны"}
+        
+        # Ищем или создаем клиента (только если есть client_data)
+        client = None
+        if client_data:
+            client = await crud.get_or_create_client(db, client_data)
+        
+        # Проверяем, есть ли уже составной заказ с таким ID
+        order_id = payload.get("id")
+        order = None
+        if order_id:
+            result = await db.execute(select(crud.models.ComposeOrder).filter_by(id=order_id))
+            order = result.scalars().first()
+        
+        if not order:
+            # Создаем новый составной заказ с новой структурой (только если есть client_data)
+            if not client_data:
+                return {"success": False, "error": "Для создания нового заказа необходимы данные клиента"}
+            
+            from datetime import date
+            
+            # Используем данные из payload, которые уже содержат первый кондиционер
+            new_order_data = compose_order_data
+            
+            order_payload = schemas.ComposeOrderCreate(
+                client_id=client.id,
+                created_at=date.today(),
+                status=payload.get("status", "draft"),
+                pdf_path=None,
+                compose_order_data=new_order_data
+            )
+            order = await crud.create_compose_order(db, order_payload)
+            logger.info(f"Создан новый составной заказ с id={order.id}")
+            return {"success": True, "order_id": order.id, "updated": False}
+        else:
+            # Обновляем существующий заказ
+            if components_update is not None:
+                # Обновляем только комплектующие
+                existing_data = json.loads(order.compose_order_data)
+                existing_data["components"] = components_update
+                if status_update:
+                    existing_data["status"] = status_update
+                order.compose_order_data = json.dumps(existing_data, ensure_ascii=False)
+                order.status = status_update or order.status
+                logger.info(f"Обновлены комплектующие составного заказа id={order.id}")
+            elif update_last_aircon is not None:
+                # Обновляем только последний кондиционер
+                existing_data = json.loads(order.compose_order_data)
+                airs = existing_data.get("airs", [])
+                logger.info(f"Обновление последнего кондиционера: найдено {len(airs)} кондиционеров в заказе")
+                if airs:
+                    # Обновляем параметры последнего кондиционера
+                    last_air = airs[-1]
+                    logger.info(f"Обновляем кондиционер с ID: {last_air.get('id')}")
+                    last_air["order_params"] = update_last_aircon.get("order_params", {})
+                    last_air["aircon_params"] = update_last_aircon.get("aircon_params", {})
+                    order.compose_order_data = json.dumps(existing_data, ensure_ascii=False)
+                    order.status = status_update or order.status
+                    logger.info(f"Обновлен последний кондиционер составного заказа id={order.id}")
+                else:
+                    return {"success": False, "error": "В заказе нет кондиционеров для обновления"}
+            else:
+                # Обновляем полные данные заказа
+                order.compose_order_data = json.dumps(compose_order_data, ensure_ascii=False)
+                order.status = payload.get("status", order.status)
+                logger.info(f"Обновлён составной заказ id={order.id}")
+            
+            await db.commit()
+            return {"success": True, "order_id": order.id, "updated": True}
+            
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении составного заказа: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/select_compose_aircons/")
+async def select_compose_aircons(payload: dict, db: AsyncSession = Depends(get_session)):
+    """
+    Подбирает кондиционеры для последнего добавленного кондиционера в составном заказе.
+    """
+    logger.info(f"Получен запрос на подбор кондиционеров для составного заказа: {json.dumps(payload, ensure_ascii=False)}")
+    try:
+        order_id = payload.get("id")
+        if not order_id:
+            return {"error": "ID составного заказа не указан"}
+        
+        # Получаем составной заказ
+        result = await db.execute(select(crud.models.ComposeOrder).filter_by(id=order_id))
+        order = result.scalars().first()
+        if not order:
+            return {"error": "Составной заказ не найден"}
+        
+        compose_order_data = json.loads(order.compose_order_data)
+        airs = compose_order_data.get("airs", [])
+        
+        if not airs:
+            return {"error": "В составном заказе нет кондиционеров для подбора"}
+        
+        # Берем последний добавленный кондиционер
+        last_air = airs[-1]
+        logger.info(f"Подбираем кондиционеры для последнего элемента с ID {last_air.get('id')}")
+        
+        # Импортируем функцию подбора для одного кондиционера
+        from utils.compose_aircon_selector import select_aircons_for_params
+        
+        # Подбираем кондиционеры для последнего элемента
+        aircon_params = last_air.get("aircon_params", {})
+        order_params = last_air.get("order_params", {})
+        
+        # Преобразуем illumination из строки в число, если нужно
+        if isinstance(aircon_params.get('illumination'), str):
+            illumination_map = {"Слабая": 0, "Средняя": 1, "Сильная": 2}
+            aircon_params['illumination'] = illumination_map.get(aircon_params['illumination'], 1)
+        
+        # Преобразуем activity из строки в число, если нужно
+        if isinstance(aircon_params.get('activity'), str):
+            activity_map = {"Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
+            aircon_params['activity'] = activity_map.get(aircon_params['activity'], 0)
+        
+        selected_aircons = await select_aircons_for_params(db, aircon_params)
+        
+        # Формируем результат для отображения
+        result_text = f"Результаты подбора кондиционеров:\n"
+        result_text += f"Площадь: {aircon_params.get('area', 0)} м²\n"
+        
+        # Рассчитываем требуемую мощность используя правильную функцию
+        from utils.aircon_selector import calculate_required_power
+        
+        # Восстанавливаем строковые значения для правильного расчета
+        calculation_params = aircon_params.copy()
+        if isinstance(calculation_params.get('illumination'), int):
+            illumination_map = {0: "Слабая", 1: "Средняя", 2: "Сильная"}
+            calculation_params['illumination'] = illumination_map.get(calculation_params['illumination'], "Средняя")
+        if isinstance(calculation_params.get('activity'), int):
+            activity_map = {0: "Сидячая работа", 1: "Легкая работа", 2: "Средняя работа", 3: "Тяжелая работа", 4: "Спорт"}
+            calculation_params['activity'] = activity_map.get(calculation_params['activity'], "Сидячая работа")
+        
+        required_power = calculate_required_power(calculation_params)
+        
+        result_text += f"Требуемая мощность: {required_power:.2f} кВт\n"
+        result_text += f"Подобрано вариантов: {len(selected_aircons)}\n\n"
+        
+        # Добавляем информацию о подобранных кондиционерах
+        for i, ac in enumerate(selected_aircons, 1):
+            result_text += f"{i}. {ac.brand} {ac.model_name}\n"
+            result_text += f"   Мощность: {ac.cooling_power_kw} кВт\n"
+            result_text += f"   Цена: {ac.retail_price_byn} BYN\n"
+            if ac.is_inverter:
+                result_text += f"   Инверторный\n"
+            if ac.has_wifi:
+                result_text += f"   Wi-Fi\n"
+            result_text += f"   Тип монтажа: {ac.mount_type}\n\n"
+        
+        # Сохраняем подобранные кондиционеры в постоянное поле
+        last_air["selected_aircons"] = [
+            {
+                "id": ac.id,
+                "model_name": ac.model_name,
+                "brand": ac.brand,
+                "cooling_power_kw": ac.cooling_power_kw,
+                "retail_price_byn": ac.retail_price_byn,
+                "is_inverter": ac.is_inverter,
+                "has_wifi": ac.has_wifi,
+                "mount_type": ac.mount_type
+            }
+            for ac in selected_aircons
+        ]
+        
+        # Обновляем данные в базе
+        order.compose_order_data = json.dumps(compose_order_data, ensure_ascii=False)
+        await db.commit()
+        
+        logger.info(f"Подбор кондиционеров для составного заказа {order_id} завершен. Подобрано {len(selected_aircons)} вариантов.")
+        return {"result_text": result_text, "selected_count": len(selected_aircons)}
+        
+    except Exception as e:
+        logger.error(f"Ошибка при подборе кондиционеров для составного заказа: {e}", exc_info=True)
+        return {"error": str(e)}
+
+@app.post("/api/add_aircon_to_compose_order/")
+async def add_aircon_to_compose_order(payload: dict, db: AsyncSession = Depends(get_session)):
+    """
+    Добавляет новый кондиционер к существующему составному заказу с новой структурой (airs).
+    Также сохраняет подобранные кондиционеры для предыдущего элемента.
+    """
+    logger.info(f"Получен запрос на добавление кондиционера к составному заказу: {json.dumps(payload, ensure_ascii=False)}")
+    try:
+        order_id = payload.get("id")
+        new_aircon_order = payload.get("new_aircon_order", {})
+        
+        if not order_id:
+            return {"success": False, "error": "ID составного заказа не указан"}
+        
+        # Получаем составной заказ
+        result = await db.execute(select(crud.models.ComposeOrder).filter_by(id=order_id))
+        order = result.scalars().first()
+        if not order:
+            return {"success": False, "error": "Составной заказ не найден"}
+        
+        # Обновляем данные заказа с новой структурой
+        compose_order_data = json.loads(order.compose_order_data)
+        airs = compose_order_data.get("airs", [])
+        
+        # Если есть предыдущий кондиционер, проверяем что у него есть подобранные кондиционеры
+        if airs:
+            last_air = airs[-1]
+            if "selected_aircons" in last_air and last_air.get("selected_aircons"):
+                logger.info(f"У элемента с ID {last_air.get('id')} уже есть подобранные кондиционеры")
+        
+        # Генерируем автоинкрементный ID для нового кондиционера
+        new_air_id = len(airs) + 1
+        
+        # Добавляем ID к данным кондиционера
+        new_aircon_order["id"] = new_air_id
+        
+        # Добавляем в массив airs
+        if "airs" not in compose_order_data:
+            compose_order_data["airs"] = []
+        compose_order_data["airs"].append(new_aircon_order)
+        
+        order.compose_order_data = json.dumps(compose_order_data, ensure_ascii=False)
+        await db.commit()
+        
+        aircon_count = len(compose_order_data["airs"])
+        logger.info(f"К составному заказу {order_id} добавлен кондиционер #{aircon_count} с ID {new_air_id}")
+        return {"success": True, "aircon_count": aircon_count}
+        
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении кондиционера к составному заказу: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/generate_compose_offer/")
+async def generate_compose_offer(payload: dict, db: AsyncSession = Depends(get_session)):
+    """
+    Генерирует PDF коммерческое предложение для составного заказа.
+    """
+    logger.info(f"Получен запрос на генерацию КП для составного заказа: {json.dumps(payload, ensure_ascii=False)}")
+    try:
+        order_id = payload.get("id")
+        if not order_id:
+            return {"error": "ID составного заказа не указан"}
+        
+        # Получаем составной заказ
+        result = await db.execute(select(crud.models.ComposeOrder).filter_by(id=order_id))
+        order = result.scalars().first()
+        if not order:
+            return {"error": "Составной заказ не найден"}
+        
+        compose_order_data = json.loads(order.compose_order_data)
+        
+        # Импортируем функцию генерации PDF
+        from utils.compose_pdf_generator import generate_compose_commercial_offer_pdf
+        
+        # Проверяем, что есть кондиционеры с подобранными вариантами
+        airs = compose_order_data.get("airs", [])
+        if not airs:
+            return {"error": "В составном заказе нет кондиционеров"}
+        
+        # Формируем структуру aircon_results только для кондиционеров с подобранными вариантами
+        aircon_results = {
+            "aircon_results": []
+        }
+        
+        airs_with_selections = []
+        for air in airs:
+            if "selected_aircons" in air and air.get("selected_aircons"):
+                aircon_results["aircon_results"].append({
+                    "aircon_params": air.get("aircon_params", {}),
+                    "order_params": air.get("order_params", {}),
+                    "selected_aircons": air.get("selected_aircons", [])
+                })
+                airs_with_selections.append(air)
+        
+        if not aircon_results["aircon_results"]:
+            return {"error": "Нет кондиционеров с подобранными вариантами. Сначала подберите кондиционеры для всех помещений."}
+        
+        # Получаем скидку из первого кондиционера с подобранными вариантами
+        discount_percent = airs_with_selections[0].get("order_params", {}).get("discount", 0) if airs_with_selections else 0
+        
+        # Генерируем PDF
+        pdf_path = await generate_compose_commercial_offer_pdf(
+            compose_order_data=compose_order_data,
+            aircon_results=aircon_results,
+            components=compose_order_data.get("components", []),
+            discount_percent=discount_percent,
+            db_session=db
+        )
+        
+        # Обновляем статус заказа и путь к PDF
+        order.status = "completed"
+        order.pdf_path = pdf_path
+        await db.commit()
+        
+        logger.info(f"КП для составного заказа {order_id} успешно сгенерировано: {pdf_path}")
+        return {"success": True, "pdf_path": pdf_path}
+        
+    except Exception as e:
+        logger.error(f"Ошибка при генерации КП для составного заказа: {e}", exc_info=True)
         return {"error": str(e)}
