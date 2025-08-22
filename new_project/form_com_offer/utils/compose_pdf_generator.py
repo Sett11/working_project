@@ -223,7 +223,6 @@ async def generate_compose_commercial_offer_pdf(
         story.append(Spacer(1, 15))
 
         # --- Варианты кондиционеров для каждой комнаты ---
-        total_aircon_price = 0
         total_installation_price = 0
         
         for i, aircon_result in enumerate(aircon_results.get("aircon_results", [])):
@@ -259,24 +258,46 @@ async def generate_compose_commercial_offer_pdf(
                     discount = float(discount_percent or 0)
                     total_with_discount = price * qty * (1 - discount / 100)
                     
-                    # Формируем характеристики
+                    # Формируем характеристики как в обычном КП
                     specs_list = []
+                    
+                    # 1. Мощность охлаждения
                     if ac.get('cooling_power_kw'):
-                        specs_list.append(f"Мощность охлаждения: {ac['cooling_power_kw']:.2f} кВт")
-                    if ac.get('heating_power_kw'):
-                        specs_list.append(f"Мощность обогрева: {ac['heating_power_kw']:.2f} кВт")
-                    if ac.get('brand'):
-                        specs_list.append(f"Бренд: {ac['brand']}")
+                        specs_list.append(f"Охлаждение: {ac['cooling_power_kw']:.2f} кВт")
+                    
+                    # 2. Класс энергоэффективности
+                    if ac.get('energy_efficiency_class'):
+                        specs_list.append(f"Класс: {ac['energy_efficiency_class']}")
+                    
+                    # 3. Инверторный
                     if ac.get('is_inverter'):
                         specs_list.append("Инверторный")
+                    
+                    # 4. Wi-Fi
                     if ac.get('has_wifi'):
                         specs_list.append("Wi-Fi")
                     
+                    # 5. Полное описание модели
+                    model_name = ac.get('model_name', '')
+                    if model_name:
+                        # Убираем бренд из начала названия модели, если он там есть
+                        brand = ac.get('brand', '')
+                        if brand and model_name.startswith(brand):
+                            # Убираем бренд и лишние пробелы
+                            description = model_name[len(brand):].strip()
+                            if description.startswith(' '):
+                                description = description[1:]
+                        else:
+                            description = model_name
+                        
+                        if description:
+                            specs_list.append(description)
+                    
                     specs_text = ". ".join(specs_list)
                     
-                    # Ограничиваем длину для предотвращения переполнения ячейки
-                    if len(specs_text) > 300:
-                        specs_text = specs_text[:297] + "..."
+                    # Увеличиваем лимит длины для характеристик
+                    if len(specs_text) > 800:
+                        specs_text = specs_text[:797] + "..."
 
                     # Ограничиваем длину названия
                     name_text = ac.get('model_name', "") or ""
@@ -314,9 +335,7 @@ async def generate_compose_commercial_offer_pdf(
                 ]))
                 story.append(ac_table)
                 
-                # Суммируем стоимость кондиционеров (для отображения отдельно)
-                if selected_aircons and selected_aircons[0].get('retail_price_byn'):
-                    total_aircon_price += selected_aircons[0]['retail_price_byn'] * (1 - discount_percent / 100)
+                
                 
                 # Суммируем стоимость монтажа для каждого кондиционера
                 installation_price_val = order_params.get('installation_price', 0)
@@ -330,6 +349,7 @@ async def generate_compose_commercial_offer_pdf(
 
         # --- Таблица комплектующих (точно как в оригинале) ---
         total_components = 0
+        logger.info(f"Компоненты для PDF: {components}")
         if components:
             story.append(Paragraph("Комплектующие и материалы:", styleBold))
             story.append(Spacer(1, 8))
@@ -342,6 +362,7 @@ async def generate_compose_commercial_offer_pdf(
             ]]
             
             for comp in components:
+                logger.info(f"Обрабатываем компонент: {comp}")
                 if comp.get("selected"):
                     price = float(comp.get('price', 0))
                     unit = comp.get('unit', 'шт.')
@@ -394,7 +415,6 @@ async def generate_compose_commercial_offer_pdf(
 
         # --- Блок работ (стоимость монтажа уже учтена в цикле выше) ---
         logger.info(f"Общая стоимость монтажа: {total_installation_price:.2f}")
-        logger.info(f"Стоимость кондиционеров: {total_aircon_price:.2f}")
         
         # Отображаем общую стоимость монтажа
         if total_installation_price > 0:
@@ -442,24 +462,7 @@ async def generate_compose_commercial_offer_pdf(
         ]))
         story.append(total_table)
         
-        # Добавляем информацию о стоимости кондиционеров отдельно
-        if total_aircon_price > 0:
-            aircon_cost_table = Table([
-                [
-                    Paragraph(f"Стоимость выбранных кондиционеров:", styleBold),
-                    Paragraph(f"{total_aircon_price:.2f} BYN", styleBold)
-                ]
-            ], colWidths=[130*mm, 50*mm])
-            aircon_cost_table.setStyle(TableStyle([
-                ('FONTNAME', (0,0), (-1,-1), FONT_NAME_NORMAL),
-                ('FONTSIZE', (0,0), (-1,-1), 10),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ('ALIGN', (0,0), (0,0), 'LEFT'),
-                ('ALIGN', (1,0), (1,0), 'RIGHT'),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-                ('TOPPADDING', (0,0), (-1,-1), 4),
-            ]))
-            story.append(aircon_cost_table)
+        
         
         story.append(Spacer(1, 20))
 

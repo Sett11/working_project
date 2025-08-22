@@ -731,7 +731,9 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             
             # Загружаем комплектующие
             components = compose_order_data.get("components", [])
+            logger.info(f"[DEBUG] load_compose_order: components from compose_order_data: {components}")
             comp_updates = fill_components_fields_from_order({"components": components}, COMPONENTS_CATALOG)
+            logger.info(f"[DEBUG] load_compose_order: comp_updates length: {len(comp_updates)}")
             
             # Загружаем комментарий
             comment_value = compose_order_data.get("comment", "Оставьте комментарий...")
@@ -749,6 +751,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[0].value: {getattr(compose_fields_updates[0], 'value', 'N/A')}")
             logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[1].value: {getattr(compose_fields_updates[1], 'value', 'N/A')}")
             
+            # Возвращаем обновления в правильном порядке согласно outputs
+            # Формат: [load_error(1), orders_list_screen(1), main_order_screen(1), обычные_поля(21), components(195), comment(5), compose_поля(21), compose_статусы(4)]
             result = [
                 gr.update(visible=False, value=""),  # load_error
                 gr.update(visible=False),            # orders_list_screen
