@@ -460,6 +460,22 @@ async def delete_order(order_id: int = Path(...), db: AsyncSession = Depends(get
         logger.error(f"Ошибка при удалении заказа: {e}", exc_info=True)
         return {"error": str(e)}
 
+@app.delete("/api/compose_order/{order_id}")
+async def delete_compose_order(order_id: int = Path(...), db: AsyncSession = Depends(get_session)):
+    """Удаляет составной заказ по ID"""
+    try:
+        result = await db.execute(select(crud.models.ComposeOrder).filter_by(id=order_id))
+        order = result.scalars().first()
+        if not order:
+            return {"error": "Составной заказ не найден"}
+        await db.delete(order)
+        await db.commit()
+        logger.info(f"Составной заказ id={order_id} успешно удалён")
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Ошибка при удалении составного заказа: {e}", exc_info=True)
+        return {"error": str(e)}
+
 # --- Эндпоинты для составных заказов ---
 
 @app.post("/api/save_compose_order/")
@@ -470,6 +486,7 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
     logger.info(f"Получен запрос на сохранение составного заказа: {json.dumps(payload, ensure_ascii=False)}")
     try:
         compose_order_data = payload.get("compose_order_data", {})
+        logger.info(f"compose_order_data: {json.dumps(compose_order_data, ensure_ascii=False, indent=2)}")
         client_data = compose_order_data.get("client_data", {})
         
         # Проверяем, есть ли обновление комплектующих
@@ -505,6 +522,18 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
             # Используем данные из payload, которые уже содержат первый кондиционер
             new_order_data = compose_order_data
             
+            # Убеждаемся, что есть все необходимые поля
+            if "order_params" not in new_order_data:
+                new_order_data["order_params"] = {}
+            if "airs" not in new_order_data:
+                new_order_data["airs"] = []
+            if "components" not in new_order_data:
+                new_order_data["components"] = []
+            if "comment" not in new_order_data:
+                new_order_data["comment"] = "Оставьте комментарий..."
+            if "status" not in new_order_data:
+                new_order_data["status"] = "draft"
+            
             order_payload = schemas.ComposeOrderCreate(
                 client_id=client.id,
                 created_at=date.today(),
@@ -538,6 +567,7 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
                     
                     # Безопасное преобразование типов для order_params
                     order_params = update_last_aircon.get("order_params", {})
+                    logger.info(f"[DEBUG] Обновление последнего кондиционера: order_params из payload: {json.dumps(order_params, ensure_ascii=False)}")
                     safe_order_params = {}
                     for key, value in order_params.items():
                         if key in ["room_area", "installation_price"]:
@@ -555,6 +585,7 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
                     
                     # Безопасное преобразование типов для aircon_params
                     aircon_params = update_last_aircon.get("aircon_params", {})
+                    logger.info(f"[DEBUG] Обновление последнего кондиционера: aircon_params из payload: {json.dumps(aircon_params, ensure_ascii=False)}")
                     safe_aircon_params = {}
                     for key, value in aircon_params.items():
                         if key in ["area", "ceiling_height", "other_power", "price_limit"]:
@@ -574,6 +605,9 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
                                 safe_aircon_params[key] = False
                         else:
                             safe_aircon_params[key] = value
+                    
+                    logger.info(f"[DEBUG] Обновление последнего кондиционера: safe_order_params: {json.dumps(safe_order_params, ensure_ascii=False)}")
+                    logger.info(f"[DEBUG] Обновление последнего кондиционера: safe_aircon_params: {json.dumps(safe_aircon_params, ensure_ascii=False)}")
                     
                     last_air["order_params"] = safe_order_params
                     last_air["aircon_params"] = safe_aircon_params

@@ -549,6 +549,10 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     compose_date = gr.Textbox(label="Дата визита монтажника", value=get_placeholder_order()["order_params"]["visit_date"])
                     compose_discount = gr.Slider(0, 50, label="Индивидуальная скидка (%)", value=get_placeholder_order()["order_params"]["discount"])
             
+            # Кнопка сохранения данных клиента
+            compose_save_client_status = gr.Textbox(label="Статус сохранения данных клиента", interactive=False)
+            compose_save_client_btn = gr.Button("Сохранить данные клиента", variant="primary")
+            
             # Разделитель между секциями
             gr.Markdown("---")
             
@@ -582,8 +586,9 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 compose_other_power = gr.Slider(0, 2000, step=50, label="Мощность прочей техники (Вт)", value=get_placeholder_order()["aircon_params"]["other_power"])
             
             compose_order_id_hidden = gr.Number(label="ID составного заказа (скрытое)", visible=False)
+            compose_aircon_counter = gr.Textbox(label="Количество добавленных кондиционеров", value="0", interactive=False)
             compose_save_status = gr.Textbox(label="Статус сохранения данных", interactive=False)
-            compose_save_btn = gr.Button("Сохранить данные", variant="primary")
+            compose_save_btn = gr.Button("Сохранить данные для кондиционера", variant="primary")
             
             # Окно отображения подобранных кондиционеров
             compose_aircons_output = gr.TextArea(label="Подходящие модели", interactive=False, lines=10, max_lines=None, show_copy_button=True)
@@ -594,6 +599,9 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             compose_generate_kp_btn = gr.Button("Сгенерировать КП", variant="primary")
             compose_kp_status = gr.Textbox(label="Статус генерации КП", interactive=False)
             compose_pdf_output = gr.File(label="Скачать коммерческое предложение")
+            
+            # Кнопка удаления составного заказа
+            compose_delete_btn = gr.Button("Удалить составной заказ", variant="stop", size="sm")
             
 
 
@@ -628,7 +636,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         logger.info(f"[DEBUG] load_selected_order: selected={selected}")
         if not selected:
             logger.info(f"[DEBUG] load_selected_order: error - не выбран заказ")
-            return [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(22)] + [gr.update() for _ in components_ui_inputs] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()] + [gr.update() for _ in range(22)] + [gr.update(value=""), gr.update(value=None), gr.update(value=""), gr.update(value="")]
+            return [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(22)] + [gr.update() for _ in components_ui_inputs] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()] + [gr.update() for _ in range(22)] + [gr.update(value=""), gr.update(value=""), gr.update(value=None), gr.update(value="0"), gr.update(value=""), gr.update(value="")]
         
         # Извлекаем ID и тип заказа из строки
         parts = selected.split("|")
@@ -664,16 +672,57 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             logger.info(f"[DEBUG] load_compose_order: loaded compose_order_data={compose_order_data}")
             
             if "error" in compose_order_data:
-                return [gr.update(visible=True, value=f"Ошибка: {compose_order_data['error']}"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(21)] + [gr.update() for _ in components_ui_inputs] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()] + [gr.update() for _ in range(21)] + [gr.update(value=""), gr.update(value=None), gr.update(value=""), gr.update(value="")]
+                return [gr.update(visible=True, value=f"Ошибка: {compose_order_data['error']}"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(21)] + [gr.update() for _ in components_ui_inputs] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()] + [gr.update() for _ in range(21)] + [gr.update(value=""), gr.update(value=""), gr.update(value=None), gr.update(value="0"), gr.update(value=""), gr.update(value="")]
             
-            # Извлекаем данные клиента и скидку
+            # Извлекаем данные клиента
             client_data = compose_order_data.get("client_data", {})
+            # Извлекаем общие параметры заказа (visit_date, discount)
+            general_order_params = compose_order_data.get("order_params", {})
+            
+            # Если order_params пустой, используем дефолтные значения и обновляем заказ
+            if not general_order_params:
+                logger.info("[DEBUG] load_compose_order: order_params пустой, добавляем дефолтные значения и обновляем заказ")
+                general_order_params = {
+                    "visit_date": datetime.date.today().strftime('%Y-%m-%d'),
+                    "discount": 0
+                }
+                
+                # Обновляем заказ, добавляя order_params
+                updated_compose_order_data = compose_order_data.copy()
+                updated_compose_order_data["order_params"] = general_order_params
+                
+                # Отправляем обновление на бэкенд
+                try:
+                    async with httpx.AsyncClient() as update_client:
+                        update_payload = {
+                            "id": order_id,
+                            "compose_order_data": updated_compose_order_data,
+                            "status": compose_order_data.get("status", "draft")
+                        }
+                        logger.info(f"[DEBUG] load_compose_order: обновляем заказ с order_params: {json.dumps(update_payload, ensure_ascii=False, indent=2)}")
+                        
+                        update_resp = await update_client.post(f"{BACKEND_URL}/api/save_compose_order/", json=update_payload)
+                        update_resp.raise_for_status()
+                        update_data = update_resp.json()
+                        
+                        if update_data.get("success"):
+                            logger.info(f"[DEBUG] load_compose_order: заказ успешно обновлен с order_params")
+                            # Обновляем локальные данные
+                            compose_order_data = updated_compose_order_data
+                        else:
+                            logger.warning(f"[DEBUG] load_compose_order: не удалось обновить заказ: {update_data.get('error', 'unknown error')}")
+                except Exception as e:
+                    logger.warning(f"[DEBUG] load_compose_order: ошибка при обновлении заказа: {e}")
+                    # Продолжаем с дефолтными значениями
             # Извлекаем данные из последнего кондиционера
             airs = compose_order_data.get("airs", [])
             last_air = airs[-1] if airs else {}
             last_air_order_params = last_air.get("order_params", {})
             last_air_aircon_params = last_air.get("aircon_params", {})
             
+            logger.info(f"[DEBUG] load_compose_order: general_order_params={general_order_params}")
+            logger.info(f"[DEBUG] load_compose_order: visit_date={general_order_params.get('visit_date', 'NOT_FOUND')}")
+            logger.info(f"[DEBUG] load_compose_order: discount={general_order_params.get('discount', 'NOT_FOUND')}")
             logger.info(f"[DEBUG] load_compose_order: last_air_order_params={last_air_order_params}")
             logger.info(f"[DEBUG] load_compose_order: last_air_aircon_params={last_air_aircon_params}")
             
@@ -702,7 +751,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 except (ValueError, TypeError):
                     return False
             
-            # ИСПРАВЛЯЕМ порядок полей для составного заказа согласно outputs строка 804:
+            # ИСПРАВЛЯЕМ порядок полей для составного заказа согласно outputs в load_selected_btn.click():
             # compose_name, compose_phone, compose_mail, compose_address, compose_date, compose_discount, 
             # compose_area, compose_type_room, compose_wifi, compose_inverter, compose_price, compose_mount_type, 
             # compose_ceiling_height, compose_illumination, compose_num_people, compose_activity, compose_num_computers, 
@@ -712,8 +761,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 gr.update(value=client_data.get("phone", "")),      # 2. compose_phone
                 gr.update(value=client_data.get("email", "")),      # 3. compose_mail
                 gr.update(value=client_data.get("address", "")),    # 4. compose_address
-                gr.update(value=last_air_order_params.get("visit_date", "")),  # 5. compose_date
-                gr.update(value=safe_int(last_air_order_params.get("discount", 0))),   # 6. compose_discount
+                gr.update(value=general_order_params.get("visit_date", "")),  # 5. compose_date (из общих параметров)
+                gr.update(value=safe_int(general_order_params.get("discount", 0))),   # 6. compose_discount (из общих параметров)
                 gr.update(value=safe_float(last_air_aircon_params.get("area", 50))),      # 7. compose_area
                 gr.update(value=last_air_order_params.get("room_type", "")),      # 8. compose_type_room
                 gr.update(value=safe_bool(last_air_aircon_params.get("wifi", False))),   # 9. compose_wifi
@@ -752,6 +801,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[1]: {compose_fields_updates[1]}")
             logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[0].value: {getattr(compose_fields_updates[0], 'value', 'N/A')}")
             logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[1].value: {getattr(compose_fields_updates[1], 'value', 'N/A')}")
+            logger.info(f"[DEBUG] load_compose_order: last_air_order_params: {last_air_order_params}")
+            logger.info(f"[DEBUG] load_compose_order: last_air_aircon_params: {last_air_aircon_params}")
             
             # Возвращаем обновления в правильном порядке согласно outputs
             # Формат: [load_error(1), orders_list_screen(1), main_order_screen(1), обычные_поля(21), components(195), comment(5), compose_поля(21), compose_статусы(4)]
@@ -768,6 +819,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             ] + compose_fields_updates + [
                 gr.update(value=""),                 # compose_save_status
                 gr.update(value=order_id),           # compose_order_id_hidden
+                gr.update(value=str(len(airs))),     # compose_aircon_counter (счётчик кондиционеров)
                 gr.update(value=""),                 # compose_aircons_output
                 gr.update(value=""),                 # compose_kp_status
             ]
@@ -777,7 +829,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             
         except Exception as e:
             logger.error(f"Ошибка при загрузке составного заказа: {e}", exc_info=True)
-            return [gr.update(visible=True, value=f"Ошибка при загрузке составного заказа: {e}"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(21)] + [gr.update() for _ in components_ui_inputs] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()] + [gr.update() for _ in range(21)] + [gr.update(value=""), gr.update(value=None), gr.update(value=""), gr.update(value="")]
+            return [gr.update(visible=True, value=f"Ошибка при загрузке составного заказа: {e}"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(21)] + [gr.update() for _ in components_ui_inputs] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()] + [gr.update() for _ in range(21)] + [gr.update(value=""), gr.update(value=None), gr.update(value="0"), gr.update(value=""), gr.update(value="")]
 
     def show_main(order=None):
         if order is None:
@@ -844,7 +896,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     load_selected_btn.click(
         fn=load_selected_order,
         inputs=[orders_radio],
-        outputs=[load_error, orders_list_screen, main_order_screen, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price] + components_ui_inputs + [comment_box, save_comment_status, order_id_hidden, order_state, order_id_state, compose_name, compose_phone, compose_mail, compose_address, compose_date, compose_discount, compose_area, compose_type_room, compose_wifi, compose_inverter, compose_price, compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity, compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price, compose_save_status, compose_order_id_hidden, compose_aircons_output, compose_kp_status]
+        outputs=[load_error, orders_list_screen, main_order_screen, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price] + components_ui_inputs + [comment_box, save_comment_status, order_id_hidden, order_state, order_id_state, compose_name, compose_phone, compose_mail, compose_address, compose_date, compose_discount, compose_area, compose_type_room, compose_wifi, compose_inverter, compose_price, compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity, compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price, compose_save_status, compose_order_id_hidden, compose_aircon_counter, compose_aircons_output, compose_kp_status]
     )
     back_to_start_btn.click(fn=show_start, outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_table_data])
     # Удаляю orders_table.select(on_select_order, outputs=[...]) как устаревший и неиспользуемый
@@ -1098,10 +1150,155 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     save_comment_btn.click(fn=save_comment_handler, inputs=[order_id_hidden, comment_box], outputs=[save_comment_status])
 
     # --- Обработчики для составного заказа ---
-    async def save_compose_order_handler(order_id_hidden_value, client_name, client_phone, client_mail, client_address, visit_date, 
+    
+    async def save_compose_client_handler(order_id_hidden_value, client_name, client_phone, client_mail, client_address, visit_date, discount):
+        """Обработчик сохранения данных клиента для составного заказа"""
+        logger.info(f"[DEBUG] save_compose_client_handler: order_id_hidden_value={order_id_hidden_value}, client_name={client_name}, client_phone={client_phone}")
+        
+        try:
+            # Проверяем обязательные поля
+            if not client_name or not client_phone:
+                return "Ошибка: Имя клиента и телефон обязательны!", None
+            
+            # Безопасное преобразование типов
+            def safe_int(value):
+                if value is None or value == "":
+                    return 0
+                try:
+                    return int(float(value))  # Сначала float, потом int для случаев типа "15.0"
+                except (ValueError, TypeError):
+                    return 0
+            
+            # Формируем данные клиента
+            client_data = {
+                "full_name": client_name,
+                "phone": client_phone,
+                "email": client_mail or "",
+                "address": client_address or ""
+            }
+            
+            # Формируем базовые параметры заказа
+            order_params = {
+                "visit_date": visit_date or "",
+                "discount": safe_int(discount)
+            }
+            
+            # Проверяем, есть ли уже существующий заказ
+            existing_order_id = None
+            if order_id_hidden_value and order_id_hidden_value != "" and order_id_hidden_value != "None":
+                try:
+                    existing_order_id = int(order_id_hidden_value)
+                    if existing_order_id <= 0:
+                        existing_order_id = None
+                except (ValueError, TypeError):
+                    existing_order_id = None
+            
+            if existing_order_id:
+                # Обновляем существующий заказ
+                logger.info(f"[DEBUG] save_compose_client_handler: обновляем существующий заказ ID={existing_order_id}")
+                
+                # Сначала получаем текущие данные заказа
+                async with httpx.AsyncClient() as get_client:
+                    get_resp = await get_client.get(f"{BACKEND_URL}/api/compose_order/{existing_order_id}")
+                    get_resp.raise_for_status()
+                    current_order_data = get_resp.json()
+                    
+                    if "error" in current_order_data:
+                        return f"Ошибка: {current_order_data['error']}", None
+                
+                # Обновляем только client_data и order_params, сохраняем остальные данные
+                updated_order_data = current_order_data.copy()
+                updated_order_data["client_data"] = client_data
+                updated_order_data["order_params"] = order_params
+                
+                payload = {
+                    "id": existing_order_id,
+                    "compose_order_data": updated_order_data,
+                    "status": "draft"
+                }
+                
+                logger.info(f"[DEBUG] save_compose_client_handler: обновляем заказ: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+                
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    if data.get("success"):
+                        msg = f"Данные клиента успешно обновлены! ID: {existing_order_id}"
+                        return msg, existing_order_id
+                    else:
+                        error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
+                        return f"Ошибка: {error_msg}", None
+            else:
+                # Создаем новый заказ
+                logger.info(f"[DEBUG] save_compose_client_handler: создаем новый заказ")
+                
+                # Создаем базовую структуру составного заказа
+                compose_order_data = {
+                    "client_data": client_data,
+                    "order_params": order_params,  # Добавляем общие параметры заказа
+                    "airs": [],  # Пока нет кондиционеров
+                    "components": [],
+                    "comment": "Оставьте комментарий...",
+                    "status": "draft"
+                }
+                
+                payload = {
+                    "compose_order_data": compose_order_data,
+                    "status": "draft"
+                }
+                
+                logger.info(f"[DEBUG] save_compose_client_handler: создаем новый заказ: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+                
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    if data.get("success"):
+                        order_id = data.get("order_id")
+                        msg = f"Данные клиента успешно сохранены! ID: {order_id}"
+                        return msg, order_id
+                    else:
+                        error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
+                        return f"Oшибка: {error_msg}", None
+                    
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении данных клиента: {e}", exc_info=True)
+            return f"Ошибка: {e}", None
+    
+    async def delete_compose_order_handler(order_id_hidden_value):
+        """Обработчик удаления составного заказа"""
+        logger.info(f"[DEBUG] delete_compose_order_handler: order_id_hidden_value={order_id_hidden_value}")
+        
+        try:
+            order_id = int(order_id_hidden_value)
+            if not order_id or order_id <= 0:
+                return "Ошибка: Некорректный ID составного заказа!", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), None, get_placeholder_order()
+        except Exception as e:
+            logger.error(f"Ошибка преобразования order_id_hidden_value: {e}")
+            return f"Ошибка: Некорректный ID составного заказа!", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), None, get_placeholder_order()
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.delete(f"{BACKEND_URL}/api/compose_order/{order_id}")
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("success"):
+                    logger.info(f"Составной заказ {order_id} успешно удален")
+                    # Возвращаемся на корневую страницу и сбрасываем состояние
+                    return "Составной заказ успешно удален! Перенаправление на главную страницу...", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), None, get_placeholder_order()
+                else:
+                    error_msg = data.get("error", "Неизвестная ошибка при удалении заказа")
+                    logger.error(f"Ошибка удаления составного заказа {order_id}: {error_msg}")
+                    return f"Ошибка: {error_msg}", gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order_id, None
+        except Exception as e:
+            logger.error(f"Ошибка при удалении составного заказа: {e}", exc_info=True)
+            return f"Ошибка: {e}", gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order_id, None
+    
+    async def save_compose_order_handler(order_id_hidden_value, client_name, client_phone, client_mail, client_address, visit_date,
                                        room_area, room_type, discount, wifi, inverter, price_limit, mount_type, 
                                        ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price):
-        """Обработчик сохранения данных составного заказа"""
+        """Обработчик сохранения данных кондиционера для составного заказа"""
         logger.info(f"[DEBUG] save_compose_order_handler: order_id_hidden_value={order_id_hidden_value}")
         logger.info(f"[DEBUG] save_compose_order_handler: room_area={room_area} (type: {type(room_area)})")
         logger.info(f"[DEBUG] save_compose_order_handler: discount={discount} (type: {type(discount)})")
@@ -1114,19 +1311,11 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         logger.info(f"[DEBUG] save_compose_order_handler: installation_price={installation_price} (type: {type(installation_price)})")
         
         # Проверка обязательных полей
-        if not client_name or not client_phone:
-            logger.error("Имя клиента или телефон не заполнены!")
-            return "Ошибка: заполните имя и телефон клиента!", None
+        if not order_id_hidden_value or order_id_hidden_value <= 0:
+            logger.error("ID составного заказа не найден!")
+            return "Ошибка: сначала сохраните данные клиента!", None
         
         try:
-            # Формируем данные для сохранения
-            client_data = {
-                "full_name": client_name,
-                "phone": client_phone,
-                "email": client_mail or "",
-                "address": client_address or ""
-            }
-            
             # Безопасное преобразование типов
             def safe_float(value):
                 if value is None or value == "":
@@ -1176,56 +1365,104 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 "mount_type": mount_type
             }
             
-            # Проверяем, есть ли уже существующий заказ
-            if order_id_hidden_value and str(order_id_hidden_value).isdigit():
-                order_id = int(order_id_hidden_value)
-                # Для существующего заказа обновляем только последний кондиционер
-                payload = {
-                    "id": order_id,
-                    "update_last_aircon": {
-                        "order_params": order_params,
-                        "aircon_params": aircon_params
-                    },
-                    "status": "partially filled"
-                }
-            else:
-                # Для нового заказа создаем первый кондиционер
-                first_air = {
-                    "id": 1,
-                    "order_params": order_params,
-                    "aircon_params": aircon_params
-                }
-                
-                compose_order_data = {
-                    "client_data": client_data,
-                    "airs": [first_air],  # Сразу добавляем первый кондиционер
-                    "components": [],
-                    "comment": "Оставьте комментарий...",  # Добавляем поле комментария
-                    "status": "partially filled"  # Изменяем статус на partially filled
-                }
-                
-                payload = {
-                    "compose_order_data": compose_order_data,
-                    "status": "partially filled"  # Изменяем статус на partially filled
-                }
+            # Проверяем, есть ли кондиционеры в заказе
+            order_id = int(order_id_hidden_value)
             
-            logger.info(f"[DEBUG] save_compose_order_handler: payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
-            
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=payload)
-                resp.raise_for_status()
-                data = resp.json()
-                if data.get("success"):
-                    order_id = data.get("order_id")
-                    msg = f"Данные составного заказа успешно сохранены! ID: {order_id}"
-                    return msg, order_id, order_id
+            # Сначала получаем данные заказа, чтобы проверить количество кондиционеров
+            async with httpx.AsyncClient() as check_client:
+                check_resp = await check_client.get(f"{BACKEND_URL}/api/compose_order/{order_id}")
+                check_resp.raise_for_status()
+                current_order_data = check_resp.json()
+                
+                if "error" in current_order_data:
+                    return f"Ошибка: {current_order_data['error']}", order_id_hidden_value, order_id_hidden_value
+                
+                existing_airs = current_order_data.get("airs", [])
+                logger.info(f"[DEBUG] save_compose_order_handler: existing_airs count={len(existing_airs)}")
+                
+                if len(existing_airs) == 0:
+                    # Создаем первый кондиционер через add_aircon_to_compose_order
+                    payload = {
+                        "id": order_id,
+                        "new_aircon_order": {
+                            "order_params": order_params,
+                            "aircon_params": aircon_params
+                        }
+                    }
+                    
+                    # Используем другой эндпоинт для добавления первого кондиционера
+                    async with httpx.AsyncClient() as first_client:
+                        resp = await first_client.post(f"{BACKEND_URL}/api/add_aircon_to_compose_order/", json=payload)
+                        resp.raise_for_status()
+                        data = resp.json()
+                        if data.get("success"):
+                            msg = f"Данные кондиционера успешно сохранены!"
+                            aircon_count = data.get("aircon_count", 1)  # Получаем количество кондиционеров
+                            return msg, order_id, order_id, str(aircon_count)  # Возвращаем обновленный счётчик
+                        else:
+                            error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
+                            return f"Ошибка: {error_msg}", order_id_hidden_value, order_id_hidden_value, "0"
                 else:
-                    error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
-                    return f"Ошибка: {error_msg}", order_id_hidden_value, order_id_hidden_value
+                    # Обновляем последний кондиционер И общие параметры заказа
+                    # Сначала обновляем последний кондиционер
+                    payload = {
+                        "id": order_id,
+                        "update_last_aircon": {
+                            "order_params": order_params,
+                            "aircon_params": aircon_params
+                        },
+                        "status": "partially filled"
+                    }
+                    
+                    logger.info(f"[DEBUG] save_compose_order_handler: payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+                    
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=payload)
+                        resp.raise_for_status()
+                        data = resp.json()
+                        if data.get("success"):
+                            # Теперь обновляем общие параметры заказа (visit_date, discount)
+                            general_order_params = {
+                                "visit_date": visit_date,
+                                "discount": safe_int(discount)
+                            }
+                            
+                            # ВАЖНО: Получаем СВЕЖИЕ данные заказа после обновления последнего кондиционера
+                            fresh_resp = await client.get(f"{BACKEND_URL}/api/compose_order/{order_id}")
+                            fresh_resp.raise_for_status()
+                            fresh_order_data = fresh_resp.json()
+                            
+                            # Обновляем общие параметры в структуре заказа
+                            updated_order_data = fresh_order_data.copy()
+                            updated_order_data["order_params"] = general_order_params
+                            
+                            general_payload = {
+                                "id": order_id,
+                                "compose_order_data": updated_order_data,
+                                "status": "partially filled"
+                            }
+                            
+                            logger.info(f"[DEBUG] save_compose_order_handler: updating general params: {json.dumps(general_payload, ensure_ascii=False, indent=2)}")
+                            
+                            resp2 = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=general_payload)
+                            resp2.raise_for_status()
+                            data2 = resp2.json()
+                            
+                            if data2.get("success"):
+                                order_id = data2.get("order_id")
+                                msg = f"Данные кондиционера успешно сохранены!"
+                                # При обновлении существующего кондиционера счётчик НЕ увеличивается
+                                return msg, order_id, order_id, str(len(existing_airs))
+                            else:
+                                error_msg = data2.get("error", "Ошибка при обновлении общих параметров.")
+                                return f"Ошибка: {error_msg}", order_id_hidden_value, order_id_hidden_value, "0"
+                        else:
+                            error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
+                            return f"Ошибка: {error_msg}", order_id_hidden_value, order_id_hidden_value, "0"
                     
         except Exception as e:
             logger.error(f"Ошибка при сохранении составного заказа: {e}", exc_info=True)
-            return f"Ошибка: {e}", order_id_hidden_value, order_id_hidden_value
+            return f"Ошибка: {e}", order_id_hidden_value, order_id_hidden_value, "0"
 
     async def select_compose_aircons_handler(order_id_hidden_value):
         """Обработчик подбора кондиционеров для составного заказа"""
@@ -1350,6 +1587,9 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     # Получаем дефолтные значения для очистки полей
                     placeholder = get_placeholder_order()
                     
+                    # Получаем текущее количество кондиционеров из ответа бэкенда
+                    aircon_count = data.get("aircon_count", 1)  # По умолчанию 1, если не указано
+                    
                     # Возвращаем сообщение, ID заказа и обновленные значения полей (очищенные)
                     # Порядок должен точно соответствовать outputs в compose_add_aircon_btn.click()
                     # Используем дефолтные значения из get_placeholder_order()
@@ -1357,6 +1597,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                         msg,  # compose_save_status
                         order_id,  # compose_order_id_hidden
                         order_id,  # order_id_hidden
+                        str(aircon_count),  # compose_aircon_counter (обновляем счётчик)
                         client_name,  # compose_name (данные клиента не меняются)
                         client_phone,  # compose_phone (данные клиента не меняются)
                         client_mail,  # compose_mail (данные клиента не меняются)
@@ -1382,12 +1623,12 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 else:
                     error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
                     placeholder = get_placeholder_order()
-                    return f"Ошибка: {error_msg}", order_id, order_id, client_name, client_phone, client_mail, client_address, visit_date, float(placeholder["order_params"]["room_area"]), placeholder["order_params"]["room_type"], discount, placeholder["aircon_params"]["wifi"], placeholder["aircon_params"]["inverter"], float(placeholder["aircon_params"]["price_limit"]), placeholder["aircon_params"]["mount_type"], float(placeholder["aircon_params"]["ceiling_height"]), placeholder["aircon_params"]["illumination"], int(placeholder["aircon_params"]["num_people"]), placeholder["aircon_params"]["activity"], int(placeholder["aircon_params"]["num_computers"]), int(placeholder["aircon_params"]["num_tvs"]), float(placeholder["aircon_params"]["other_power"]), placeholder["aircon_params"]["brand"], float(placeholder["order_params"]["installation_price"])
+                    return f"Ошибка: {error_msg}", order_id, order_id, "0", client_name, client_phone, client_mail, client_address, visit_date, float(placeholder["order_params"]["room_area"]), placeholder["order_params"]["room_type"], discount, placeholder["aircon_params"]["wifi"], placeholder["aircon_params"]["inverter"], float(placeholder["aircon_params"]["price_limit"]), placeholder["aircon_params"]["mount_type"], float(placeholder["aircon_params"]["ceiling_height"]), placeholder["aircon_params"]["illumination"], int(placeholder["aircon_params"]["num_people"]), placeholder["aircon_params"]["activity"], int(placeholder["aircon_params"]["num_computers"]), int(placeholder["aircon_params"]["num_tvs"]), float(placeholder["aircon_params"]["other_power"]), placeholder["aircon_params"]["brand"], float(placeholder["order_params"]["installation_price"])
                     
         except Exception as e:
             logger.error(f"Ошибка при добавлении кондиционера: {e}", exc_info=True)
             placeholder = get_placeholder_order()
-            return f"Ошибка: {e}", order_id, order_id, client_name, client_phone, client_mail, client_address, visit_date, float(placeholder["order_params"]["room_area"]), placeholder["order_params"]["room_type"], discount, placeholder["aircon_params"]["wifi"], placeholder["aircon_params"]["inverter"], float(placeholder["aircon_params"]["price_limit"]), placeholder["aircon_params"]["mount_type"], float(placeholder["aircon_params"]["ceiling_height"]), placeholder["aircon_params"]["illumination"], int(placeholder["aircon_params"]["num_people"]), placeholder["aircon_params"]["activity"], int(placeholder["aircon_params"]["num_computers"]), int(placeholder["aircon_params"]["num_tvs"]), float(placeholder["aircon_params"]["other_power"]), placeholder["aircon_params"]["brand"], float(placeholder["order_params"]["installation_price"])
+            return f"Ошибка: {e}", order_id, order_id, "0", client_name, client_phone, client_mail, client_address, visit_date, float(placeholder["order_params"]["room_area"]), placeholder["order_params"]["room_type"], discount, placeholder["aircon_params"]["wifi"], placeholder["aircon_params"]["inverter"], float(placeholder["aircon_params"]["price_limit"]), placeholder["aircon_params"]["mount_type"], float(placeholder["aircon_params"]["ceiling_height"]), placeholder["aircon_params"]["illumination"], int(placeholder["aircon_params"]["num_people"]), placeholder["aircon_params"]["activity"], int(placeholder["aircon_params"]["num_computers"]), int(placeholder["aircon_params"]["num_tvs"]), float(placeholder["aircon_params"]["other_power"]), placeholder["aircon_params"]["brand"], float(placeholder["order_params"]["installation_price"])
 
     # Обработчик для удаления заказа
     async def delete_order_handler(order_id_hidden_value):
@@ -1470,13 +1711,19 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             return error_message, None
 
     # --- Привязка обработчиков для составного заказа ---
+    compose_save_client_btn.click(
+        fn=save_compose_client_handler,
+        inputs=[compose_order_id_hidden, compose_name, compose_phone, compose_mail, compose_address, compose_date, compose_discount],
+        outputs=[compose_save_client_status, compose_order_id_hidden]
+    )
+    
     compose_save_btn.click(
         fn=save_compose_order_handler,
         inputs=[compose_order_id_hidden, compose_name, compose_phone, compose_mail, compose_address, compose_date, 
                compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price, 
                compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity, 
                compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price],
-        outputs=[compose_save_status, compose_order_id_hidden, order_id_hidden]
+        outputs=[compose_save_status, compose_order_id_hidden, order_id_hidden, compose_aircon_counter]
     )
     
     compose_select_btn.click(
@@ -1491,7 +1738,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price, 
                compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity, 
                compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price],
-        outputs=[compose_save_status, compose_order_id_hidden, order_id_hidden, compose_name, compose_phone, compose_mail, compose_address, compose_date,
+        outputs=[compose_save_status, compose_order_id_hidden, order_id_hidden, compose_aircon_counter, compose_name, compose_phone, compose_mail, compose_address, compose_date,
                 compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price,
                 compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity,
                 compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price]
@@ -1501,4 +1748,10 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         fn=generate_compose_kp_handler,
         inputs=[compose_order_id_hidden],
         outputs=[compose_kp_status, compose_pdf_output]
+    )
+    
+    compose_delete_btn.click(
+        fn=delete_compose_order_handler,
+        inputs=[compose_order_id_hidden],
+        outputs=[compose_save_status, start_screen, orders_list_screen, main_order_screen, compose_order_id_hidden, order_state]
     )
