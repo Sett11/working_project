@@ -1,10 +1,13 @@
 # 1. Используем базовый образ Python
 FROM python:3.11-slim
 
-# 2. Устанавливаем рабочую директорию в контейнере
+# 2. Устанавливаем curl для healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# 3. Устанавливаем рабочую директорию в контейнере
 WORKDIR /app
 
-# 3. Копируем файл с зависимостями и устанавливаем их
+# 4. Копируем файл с зависимостями и устанавливаем их
 # Этот шаг выполняется отдельно, чтобы использовать кэширование Docker
 COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout=100 -r requirements.txt

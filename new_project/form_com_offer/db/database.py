@@ -39,10 +39,29 @@ logger.info(f"Используется URL базы данных: {DATABASE_URL.
 
 try:
     # Создаём асинхронный движок SQLAlchemy для работы с asyncpg
-    engine = create_async_engine(DATABASE_URL, echo=False, future=True)
+    # Настраиваем пул соединений для предотвращения утечек
+    engine = create_async_engine(
+        DATABASE_URL, 
+        echo=False, 
+        future=True,
+        # Настройки пула соединений
+        pool_size=10,  # Максимальное количество соединений в пуле
+        max_overflow=20,  # Дополнительные соединения при переполнении
+        pool_pre_ping=True,  # Проверка соединений перед использованием
+        pool_recycle=3600,  # Пересоздание соединений каждый час
+        pool_timeout=30,  # Таймаут ожидания свободного соединения
+        # Настройки для asyncpg
+        poolclass=None,  # Используем дефолтный пул для async
+    )
 
     # Создаём асинхронную фабрику сессий
-    AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    AsyncSessionLocal = async_sessionmaker(
+        engine, 
+        expire_on_commit=False, 
+        class_=AsyncSession,
+        autoflush=False,  # Отключаем автоматический flush
+        autocommit=False  # Отключаем автоматический commit
+    )
 
     # Создаём базовый класс для всех декларативных моделей SQLAlchemy (общий для sync/async)
     Base = declarative_base()
@@ -64,8 +83,15 @@ async def get_session():
         AsyncSession: Объект асинхронной сессии SQLAlchemy.
     """
     async with AsyncSessionLocal() as session:
-        logger.debug(f"Асинхронная сессия базы данных {id(session)} создана.")
+        session_id = id(session)
+        logger.debug(f"Асинхронная сессия базы данных {session_id} создана.")
         try:
             yield session
+        except Exception as e:
+            logger.error(f"Ошибка в сессии {session_id}: {e}")
+            raise
         finally:
-            logger.debug(f"Асинхронная сессия базы данных {id(session)} закрыта.")
+            logger.debug(f"Асинхронная сессия базы данных {session_id} закрыта.")
+            # Логируем статистику пула соединений
+            pool = engine.pool
+            logger.debug(f"Статистика пула: размер={pool.size()}, проверено={pool.checkedin()}, в использовании={pool.checkedout()}")

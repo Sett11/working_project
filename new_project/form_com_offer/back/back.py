@@ -18,6 +18,12 @@ from sqlalchemy import select
 logger = Logger(name=__name__, log_file="backend.log")
 app = FastAPI(title="Air-Con Commercial Offer API", version="0.1.0")
 
+# Глобальный обработчик исключений
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Необработанное исключение: {exc}", exc_info=True)
+    return {"error": "Внутренняя ошибка сервера", "detail": str(exc)}
+
 # ... (эндпоинты startup, shutdown, read_root, get_all_air_conditioners, select_aircons_endpoint без изменений) ...
 @app.on_event("startup")
 async def startup_event():
@@ -31,6 +37,33 @@ async def shutdown_event():
 async def read_root():
     logger.info("Запрос к корневому эндпоинту '/' (проверка работоспособности API)")
     return {"message": "API бэкенда для подбора кондиционеров работает."}
+
+@app.get("/health")
+async def health_check():
+    """Эндпоинт для проверки здоровья приложения"""
+    try:
+        # Проверяем соединение с БД
+        async with AsyncSessionLocal() as session:
+            await session.execute("SELECT 1")
+        
+        # Получаем статистику пула соединений
+        pool = engine.pool
+        pool_stats = {
+            "size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+            "invalid": pool.invalid()
+        }
+        
+        return {
+            "status": "healthy", 
+            "database": "connected",
+            "pool_stats": pool_stats
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {"status": "unhealthy", "database": "disconnected", "error": str(e)}
 
 @app.get("/api/air_conditioners/", response_model=List[schemas.AirConditioner])
 async def get_all_air_conditioners(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_session)):
