@@ -28,3 +28,14 @@ greenlet
 nest_asyncio
 filelock
 colorama
+
+# Testing dependencies
+pytest
+pytest-asyncio
+pytest-cov
+pytest-mock
+pytest-xdist
+pytest-html
+pytest-json-report
+httpx
+aiofiles

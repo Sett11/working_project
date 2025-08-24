@@ -7,13 +7,15 @@ from typing import List
 import datetime
 import re
 from db import crud, schemas
-from db.database import get_session
+from db.database import get_session, AsyncSessionLocal, engine
 from utils.mylogger import Logger
 from utils.aircon_selector import select_aircons
 from utils.pdf_generator import generate_commercial_offer_pdf_async
 from db.schemas import FullOrderCreate
 import json
 from sqlalchemy import select
+import threading
+import time
 
 logger = Logger(name=__name__, log_file="backend.log")
 app = FastAPI(title="Air-Con Commercial Offer API", version="0.1.0")
@@ -28,6 +30,22 @@ async def global_exception_handler(request, exc):
 @app.on_event("startup")
 async def startup_event():
     logger.info("Запуск FastAPI приложения...")
+    
+    # Запускаем мониторинг пула соединений в фоновом режиме
+    def monitor_pool():
+        while True:
+            try:
+                from db.database import engine
+                pool = engine.pool
+                logger.info(f"Мониторинг пула: размер={pool.size()}, проверено={pool.checkedin()}, в использовании={pool.checkedout()}, переполнение={pool.overflow()}")
+                time.sleep(300)  # Проверяем каждые 5 минут
+            except Exception as e:
+                logger.error(f"Ошибка мониторинга пула: {e}")
+                time.sleep(60)  # При ошибке проверяем через минуту
+    
+    monitor_thread = threading.Thread(target=monitor_pool, daemon=True)
+    monitor_thread.start()
+    logger.info("Мониторинг пула соединений запущен")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -43,8 +61,10 @@ async def health_check():
     """Эндпоинт для проверки здоровья приложения"""
     try:
         # Проверяем соединение с БД
+        from db.database import AsyncSessionLocal, engine
+        from sqlalchemy import text
         async with AsyncSessionLocal() as session:
-            await session.execute("SELECT 1")
+            await session.execute(text("SELECT 1"))
         
         # Получаем статистику пула соединений
         pool = engine.pool
@@ -52,8 +72,7 @@ async def health_check():
             "size": pool.size(),
             "checked_in": pool.checkedin(),
             "checked_out": pool.checkedout(),
-            "overflow": pool.overflow(),
-            "invalid": pool.invalid()
+            "overflow": pool.overflow()
         }
         
         return {
@@ -64,6 +83,17 @@ async def health_check():
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return {"status": "unhealthy", "database": "disconnected", "error": str(e)}
+
+@app.post("/api/recreate_pool")
+async def recreate_connection_pool():
+    """Эндпоинт для принудительного пересоздания пула соединений"""
+    try:
+        from db.database import _recreate_connection_pool
+        await _recreate_connection_pool()
+        return {"status": "success", "message": "Пул соединений пересоздан"}
+    except Exception as e:
+        logger.error(f"Ошибка при пересоздании пула: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.get("/api/air_conditioners/", response_model=List[schemas.AirConditioner])
 async def get_all_air_conditioners(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_session)):
@@ -526,6 +556,9 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
         components_update = payload.get("components")
         status_update = payload.get("status")
         
+        # Проверяем, есть ли обновление комментария
+        comment_update = payload.get("comment")
+        
         # Проверяем, есть ли обновление последнего кондиционера
         update_last_aircon = payload.get("update_last_aircon")
         
@@ -585,9 +618,20 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
                 existing_data["components"] = components_update
                 if status_update:
                     existing_data["status"] = status_update
+                if comment_update is not None:
+                    existing_data["comment"] = comment_update
                 order.compose_order_data = json.dumps(existing_data, ensure_ascii=False)
                 order.status = status_update or order.status
                 logger.info(f"Обновлены комплектующие составного заказа id={order.id}")
+            elif comment_update is not None:
+                # Обновляем только комментарий
+                existing_data = json.loads(order.compose_order_data)
+                existing_data["comment"] = comment_update
+                if status_update:
+                    existing_data["status"] = status_update
+                order.compose_order_data = json.dumps(existing_data, ensure_ascii=False)
+                order.status = status_update or order.status
+                logger.info(f"Обновлен комментарий составного заказа id={order.id}")
             elif update_last_aircon is not None:
                 # Обновляем только последний кондиционер
                 existing_data = json.loads(order.compose_order_data)

@@ -82,16 +82,75 @@ async def get_session():
     Yields:
         AsyncSession: Объект асинхронной сессии SQLAlchemy.
     """
-    async with AsyncSessionLocal() as session:
-        session_id = id(session)
-        logger.debug(f"Асинхронная сессия базы данных {session_id} создана.")
+    max_retries = 3
+    retry_count = 0
+    
+    while retry_count < max_retries:
         try:
-            yield session
+            async with AsyncSessionLocal() as session:
+                session_id = id(session)
+                logger.debug(f"Асинхронная сессия базы данных {session_id} создана.")
+                try:
+                    yield session
+                except Exception as e:
+                    logger.error(f"Ошибка в сессии {session_id}: {e}")
+                    # Если ошибка связана с соединением, попробуем пересоздать пул
+                    if "connection" in str(e).lower() and "closed" in str(e).lower():
+                        logger.warning(f"Обнаружена ошибка соединения, попытка {retry_count + 1}/{max_retries}")
+                        retry_count += 1
+                        if retry_count < max_retries:
+                            await _recreate_connection_pool()
+                            continue
+                    raise
+                finally:
+                    logger.debug(f"Асинхронная сессия базы данных {session_id} закрыта.")
+                    # Логируем статистику пула соединений
+                    pool = engine.pool
+                    logger.debug(f"Статистика пула: размер={pool.size()}, проверено={pool.checkedin()}, в использовании={pool.checkedout()}")
+            break  # Успешное выполнение, выходим из цикла
         except Exception as e:
-            logger.error(f"Ошибка в сессии {session_id}: {e}")
-            raise
-        finally:
-            logger.debug(f"Асинхронная сессия базы данных {session_id} закрыта.")
-            # Логируем статистику пула соединений
-            pool = engine.pool
-            logger.debug(f"Статистика пула: размер={pool.size()}, проверено={pool.checkedin()}, в использовании={pool.checkedout()}")
+            retry_count += 1
+            logger.error(f"Попытка {retry_count}/{max_retries} создания сессии не удалась: {e}")
+            if retry_count >= max_retries:
+                raise
+            await _recreate_connection_pool()
+
+async def _recreate_connection_pool():
+    """
+    Пересоздает пул соединений при критических ошибках.
+    """
+    global engine, AsyncSessionLocal
+    try:
+        logger.warning("Пересоздание пула соединений...")
+        
+        # Закрываем старый engine
+        if engine:
+            await engine.dispose()
+        
+        # Создаём новый асинхронный движок SQLAlchemy
+        engine = create_async_engine(
+            DATABASE_URL, 
+            echo=False, 
+            future=True,
+            # Настройки пула соединений
+            pool_size=10,
+            max_overflow=20,
+            pool_pre_ping=True,
+            pool_recycle=3600,
+            pool_timeout=30,
+            poolclass=None,
+        )
+
+        # Создаём новую асинхронную фабрику сессий
+        AsyncSessionLocal = async_sessionmaker(
+            engine, 
+            expire_on_commit=False, 
+            class_=AsyncSession,
+            autoflush=False,
+            autocommit=False
+        )
+        
+        logger.info("Пул соединений успешно пересоздан.")
+    except Exception as e:
+        logger.error(f"Ошибка при пересоздании пула соединений: {e}")
+        raise
