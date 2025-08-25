@@ -1,8 +1,0 @@
-gradio==5.23.1
-aiohttp==3.9.3
-python-docx==1.0.1
-python-pptx==0.6.23
-pdfplumber==0.10.3
-Pillow==10.2.0
-openai==1.12.0
-python-dotenv==1.0.1

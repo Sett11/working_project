@@ -94,9 +94,9 @@ async def get_session():
                     yield session
                 except Exception as e:
                     logger.error(f"Ошибка в сессии {session_id}: {e}")
-                    # Если ошибка связана с соединением, попробуем пересоздать пул
-                    if "connection" in str(e).lower() and "closed" in str(e).lower():
-                        logger.warning(f"Обнаружена ошибка соединения, попытка {retry_count + 1}/{max_retries}")
+                    # Если ошибка связана с event loop или соединением, попробуем пересоздать пул
+                    if ("connection" in str(e).lower() and "closed" in str(e).lower()) or "different loop" in str(e).lower():
+                        logger.warning(f"Обнаружена ошибка соединения или event loop, попытка {retry_count + 1}/{max_retries}")
                         retry_count += 1
                         if retry_count < max_retries:
                             await _recreate_connection_pool()
@@ -105,8 +105,11 @@ async def get_session():
                 finally:
                     logger.debug(f"Асинхронная сессия базы данных {session_id} закрыта.")
                     # Логируем статистику пула соединений
-                    pool = engine.pool
-                    logger.debug(f"Статистика пула: размер={pool.size()}, проверено={pool.checkedin()}, в использовании={pool.checkedout()}")
+                    try:
+                        pool = engine.pool
+                        logger.debug(f"Статистика пула: размер={pool.size()}, проверено={pool.checkedin()}, в использовании={pool.checkedout()}")
+                    except Exception as pool_error:
+                        logger.warning(f"Не удалось получить статистику пула: {pool_error}")
             break  # Успешное выполнение, выходим из цикла
         except Exception as e:
             retry_count += 1
