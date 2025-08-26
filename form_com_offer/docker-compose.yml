@@ -4,7 +4,13 @@ services:
   backend:
     build: .
     container_name: ${COMPOSE_PROJECT_NAME}_backend
-    command: uvicorn back.back:app --host 0.0.0.0 --port 8001 --reload --log-level info --access-log
+    command: >
+      sh -c "
+        echo '🌱 Запуск seeder для инициализации базы данных...' &&
+        python -m db.seeder &&
+        echo '✅ Seeder завершен, запускаем сервер...' &&
+        uvicorn back.back:app --host 0.0.0.0 --port 8001 --reload --log-level info --access-log
+      "
     volumes:
       - .:/app
     ports:
