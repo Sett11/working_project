@@ -117,7 +117,7 @@ async def select_aircons_endpoint(payload: dict, db: AsyncSession = Depends(get_
             order = result.scalars().first()
             if not order:
                 logger.error(f"Заказ с id={order_id} не найден для подбора кондиционеров!")
-                return {"error": f"Заказ с id={order_id} не найден!"}
+                return {"success": False, "error": f"Заказ с id={order_id} не найден!"}
             order_data = json.loads(order.order_data)
             aircon_params = order_data.get("aircon_params", {})
             client_full_name = order_data.get("client_data", {}).get('full_name', 'N/A')
@@ -159,7 +159,7 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
             order = result.scalars().first()
             if not order:
                 logger.error(f"Заказ с id={order_id} не найден для генерации КП!")
-                return {"error": f"Заказ с id={order_id} не найден!"}
+                return {"success": False, "error": f"Заказ с id={order_id} не найден!"}
             order_data = json.loads(order.order_data)
             client_data = order_data.get("client_data", {})
             order_params = order_data.get("order_params", {})
@@ -381,7 +381,7 @@ async def get_orders_list(db: AsyncSession = Depends(get_session)):
         return result
     except Exception as e:
         logger.error(f"Ошибка при получении списка заказов: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"success": False, "error": str(e)}
 
 # --- Эндпоинт: получить список всех составных заказов ---
 @app.get("/api/compose_orders/")
@@ -404,13 +404,13 @@ async def get_compose_orders_list(db: AsyncSession = Depends(get_session)):
                 "address": client_data.get("address", ""),
                 "created_at": order.created_at.strftime("%Y-%m-%d"),
                 "status": order.status,
-                "comment": ""  # У составных заказов пока нет комментариев
+                "comment": compose_order_data.get("comment", "")  # Загружаем комментарий для составных заказов
             })
         logger.info(f"Отправлен список составных заказов: {result}")
         return result
     except Exception as e:
         logger.error(f"Ошибка при получении списка составных заказов: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"success": False, "error": str(e)}
 
 # --- Эндпоинт: получить объединенный список всех заказов ---
 @app.get("/api/all_orders/")
@@ -466,7 +466,7 @@ async def get_all_orders_list(db: AsyncSession = Depends(get_session)):
         return all_orders
     except Exception as e:
         logger.error(f"Ошибка при получении объединенного списка заказов: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"success": False, "error": str(e)}
 
 # --- Эндпоинт: получить заказ по ID ---
 @app.get("/api/order/{order_id}")
@@ -475,7 +475,7 @@ async def get_order_by_id(order_id: int = Path(...), db: AsyncSession = Depends(
         result = await db.execute(select(crud.models.Order).filter_by(id=order_id))
         order = result.scalars().first()
         if not order:
-            return {"error": "Заказ не найден"}
+            return {"success": False, "error": "Заказ не найден"}
         # Возвращаем order_data как есть (словарь)
         order_data = json.loads(order.order_data)
         order_data["id"] = order.id
@@ -486,7 +486,7 @@ async def get_order_by_id(order_id: int = Path(...), db: AsyncSession = Depends(
         return order_data
     except Exception as e:
         logger.error(f"Ошибка при получении заказа по id: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"success": False, "error": str(e)}
 
 # --- Эндпоинт: получить составной заказ по ID ---
 @app.get("/api/compose_order/{order_id}")
@@ -495,7 +495,7 @@ async def get_compose_order_by_id(order_id: int = Path(...), db: AsyncSession = 
         result = await db.execute(select(crud.models.ComposeOrder).filter_by(id=order_id))
         order = result.scalars().first()
         if not order:
-            return {"error": "Составной заказ не найден"}
+            return {"success": False, "error": "Составной заказ не найден"}
         # Возвращаем compose_order_data как есть (словарь)
         compose_order_data = json.loads(order.compose_order_data)
         compose_order_data["id"] = order.id
@@ -505,7 +505,7 @@ async def get_compose_order_by_id(order_id: int = Path(...), db: AsyncSession = 
         return compose_order_data
     except Exception as e:
         logger.error(f"Ошибка при получении составного заказа по id: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"success": False, "error": str(e)}
 
 # --- Эндпоинт: удалить заказ по ID ---
 @app.delete("/api/order/{order_id}")
@@ -514,14 +514,14 @@ async def delete_order(order_id: int = Path(...), db: AsyncSession = Depends(get
         result = await db.execute(select(crud.models.Order).filter_by(id=order_id))
         order = result.scalars().first()
         if not order:
-            return {"error": "Заказ не найден"}
+            return {"success": False, "error": "Заказ не найден"}
         await db.delete(order)
         await db.commit()
         logger.info(f"Заказ id={order_id} успешно удалён")
         return {"success": True}
     except Exception as e:
         logger.error(f"Ошибка при удалении заказа: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"success": False, "error": str(e)}
 
 @app.delete("/api/compose_order/{order_id}")
 async def delete_compose_order(order_id: int = Path(...), db: AsyncSession = Depends(get_session)):
@@ -530,14 +530,14 @@ async def delete_compose_order(order_id: int = Path(...), db: AsyncSession = Dep
         result = await db.execute(select(crud.models.ComposeOrder).filter_by(id=order_id))
         order = result.scalars().first()
         if not order:
-            return {"error": "Составной заказ не найден"}
+            return {"success": False, "error": "Составной заказ не найден"}
         await db.delete(order)
         await db.commit()
         logger.info(f"Составной заказ id={order_id} успешно удалён")
         return {"success": True}
     except Exception as e:
         logger.error(f"Ошибка при удалении составного заказа: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"success": False, "error": str(e)}
 
 # --- Эндпоинты для составных заказов ---
 
@@ -715,19 +715,19 @@ async def select_compose_aircons(payload: dict, db: AsyncSession = Depends(get_s
     try:
         order_id = payload.get("id")
         if not order_id:
-            return {"error": "ID составного заказа не указан"}
+            return {"success": False, "error": "ID составного заказа не указан"}
         
         # Получаем составной заказ
         result = await db.execute(select(crud.models.ComposeOrder).filter_by(id=order_id))
         order = result.scalars().first()
         if not order:
-            return {"error": "Составной заказ не найден"}
+            return {"success": False, "error": "Составной заказ не найден"}
         
         compose_order_data = json.loads(order.compose_order_data)
         airs = compose_order_data.get("airs", [])
         
         if not airs:
-            return {"error": "В составном заказе нет кондиционеров для подбора"}
+            return {"success": False, "error": "В составном заказе нет кондиционеров для подбора"}
         
         # Берем последний добавленный кондиционер
         last_air = airs[-1]
@@ -809,7 +809,7 @@ async def select_compose_aircons(payload: dict, db: AsyncSession = Depends(get_s
         
     except Exception as e:
         logger.error(f"Ошибка при подборе кондиционеров для составного заказа: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"success": False, "error": str(e)}
 
 @app.post("/api/add_aircon_to_compose_order/")
 async def add_aircon_to_compose_order(payload: dict, db: AsyncSession = Depends(get_session)):
@@ -872,13 +872,13 @@ async def generate_compose_offer(payload: dict, db: AsyncSession = Depends(get_s
     try:
         order_id = payload.get("id")
         if not order_id:
-            return {"error": "ID составного заказа не указан"}
+            return {"success": False, "error": "ID составного заказа не указан"}
         
         # Получаем составной заказ
         result = await db.execute(select(crud.models.ComposeOrder).filter_by(id=order_id))
         order = result.scalars().first()
         if not order:
-            return {"error": "Составной заказ не найден"}
+            return {"success": False, "error": "Составной заказ не найден"}
         
         compose_order_data = json.loads(order.compose_order_data)
         
@@ -888,7 +888,7 @@ async def generate_compose_offer(payload: dict, db: AsyncSession = Depends(get_s
         # Проверяем, что есть кондиционеры с подобранными вариантами
         airs = compose_order_data.get("airs", [])
         if not airs:
-            return {"error": "В составном заказе нет кондиционеров"}
+            return {"success": False, "error": "В составном заказе нет кондиционеров"}
         
         # Формируем структуру aircon_results только для кондиционеров с подобранными вариантами
         aircon_results = {
@@ -906,7 +906,7 @@ async def generate_compose_offer(payload: dict, db: AsyncSession = Depends(get_s
                 airs_with_selections.append(air)
         
         if not aircon_results["aircon_results"]:
-            return {"error": "Нет кондиционеров с подобранными вариантами. Сначала подберите кондиционеры для всех помещений."}
+            return {"success": False, "error": "Нет кондиционеров с подобранными вариантами. Сначала подберите кондиционеры для всех помещений."}
         
         # Получаем скидку из первого кондиционера с подобранными вариантами
         discount_percent = airs_with_selections[0].get("order_params", {}).get("discount", 0) if airs_with_selections else 0
@@ -930,4 +930,4 @@ async def generate_compose_offer(payload: dict, db: AsyncSession = Depends(get_s
         
     except Exception as e:
         logger.error(f"Ошибка при генерации КП для составного заказа: {e}", exc_info=True)
-        return {"error": str(e)}
+        return {"success": False, "error": str(e)}

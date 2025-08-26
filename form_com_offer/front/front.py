@@ -361,7 +361,9 @@ def fill_fields_from_order_diff(order, placeholder):
                 comp_diffs.append(gr.update(value=v))
             else:
                 comp_diffs.append(gr.update())
+    # ИСПРАВЛЕНИЕ: Загружаем комментарий из заказа
     comment_value = order.get("comment", "Оставьте комментарий...")
+    logger.info(f"[DEBUG] fill_fields_from_order_diff: comment_value={comment_value}")
     return updates, comp_diffs, comment_value
 
 def update_components_tab(order_state):
@@ -402,42 +404,72 @@ def fill_components_fields_from_order(order, components_catalog):
     order_components = order.get("components", [])
     logger.info(f"[DEBUG] fill_components_fields_from_order: order_components={order_components}")
     
-    # Для обычных заказов используем components_catalog_for_ui если он доступен
-    # Для составных заказов тоже используем components_catalog_for_ui если он доступен
+    # ИСПРАВЛЕНИЕ: Всегда используем components_catalog_for_ui если он доступен
     if ('components_catalog_for_ui' in globals() and 
         components_catalog_for_ui and 
         len(components_catalog_for_ui) > 0):
         catalog_components = components_catalog_for_ui
         logger.info(f"[DEBUG] fill_components_fields_from_order: using components_catalog_for_ui with {len(catalog_components)} components")
+        # ИСПРАВЛЕНИЕ: Проверяем на дубликаты в каталоге
+        component_names = [comp.get("name", "") for comp in catalog_components]
+        unique_names = list(set(component_names))
+        if len(component_names) != len(unique_names):
+            logger.warning(f"[DEBUG] fill_components_fields_from_order: DUPLICATES DETECTED! {len(component_names)} total, {len(unique_names)} unique")
+            # Удаляем дубликаты, сохраняя порядок
+            seen = set()
+            deduplicated_components = []
+            for comp in catalog_components:
+                name = comp.get("name", "")
+                if name not in seen:
+                    seen.add(name)
+                    deduplicated_components.append(comp)
+            catalog_components = deduplicated_components
+            logger.info(f"[DEBUG] fill_components_fields_from_order: after deduplication: {len(catalog_components)} components")
     else:
         catalog_components = components_catalog.get("components", [])
         logger.info(f"[DEBUG] fill_components_fields_from_order: using components_catalog with {len(catalog_components)} components")
     
-    for i, catalog_comp in enumerate(catalog_components):
-        logger.info(f"[DEBUG] fill_components_fields_from_order: processing component {i}: '{catalog_comp.get('name')}'")
-        # Ищем компонент в заказе по имени (без учёта регистра и пробелов)
-        cname = catalog_comp.get("name", "").replace(" ", "").lower()
-        found = None
-        for c in order_components:
-            oname = c.get("name", "").replace(" ", "").lower()
-            if cname == oname:
-                found = c
-                logger.info(f"[DEBUG] fill_components_fields_from_order: found component '{c.get('name')}' with selected={c.get('selected')}, qty={c.get('qty')}, length={c.get('length')}")
-                break
-        
-        if found and found.get("selected"):
-            updates.append(gr.update(value=True))
-            updates.append(gr.update(value=int(found.get("qty", 0))))
-            updates.append(gr.update(value=float(found.get("length", 0))))
-        else:
-            updates.append(gr.update(value=False))
-            updates.append(gr.update(value=0))
-            updates.append(gr.update(value=0.0))
+            # ИСПРАВЛЕНИЕ: Обрабатываем ВСЕ компоненты из каталога
+        for i, catalog_comp in enumerate(catalog_components):
+            logger.info(f"[DEBUG] fill_components_fields_from_order: processing component {i}: '{catalog_comp.get('name')}'")
+            # Ищем компонент в заказе по имени (без учёта регистра и пробелов)
+            cname = catalog_comp.get("name", "").replace(" ", "").lower()
+            found = None
+            for c in order_components:
+                oname = c.get("name", "").replace(" ", "").lower()
+                if cname == oname:
+                    found = c
+                    logger.info(f"[DEBUG] fill_components_fields_from_order: found component '{c.get('name')}' with selected={c.get('selected')}, qty={c.get('qty')}, length={c.get('length')}")
+                    break
+            
+            # ИСПРАВЛЕНИЕ: Всегда добавляем обновления для всех компонентов
+            if found and found.get("selected"):
+                logger.info(f"[DEBUG] fill_components_fields_from_order: setting component '{catalog_comp.get('name')}' as SELECTED")
+                updates.append(gr.update(value=True))
+                updates.append(gr.update(value=int(found.get("qty", 0))))
+                updates.append(gr.update(value=float(found.get("length", 0))))
+            else:
+                logger.info(f"[DEBUG] fill_components_fields_from_order: setting component '{catalog_comp.get('name')}' as NOT SELECTED")
+                updates.append(gr.update(value=False))
+                updates.append(gr.update(value=0))
+                updates.append(gr.update(value=0.0))
     
     logger.info(f"[DEBUG] fill_components_fields_from_order: generated {len(updates)} updates")
     logger.info(f"[DEBUG] fill_components_fields_from_order: expected updates = {len(catalog_components) * 3}")
     logger.info(f"[DEBUG] fill_components_fields_from_order: components_catalog_for_ui length = {len(components_catalog_for_ui) if 'components_catalog_for_ui' in globals() else 'NOT_DEFINED'}")
     logger.info(f"[DEBUG] fill_components_fields_from_order: COMPONENTS_CATALOG length = {len(COMPONENTS_CATALOG.get('components', []))}")
+    
+    # ИСПРАВЛЕНИЕ: Проверяем, что количество обновлений соответствует ожидаемому
+    expected_count = len(catalog_components) * 3
+    if len(updates) != expected_count:
+        logger.warning(f"[DEBUG] fill_components_fields_from_order: WARNING! Generated {len(updates)} updates, expected {expected_count}")
+        # Дополняем до нужного количества
+        while len(updates) < expected_count:
+            updates.append(gr.update(value=False))
+            updates.append(gr.update(value=0))
+            updates.append(gr.update(value=0.0))
+        logger.info(f"[DEBUG] fill_components_fields_from_order: After padding: {len(updates)} updates")
+    
     return updates
 
 def read_notes_md():
@@ -686,7 +718,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 # Дополняем comp_updates до нужной длины
                 while len(comp_updates) < components_count:
                     comp_updates.append(gr.update())
-            result = [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + comp_updates + [gr.update(value=comment_value), gr.update(value=""), gr.update(value=order.get("id")), gr.update(value=order), gr.update(value=order.get("id"))] + [gr.update() for _ in range(22)] + [gr.update(value=""), gr.update(value=None), gr.update(value=""), gr.update(value="")]
+            # ИСПРАВЛЕНИЕ: Правильное количество compose полей (21, а не 22)
+            result = [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + comp_updates + [gr.update(value=comment_value), gr.update(value=""), gr.update(value=order.get("id")), gr.update(value=order), gr.update(value=order.get("id"))] + [gr.update() for _ in range(21)] + [gr.update(value=""), gr.update(value=""), gr.update(value="0"), gr.update(value=""), gr.update(value="")]
             logger.info(f"[DEBUG] load_selected_order: returning {len(result)} values")
             logger.info(f"[DEBUG] load_selected_order: updates length = {len(updates)}, comp_updates length = {len(comp_updates)}")
             logger.info(f"[DEBUG] load_selected_order: components_ui_inputs length = {len(components_ui_inputs)}")
@@ -711,16 +744,20 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             
             # Извлекаем данные клиента
             client_data = compose_order_data.get("client_data", {})
-            # Извлекаем общие параметры заказа (visit_date, discount)
+            # ИСПРАВЛЕНИЕ: Извлекаем общие параметры заказа (visit_date, discount)
             general_order_params = compose_order_data.get("order_params", {})
             
-            # Если order_params пустой, используем дефолтные значения и обновляем заказ
-            if not general_order_params:
-                logger.info("[DEBUG] load_compose_order: order_params пустой, добавляем дефолтные значения и обновляем заказ")
-                general_order_params = {
-                    "visit_date": datetime.date.today().strftime('%Y-%m-%d'),
-                    "discount": 0
-                }
+            # ИСПРАВЛЕНИЕ: Если order_params пустой или не содержит нужных полей, используем дефолтные значения
+            if not general_order_params or "visit_date" not in general_order_params or "discount" not in general_order_params:
+                logger.info("[DEBUG] load_compose_order: order_params пустой или неполный, добавляем дефолтные значения")
+                if not general_order_params:
+                    general_order_params = {}
+                
+                # Добавляем недостающие поля
+                if "visit_date" not in general_order_params:
+                    general_order_params["visit_date"] = datetime.date.today().strftime('%Y-%m-%d')
+                if "discount" not in general_order_params:
+                    general_order_params["discount"] = 0
                 
                 # Обновляем заказ, добавляя order_params
                 updated_compose_order_data = compose_order_data.copy()
@@ -760,6 +797,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             logger.info(f"[DEBUG] load_compose_order: discount={general_order_params.get('discount', 'NOT_FOUND')}")
             logger.info(f"[DEBUG] load_compose_order: last_air_order_params={last_air_order_params}")
             logger.info(f"[DEBUG] load_compose_order: last_air_aircon_params={last_air_aircon_params}")
+            logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[4].value (visit_date) = {general_order_params.get('visit_date', 'NOT_FOUND')}")
+            logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[5].value (discount) = {safe_int(general_order_params.get('discount', 0))}")
             
             # Безопасное преобразование типов
             def safe_float(value):
@@ -818,6 +857,22 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             # Загружаем комплектующие
             components = compose_order_data.get("components", [])
             logger.info(f"[DEBUG] load_compose_order: components from compose_order_data: {components}")
+            # ИСПРАВЛЕНИЕ: Проверяем на дубликаты в components
+            component_names = [comp.get("name", "") for comp in components]
+            unique_names = list(set(component_names))
+            if len(component_names) != len(unique_names):
+                logger.warning(f"[DEBUG] load_compose_order: DUPLICATES IN COMPONENTS! {len(component_names)} total, {len(unique_names)} unique")
+                # Удаляем дубликаты, сохраняя порядок
+                seen = set()
+                deduplicated_components = []
+                for comp in components:
+                    name = comp.get("name", "")
+                    if name not in seen:
+                        seen.add(name)
+                        deduplicated_components.append(comp)
+                components = deduplicated_components
+                logger.info(f"[DEBUG] load_compose_order: after deduplication: {len(components)} components")
+            
             comp_updates = fill_components_fields_from_order({"components": components}, {"components": components_catalog_for_ui if 'components_catalog_for_ui' in globals() and components_catalog_for_ui else COMPONENTS_CATALOG.get("components", [])})
             logger.info(f"[DEBUG] load_compose_order: comp_updates length: {len(comp_updates)}")
             
@@ -895,10 +950,44 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 gr.update(value=aircon_params.get("brand", "Любой")),
                 gr.update(value=order_params.get("installation_price", 0)),
             ]
-            for comp in placeholder["components"]:
-                values.append(gr.update(value=comp.get("selected", False)))
-                values.append(gr.update(value=comp.get("qty", 0)))
-                values.append(gr.update(value=comp.get("length", 0.0)))
+            # ИСПРАВЛЕНИЕ: Используем правильное количество компонентов из components_ui_inputs
+            # Генерируем компоненты для всех элементов в components_ui_inputs
+            catalog_components = components_catalog_for_ui if 'components_catalog_for_ui' in globals() and components_catalog_for_ui else COMPONENTS_CATALOG.get("components", [])
+            # ИСПРАВЛЕНИЕ: Проверяем на дубликаты в каталоге
+            component_names = [comp.get("name", "") for comp in catalog_components]
+            unique_names = list(set(component_names))
+            if len(component_names) != len(unique_names):
+                logger.warning(f"[DEBUG] show_main: DUPLICATES DETECTED! {len(component_names)} total, {len(unique_names)} unique")
+                # Удаляем дубликаты, сохраняя порядок
+                seen = set()
+                deduplicated_components = []
+                for comp in catalog_components:
+                    name = comp.get("name", "")
+                    if name not in seen:
+                        seen.add(name)
+                        deduplicated_components.append(comp)
+                catalog_components = deduplicated_components
+                logger.info(f"[DEBUG] show_main: after deduplication: {len(catalog_components)} components")
+            
+            for catalog_comp in catalog_components:
+                # Ищем компонент в placeholder по имени
+                cname = catalog_comp.get("name", "").replace(" ", "").lower()
+                found = None
+                for comp in placeholder["components"]:
+                    oname = comp.get("name", "").replace(" ", "").lower()
+                    if cname == oname:
+                        found = comp
+                        break
+                
+                if found and found.get("selected"):
+                    values.append(gr.update(value=True))
+                    values.append(gr.update(value=int(found.get("qty", 0))))
+                    values.append(gr.update(value=float(found.get("length", 0))))
+                else:
+                    values.append(gr.update(value=False))
+                    values.append(gr.update(value=0))
+                    values.append(gr.update(value=0.0))
+            
             # comment_box, save_comment_status, order_id_hidden, order_state, order_id_state
             values += [gr.update(value=placeholder.get("comment", "Оставьте комментарий...")), gr.update(value=""), gr.update(value=None), gr.update(value=placeholder), gr.update(value=None)]
             return (
@@ -907,10 +996,17 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             )
         else:
             updates, _, comment_value = fill_fields_from_order_diff(order, get_placeholder_order())
-            # Для обычных заказов используем fill_components_fields_from_order с components_catalog_for_ui
+            # ИСПРАВЛЕНИЕ: Для обычных заказов используем fill_components_fields_from_order с components_catalog_for_ui
             comp_updates = fill_components_fields_from_order(order, {"components": components_catalog_for_ui if 'components_catalog_for_ui' in globals() and components_catalog_for_ui else COMPONENTS_CATALOG.get("components", [])})
-            # Используем фиксированное количество элементов для компонентов
+            # ИСПРАВЛЕНИЕ: Используем фиксированное количество элементов для компонентов
             components_count = len(components_catalog_for_ui if 'components_catalog_for_ui' in globals() and components_catalog_for_ui else COMPONENTS_CATALOG.get("components", [])) * 3
+            # ИСПРАВЛЕНИЕ: Проверяем, что comp_updates имеет правильную длину
+            if len(comp_updates) != components_count:
+                logger.warning(f"[DEBUG] show_main: comp_updates length ({len(comp_updates)}) != expected ({components_count})")
+                # Дополняем comp_updates до нужной длины
+                while len(comp_updates) < components_count:
+                    comp_updates.append(gr.update())
+            logger.info(f"[DEBUG] show_main: comment_value={comment_value}")
             return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), *updates, *comp_updates, gr.update(value=comment_value), gr.update(value=""), gr.update(value=order.get("id")), gr.update(value=order), gr.update(value=order.get("id"))
 
     def on_select_order(row):
@@ -1034,10 +1130,13 @@ with gr.Blocks(title="Автоматизация продаж кондицион
 
     async def save_components_handler(
         order_id_hidden_value,
+        compose_order_id_hidden_value,
         *components_inputs
     ):
         # Сохраняем только комплектующие (по id заказа)
-        order_id = order_id_hidden_value
+        # Используем ID составного заказа, если он доступен, иначе обычного заказа
+        order_id = compose_order_id_hidden_value if compose_order_id_hidden_value and compose_order_id_hidden_value != 0 else order_id_hidden_value
+        logger.info(f"[DEBUG] save_components_handler: order_id_hidden_value={order_id_hidden_value}, compose_order_id_hidden_value={compose_order_id_hidden_value}, using order_id={order_id}")
         selected_components = []
         i = 0
         # Итерируемся в порядке, совпадающем с UI
@@ -1079,25 +1178,32 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         
         # Определяем тип заказа и отправляем на соответствующий эндпоинт
         try:
-            # Сначала получаем информацию о заказе
+            # Если у нас есть ID составного заказа и он совпадает с текущим order_id, используем его
+            if compose_order_id_hidden_value and compose_order_id_hidden_value != 0 and compose_order_id_hidden_value == order_id:
+                order_type = 'Compose'
+                logger.info(f"[DEBUG] save_components_handler: using compose order, order_id={order_id}")
+            else:
+                # Получаем информацию о заказе
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(f"{BACKEND_URL}/api/all_orders/")
+                    resp.raise_for_status()
+                    orders = resp.json()
+                    
+                    # Ищем заказ по ID
+                    order_info = None
+                    for order in orders:
+                        if order.get('id') == order_id:
+                            order_info = order
+                            break
+                    
+                    if not order_info:
+                        return f"Ошибка: Заказ с ID {order_id} не найден", order_id
+                    
+                    order_type = order_info.get('order_type', 'Order')
+                    logger.info(f"[DEBUG] save_components_handler: order_id={order_id}, order_type={order_type}")
+            
+            # Теперь обрабатываем в зависимости от типа заказа
             async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{BACKEND_URL}/api/all_orders/")
-                resp.raise_for_status()
-                orders = resp.json()
-                
-                # Ищем заказ по ID
-                order_info = None
-                for order in orders:
-                    if order.get('id') == order_id:
-                        order_info = order
-                        break
-                
-                if not order_info:
-                    return f"Ошибка: Заказ с ID {order_id} не найден", order_id
-                
-                order_type = order_info.get('order_type', 'Order')
-                logger.info(f"[DEBUG] save_components_handler: order_type={order_type}")
-                
                 if order_type == 'Compose':
                     # Для составного заказа обновляем только components
                     payload = {
@@ -1110,6 +1216,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     resp = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=payload)
                     resp.raise_for_status()
                     data = resp.json()
+                    logger.info(f"[DEBUG] save_components_handler (compose): response: {json.dumps(data, ensure_ascii=False, indent=2)}")
                     if data.get("success"):
                         msg = f"Комплектующие составного заказа успешно сохранены!"
                         return msg, order_id
@@ -1126,6 +1233,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     resp = await client.post(f"{BACKEND_URL}/api/save_order/", json=payload)
                     resp.raise_for_status()
                     data = resp.json()
+                    logger.info(f"[DEBUG] save_components_handler (regular): response: {json.dumps(data, ensure_ascii=False, indent=2)}")
                     if data.get("success"):
                         msg = f"Комплектующие успешно сохранены!"
                         return msg, order_id
@@ -1157,7 +1265,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     )
     save_components_btn.click(
         fn=save_components_handler,
-        inputs=[order_id_hidden] + components_ui_inputs,
+        inputs=[order_id_hidden, compose_order_id_hidden] + components_ui_inputs,
         outputs=[save_components_status, order_id_hidden]
     )
 
@@ -1689,37 +1797,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                    50, "квартира", 0, False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
                    "Любой", 2.7, "Средняя", 1, "Сидячая работа",  # compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity
                    0, 0, 0, "Любой", 0)  # compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price
-
-
-
-    async def delete_compose_order_handler(order_id_hidden_value):
-        """Обработчик удаления составного заказа"""
-        logger.info(f"[DEBUG] delete_compose_order_handler: order_id_hidden_value={order_id_hidden_value}")
-        
-        try:
-            order_id = int(order_id_hidden_value)
-            if not order_id or order_id <= 0:
-                return "Ошибка: Некорректный ID составного заказа!", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), None, get_placeholder_order()
-        except Exception as e:
-            logger.error(f"Ошибка преобразования order_id_hidden_value: {e}")
-            return f"Ошибка: Некорректный ID составного заказа!", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), None, get_placeholder_order()
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.delete(f"{BACKEND_URL}/api/compose_order/{order_id}")
-                resp.raise_for_status()
-                data = resp.json()
-                if data.get("success"):
-                    logger.info(f"Составной заказ {order_id} успешно удален")
-                    # Возвращаемся на корневую страницу и сбрасываем состояние
-                    return "Составной заказ успешно удален! Перенаправление на главную страницу...", gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), None, get_placeholder_order()
-                else:
-                    error_msg = data.get("error", "Неизвестная ошибка при удалении заказа")
-                    logger.error(f"Ошибка удаления составного заказа {order_id}: {error_msg}")
-                    return f"Ошибка: {error_msg}", gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order_id, None
-        except Exception as e:
-            logger.error(f"Ошибка при удалении составного заказа: {e}", exc_info=True)
-            return f"Ошибка: {e}", gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order_id, None
     
     async def generate_compose_kp_handler(order_id_hidden_value):
         """Обработчик генерации КП для составного заказа"""
