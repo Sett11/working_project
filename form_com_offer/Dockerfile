@@ -15,9 +15,6 @@ RUN pip install --no-cache-dir --timeout=100 -r requirements.txt
 # 4. Копируем все остальные файлы проекта в рабочую директорию
 COPY . .
 
-# 5. Делаем скрипты валидации исполняемыми
-RUN chmod +x validate_catalog.py test_catalog_validation.py
-
-# 6. Команда по умолчанию была убрана, так как она определяется
+# 5. Команда по умолчанию была убрана, так как она определяется
 # для каждого сервиса отдельно в docker-compose.yml
 

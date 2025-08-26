@@ -16,74 +16,12 @@ BACKEND_URL = "http://backend:8001"
 COMPONENTS_CATALOG_PATH = os.path.join(os.path.dirname(__file__), '../docs/components_catalog.json')
 PLACEHOLDER_IMAGE = os.path.abspath(os.path.join(os.path.dirname(__file__), '../docs/images_comp/placeholder.jpg'))
 
-def validate_components_catalog(catalog_data):
-    """
-    Валидирует каталог компонентов на наличие дубликатов и уникальных ID.
-    
-    Args:
-        catalog_data: Данные каталога компонентов
-    
-    Returns:
-        bool: True если каталог валиден, False если есть ошибки
-    """
-    if not catalog_data or "components" not in catalog_data:
-        logger.error("Каталог компонентов пуст или не содержит секции 'components'")
-        return False
-    
-    components = catalog_data["components"]
-    if not components:
-        logger.warning("Каталог компонентов пуст")
-        return True
-    
-    # Проверяем наличие уникальных ID
-    component_ids = []
-    component_names = []
-    missing_ids = []
-    duplicate_ids = []
-    duplicate_names = []
-    
-    for i, comp in enumerate(components):
-        comp_id = comp.get("id")
-        comp_name = comp.get("name", "")
-        
-        if not comp_id:
-            missing_ids.append(f"Индекс {i}: '{comp_name}'")
-        else:
-            if comp_id in component_ids:
-                duplicate_ids.append(str(comp_id))
-            else:
-                component_ids.append(comp_id)
-        
-        if comp_name in component_names:
-            duplicate_names.append(comp_name)
-        else:
-            component_names.append(comp_name)
-    
-    # Логируем ошибки
-    if missing_ids:
-        logger.error(f"Компоненты без ID: {missing_ids}")
-    
-    if duplicate_ids:
-        logger.error(f"Дублирующиеся ID: {duplicate_ids}")
-    
-    if duplicate_names:
-        logger.error(f"Дублирующиеся имена: {duplicate_names}")
-    
-    # Возвращаем False если есть критические ошибки
-    if missing_ids or duplicate_ids:
-        return False
-    
-    return True
+
 
 def load_components_catalog():
     try:
         with open(COMPONENTS_CATALOG_PATH, encoding='utf-8') as f:
             data = json.load(f)
-        
-        # Валидируем каталог при загрузке
-        if not validate_components_catalog(data):
-            logger.error("Каталог компонентов содержит ошибки. Приложение будет остановлено.")
-            raise ValueError("Каталог компонентов содержит ошибки валидации")
         
         logger.info(f"Каталог компонентов успешно загружен: {len(data.get('components', []))} компонентов")
         return data
@@ -92,40 +30,6 @@ def load_components_catalog():
         return {"components": []}
 
 COMPONENTS_CATALOG = load_components_catalog()
-
-# --- Хелперы для работы с компонентами ---
-def deduplicate_components(components_list, context=""):
-    """
-    Удаляет дубликаты из списка компонентов, сохраняя исходный порядок.
-    
-    Args:
-        components_list: Список словарей компонентов
-        context: Контекст для логирования (например, "UI creation", "fill_components_fields_from_order")
-    
-    Returns:
-        Список уникальных компонентов в исходном порядке
-    """
-    if not components_list:
-        return []
-    
-    seen_components = set()
-    unique_components = []
-    duplicate_names = []
-    
-    for comp in components_list:
-        comp_name = comp.get("name", "")
-        if comp_name not in seen_components:
-            seen_components.add(comp_name)
-            unique_components.append(comp)
-        else:
-            duplicate_names.append(comp_name)
-    
-    # Логируем дубликаты одним сообщением
-    if duplicate_names:
-        logger.warning(f"[DEBUG] {context}: Найдены дубликаты компонентов: {duplicate_names}")
-        logger.info(f"[DEBUG] {context}: Исходное количество: {len(components_list)}, уникальных: {len(unique_components)}")
-    
-    return unique_components
 
 def build_error_response(error_message, components_ui_inputs_length):
     """
@@ -158,6 +62,42 @@ def build_error_response(error_message, components_ui_inputs_length):
     
     # Объединяем все сегменты
     return error_updates + field_updates + component_updates + comment_updates + compose_updates + status_updates
+
+def safe_float(value):
+    """Безопасное преобразование в float"""
+    if value is None or value == "":
+        return 0.0
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
+
+def safe_int(value):
+    """Безопасное преобразование в int"""
+    if value is None or value == "":
+        return 0
+    try:
+        return int(float(value))  # Сначала float, потом int для случаев типа "15.0"
+    except (ValueError, TypeError):
+        return 0
+
+def safe_bool(value):
+    """Безопасное преобразование в bool"""
+    if value is None or value == "":
+        return False
+    try:
+        return bool(value)
+    except (ValueError, TypeError):
+        return False
+
+def safe_illumination(value):
+    """Безопасное преобразование освещения из числа в строку"""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, int):
+        illumination_map = {0: "Слабая", 1: "Средняя", 2: "Сильная"}
+        return illumination_map.get(value, "Средняя")
+    return "Средняя"
 
 # --- ОБНОВЛЕННАЯ ФУНКЦИЯ ДЛЯ РАБОТЫ С ПУТЯМИ ---
 def get_component_image_path(image_path_from_json):
@@ -544,8 +484,7 @@ def fill_components_fields_from_order(order, components_catalog):
         len(components_catalog_for_ui) > 0):
         catalog_components = components_catalog_for_ui
         logger.info(f"[DEBUG] fill_components_fields_from_order: using components_catalog_for_ui with {len(catalog_components)} components")
-        # ИСПРАВЛЕНИЕ: Проверяем на дубликаты в каталоге
-        catalog_components = deduplicate_components(catalog_components, "fill_components_fields_from_order")
+
     else:
         catalog_components = components_catalog.get("components", [])
         logger.info(f"[DEBUG] fill_components_fields_from_order: using components_catalog with {len(catalog_components)} components")
@@ -663,8 +602,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             gr.Markdown("### Подбор комплектующих для монтажа")
             components_by_category = defaultdict(list)
             
-            # ИСПРАВЛЕНИЕ: Удаляем дубликаты из каталога перед созданием UI
-            unique_components = deduplicate_components(COMPONENTS_CATALOG.get("components", []), "UI creation")
+            # Используем каталог компонентов без изменений
+            unique_components = COMPONENTS_CATALOG.get("components", [])
             
             for idx, comp in enumerate(unique_components):
                 components_by_category[comp["category"]].append((comp, idx))
@@ -951,30 +890,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             logger.info(f"[DEBUG] load_compose_order: general_order_params={general_order_params}")
             logger.info(f"[DEBUG] load_compose_order: visit_date={general_order_params.get('visit_date', 'NOT_FOUND')}")
             logger.info(f"[DEBUG] load_compose_order: discount={general_order_params.get('discount', 'NOT_FOUND')}")
-            # Безопасное преобразование типов
-            def safe_float(value):
-                if value is None or value == "":
-                    return 0.0
-                try:
-                    return float(value)
-                except (ValueError, TypeError):
-                    return 0.0
-            
-            def safe_int(value):
-                if value is None or value == "":
-                    return 0
-                try:
-                    return int(float(value))  # Сначала float, потом int для случаев типа "15.0"
-                except (ValueError, TypeError):
-                    return 0
-            
-            def safe_bool(value):
-                if value is None or value == "":
-                    return False
-                try:
-                    return bool(value)
-                except (ValueError, TypeError):
-                    return False
             
             logger.info(f"[DEBUG] load_compose_order: last_air_order_params={last_air_order_params}")
             logger.info(f"[DEBUG] load_compose_order: last_air_aircon_params={last_air_aircon_params}")
@@ -1000,7 +915,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 gr.update(value=safe_float(last_air_aircon_params.get("price_limit", 10000))),   # 11. compose_price
                 gr.update(value=last_air_aircon_params.get("mount_type", "Любой")), # 12. compose_mount_type
                 gr.update(value=safe_float(last_air_aircon_params.get("ceiling_height", 2.7))),     # 13. compose_ceiling_height
-                gr.update(value=last_air_aircon_params.get("illumination", "Средняя")), # 14. compose_illumination
+                gr.update(value=safe_illumination(last_air_aircon_params.get("illumination", "Средняя"))), # 14. compose_illumination
                 gr.update(value=safe_int(last_air_aircon_params.get("num_people", 1))),       # 15. compose_num_people
                 gr.update(value=last_air_aircon_params.get("activity", "Сидячая работа")), # 16. compose_activity
                 gr.update(value=safe_int(last_air_aircon_params.get("num_computers", 0))),       # 17. compose_num_computers
@@ -1013,21 +928,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             # Загружаем комплектующие
             components = compose_order_data.get("components", [])
             logger.info(f"[DEBUG] load_compose_order: components from compose_order_data: {components}")
-            # ИСПРАВЛЕНИЕ: Проверяем на дубликаты в components
-            component_names = [comp.get("name", "") for comp in components]
-            unique_names = list(set(component_names))
-            if len(component_names) != len(unique_names):
-                logger.warning(f"[DEBUG] load_compose_order: DUPLICATES IN COMPONENTS! {len(component_names)} total, {len(unique_names)} unique")
-                # Удаляем дубликаты, сохраняя порядок
-                seen = set()
-                deduplicated_components = []
-                for comp in components:
-                    comp_name = comp.get("name", "")
-                    if comp_name not in seen:
-                        seen.add(comp_name)
-                        deduplicated_components.append(comp)
-                components = deduplicated_components
-                logger.info(f"[DEBUG] load_compose_order: after deduplication: {len(components)} components")
             
             comp_updates = fill_components_fields_from_order({"components": components}, {"components": components_catalog_for_ui if 'components_catalog_for_ui' in globals() and components_catalog_for_ui else COMPONENTS_CATALOG.get("components", [])})
             logger.info(f"[DEBUG] load_compose_order: comp_updates length: {len(comp_updates)}")
@@ -1127,26 +1027,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 gr.update(value=aircon_params.get("brand", "Любой")),
                 gr.update(value=order_params.get("installation_price", 0)),
             ]
-            # ИСПРАВЛЕНИЕ: Используем правильное количество компонентов из components_ui_inputs
-            # Генерируем компоненты для всех элементов в components_ui_inputs
+            # Используем каталог компонентов без изменений
             catalog_components = components_catalog_for_ui if 'components_catalog_for_ui' in globals() and components_catalog_for_ui else COMPONENTS_CATALOG.get("components", [])
-            # ИСПРАВЛЕНИЕ: Проверяем на дубликаты в каталоге
-            component_names = [comp.get("name", "") for comp in catalog_components]
-            unique_names = list(set(component_names))
-            if len(component_names) != len(unique_names):
-                logger.warning(f"[DEBUG] show_main: DUPLICATES DETECTED! {len(component_names)} total, {len(unique_names)} unique")
-                # Удаляем дубликаты, сохраняя порядок
-                seen = set()
-                deduplicated_components = []
-                for comp in catalog_components:
-                    comp_name = comp.get("name", "")
-                    if comp_name not in seen:
-                        seen.add(comp_name)
-                        deduplicated_components.append(comp)
-                    else:
-                        logger.warning(f"[DEBUG] show_main: REMOVING DUPLICATE: '{comp_name}'")
-                catalog_components = deduplicated_components
-                logger.info(f"[DEBUG] show_main: after deduplication: {len(catalog_components)} components")
             
             for catalog_comp in catalog_components:
                 # Ищем компонент в placeholder по имени
