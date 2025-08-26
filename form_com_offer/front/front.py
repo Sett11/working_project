@@ -16,16 +16,148 @@ BACKEND_URL = "http://backend:8001"
 COMPONENTS_CATALOG_PATH = os.path.join(os.path.dirname(__file__), '../docs/components_catalog.json')
 PLACEHOLDER_IMAGE = os.path.abspath(os.path.join(os.path.dirname(__file__), '../docs/images_comp/placeholder.jpg'))
 
+def validate_components_catalog(catalog_data):
+    """
+    Валидирует каталог компонентов на наличие дубликатов и уникальных ID.
+    
+    Args:
+        catalog_data: Данные каталога компонентов
+    
+    Returns:
+        bool: True если каталог валиден, False если есть ошибки
+    """
+    if not catalog_data or "components" not in catalog_data:
+        logger.error("Каталог компонентов пуст или не содержит секции 'components'")
+        return False
+    
+    components = catalog_data["components"]
+    if not components:
+        logger.warning("Каталог компонентов пуст")
+        return True
+    
+    # Проверяем наличие уникальных ID
+    component_ids = []
+    component_names = []
+    missing_ids = []
+    duplicate_ids = []
+    duplicate_names = []
+    
+    for i, comp in enumerate(components):
+        comp_id = comp.get("id")
+        comp_name = comp.get("name", "")
+        
+        if not comp_id:
+            missing_ids.append(f"Индекс {i}: '{comp_name}'")
+        else:
+            if comp_id in component_ids:
+                duplicate_ids.append(str(comp_id))
+            else:
+                component_ids.append(comp_id)
+        
+        if comp_name in component_names:
+            duplicate_names.append(comp_name)
+        else:
+            component_names.append(comp_name)
+    
+    # Логируем ошибки
+    if missing_ids:
+        logger.error(f"Компоненты без ID: {missing_ids}")
+    
+    if duplicate_ids:
+        logger.error(f"Дублирующиеся ID: {duplicate_ids}")
+    
+    if duplicate_names:
+        logger.error(f"Дублирующиеся имена: {duplicate_names}")
+    
+    # Возвращаем False если есть критические ошибки
+    if missing_ids or duplicate_ids:
+        return False
+    
+    return True
+
 def load_components_catalog():
     try:
         with open(COMPONENTS_CATALOG_PATH, encoding='utf-8') as f:
             data = json.load(f)
+        
+        # Валидируем каталог при загрузке
+        if not validate_components_catalog(data):
+            logger.error("Каталог компонентов содержит ошибки. Приложение будет остановлено.")
+            raise ValueError("Каталог компонентов содержит ошибки валидации")
+        
+        logger.info(f"Каталог компонентов успешно загружен: {len(data.get('components', []))} компонентов")
         return data
     except Exception as e:
         logger.error(f"Ошибка загрузки каталога комплектующих: {e}")
         return {"components": []}
 
 COMPONENTS_CATALOG = load_components_catalog()
+
+# --- Хелперы для работы с компонентами ---
+def deduplicate_components(components_list, context=""):
+    """
+    Удаляет дубликаты из списка компонентов, сохраняя исходный порядок.
+    
+    Args:
+        components_list: Список словарей компонентов
+        context: Контекст для логирования (например, "UI creation", "fill_components_fields_from_order")
+    
+    Returns:
+        Список уникальных компонентов в исходном порядке
+    """
+    if not components_list:
+        return []
+    
+    seen_components = set()
+    unique_components = []
+    duplicate_names = []
+    
+    for comp in components_list:
+        comp_name = comp.get("name", "")
+        if comp_name not in seen_components:
+            seen_components.add(comp_name)
+            unique_components.append(comp)
+        else:
+            duplicate_names.append(comp_name)
+    
+    # Логируем дубликаты одним сообщением
+    if duplicate_names:
+        logger.warning(f"[DEBUG] {context}: Найдены дубликаты компонентов: {duplicate_names}")
+        logger.info(f"[DEBUG] {context}: Исходное количество: {len(components_list)}, уникальных: {len(unique_components)}")
+    
+    return unique_components
+
+def build_error_response(error_message, components_ui_inputs_length):
+    """
+    Строит ответ с ошибкой для load_selected_order.
+    
+    Args:
+        error_message: Сообщение об ошибке
+        components_ui_inputs_length: Количество элементов в components_ui_inputs
+    
+    Returns:
+        Список gr.update объектов для обновления UI
+    """
+    # Строим именованные сегменты для лучшей читаемости
+    error_updates = [gr.update(visible=True, value=error_message), gr.update(visible=True), gr.update(visible=False)]
+    
+    # Поля обычного заказа (22 элемента)
+    field_updates = [gr.update() for _ in range(22)]
+    
+    # Поля компонентов (3 элемента на компонент)
+    component_updates = [gr.update() for _ in range(components_ui_inputs_length)]
+    
+    # Поля комментария и связанные (5 элементов)
+    comment_updates = [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()]
+    
+    # Поля составного заказа (21 элемент)
+    compose_updates = [gr.update() for _ in range(21)]
+    
+    # Статусы и финальные поля (4 элемента)
+    status_updates = [gr.update(value=""), gr.update(value=""), gr.update(value=None), gr.update(value="0"), gr.update(value=""), gr.update(value="")]
+    
+    # Объединяем все сегменты
+    return error_updates + field_updates + component_updates + comment_updates + compose_updates + status_updates
 
 # --- ОБНОВЛЕННАЯ ФУНКЦИЯ ДЛЯ РАБОТЫ С ПУТЯМИ ---
 def get_component_image_path(image_path_from_json):
@@ -185,7 +317,7 @@ async def select_aircons(name, phone, mail, address, date, area, type_room, disc
                 return formatted_list
             else:
                 formatted_list = "Подходящих кондиционеров не найдено."
-                logger.info(f"Подбор кондиционеров завершен успешно.")
+                logger.info(f"Подбор кондиционеров завершен: подходящих не найдено.")
                 return formatted_list
     except httpx.RequestError as e:
         return f"Не удалось связаться с бэкендом: {e}"
@@ -413,31 +545,7 @@ def fill_components_fields_from_order(order, components_catalog):
         catalog_components = components_catalog_for_ui
         logger.info(f"[DEBUG] fill_components_fields_from_order: using components_catalog_for_ui with {len(catalog_components)} components")
         # ИСПРАВЛЕНИЕ: Проверяем на дубликаты в каталоге
-        component_names = [comp.get("name", "") for comp in catalog_components]
-        unique_names = list(set(component_names))
-        if len(component_names) != len(unique_names):
-            logger.warning(f"[DEBUG] fill_components_fields_from_order: DUPLICATES DETECTED! {len(component_names)} total, {len(unique_names)} unique")
-            # Находим дубликаты
-            seen = set()
-            duplicates = []
-            for name in component_names:
-                if name in seen:
-                    duplicates.append(name)
-                else:
-                    seen.add(name)
-            logger.warning(f"[DEBUG] fill_components_fields_from_order: DUPLICATE NAMES: {duplicates}")
-            # Удаляем дубликаты, сохраняя порядок
-            seen = set()
-            deduplicated_components = []
-            for comp in catalog_components:
-                comp_name = comp.get("name", "")
-                if comp_name not in seen:
-                    seen.add(comp_name)
-                    deduplicated_components.append(comp)
-                else:
-                    logger.warning(f"[DEBUG] fill_components_fields_from_order: REMOVING DUPLICATE: '{comp_name}'")
-            catalog_components = deduplicated_components
-            logger.info(f"[DEBUG] fill_components_fields_from_order: after deduplication: {len(catalog_components)} components")
+        catalog_components = deduplicate_components(catalog_components, "fill_components_fields_from_order")
     else:
         catalog_components = components_catalog.get("components", [])
         logger.info(f"[DEBUG] fill_components_fields_from_order: using components_catalog with {len(catalog_components)} components")
@@ -556,17 +664,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             components_by_category = defaultdict(list)
             
             # ИСПРАВЛЕНИЕ: Удаляем дубликаты из каталога перед созданием UI
-            seen_components = set()
-            unique_components = []
-            for comp in COMPONENTS_CATALOG.get("components", []):
-                comp_name = comp.get("name", "")
-                if comp_name not in seen_components:
-                    seen_components.add(comp_name)
-                    unique_components.append(comp)
-                else:
-                    logger.warning(f"[DEBUG] UI creation: REMOVING DUPLICATE component: '{comp_name}'")
-            
-            logger.info(f"[DEBUG] UI creation: original components: {len(COMPONENTS_CATALOG.get('components', []))}, unique components: {len(unique_components)}")
+            unique_components = deduplicate_components(COMPONENTS_CATALOG.get("components", []), "UI creation")
             
             for idx, comp in enumerate(unique_components):
                 components_by_category[comp["category"]].append((comp, idx))
@@ -728,7 +826,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         logger.info(f"[DEBUG] load_selected_order: selected={selected}")
         if not selected:
             logger.info(f"[DEBUG] load_selected_order: error - не выбран заказ")
-            return [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(22)] + [gr.update() for _ in range(len(components_ui_inputs))] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()] + [gr.update() for _ in range(22)] + [gr.update(value=""), gr.update(value=""), gr.update(value=None), gr.update(value="0"), gr.update(value=""), gr.update(value="")]
+            return build_error_response("Пожалуйста, выберите заказ для загрузки", len(components_ui_inputs))
         
         # Извлекаем ID и тип заказа из строки
         parts = selected.split("|")
@@ -1200,17 +1298,18 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     return f"Ошибка: {data['error']}"
                 aircons_list = data.get("aircons_list", [])
                 if isinstance(aircons_list, list) and aircons_list:
-                    formatted_list = f"Найдено {data.get('total_count', len(aircons_list))} подходящих кондиционеров:\n\n"
+                    total_count = data.get('total_count', len(aircons_list))
+                    formatted_list = f"Найдено {total_count} подходящих кондиционеров:\n\n"
                     for i, aircon in enumerate(aircons_list, 1):
                         formatted_list += f"{i}. {aircon.get('brand', 'N/A')} {aircon.get('model_name', 'N/A')}\n"
                         formatted_list += f"   Мощность охлаждения: {aircon.get('cooling_power_kw', 'N/A')} кВт\n"
                         formatted_list += f"   Цена: {aircon.get('retail_price_byn', 'N/A')} BYN\n"
                         formatted_list += f"   Инвертор: {'Да' if aircon.get('is_inverter') else 'Нет'}\n\n"
-                    logger.info(f"Подбор кондиционеров завершен успешно.")
+                    logger.info(f"Подбор кондиционеров завершен успешно: найдено {total_count} вариантов.")
                     return formatted_list
                 else:
                     formatted_list = "Подходящих кондиционеров не найдено."
-                    logger.info(f"Подбор кондиционеров завершен успешно.")
+                    logger.info(f"Подбор кондиционеров завершен: подходящих кондиционеров не найдено.")
                     return formatted_list
         except httpx.RequestError as e:
             error_message = f"Не удалось связаться с бэкендом: {e}"
@@ -1298,11 +1397,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         logger.info(f"[DEBUG] save_components_handler: components_inputs length = {len(components_inputs)}")
         
         # Итерируемся в порядке, совпадающем с UI
+        processing_errors = []
         for component_data in components_catalog_for_ui:
             # Проверяем, что у нас достаточно элементов в components_inputs
             if i + 2 >= len(components_inputs):
-                logger.error(f"[DEBUG] save_components_handler: IndexError at i={i}, components_inputs length={len(components_inputs)}")
-                break
+                error_msg = f"Недостаточно элементов в components_inputs: индекс {i}, ожидается минимум {i+3}, доступно {len(components_inputs)}"
+                logger.error(f"[DEBUG] save_components_handler: {error_msg}")
+                processing_errors.append(f"Компонент '{component_data.get('name', 'Unknown')}': {error_msg}")
+                continue
                 
             is_selected, qty, length = components_inputs[i], components_inputs[i+1], components_inputs[i+2]
             i += 3
@@ -1338,6 +1440,12 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             except Exception:
                 pass
             selected_components.append(comp_item)
+        
+        # Проверяем наличие ошибок обработки
+        if processing_errors:
+            error_summary = f"Ошибки при обработке компонентов: {'; '.join(processing_errors)}"
+            logger.error(f"[DEBUG] save_components_handler: {error_summary}")
+            return f"Ошибка: {error_summary}", order_id
         
         # Определяем тип заказа и отправляем на соответствующий эндпоинт
         try:
@@ -2053,4 +2161,3 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         inputs=[compose_order_id_hidden],
         outputs=[compose_save_status, start_screen, orders_list_screen, main_order_screen, compose_order_id_hidden, order_state]
     )
-    

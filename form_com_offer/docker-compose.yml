@@ -33,7 +33,13 @@ services:
   frontend:
     build: .
     container_name: ${COMPOSE_PROJECT_NAME}_frontend
-    command: python main.py
+    command: >
+      sh -c "
+        echo '🔍 Валидация каталога компонентов...' &&
+        python validate_catalog.py &&
+        echo '✅ Валидация прошла успешно, запускаем приложение...' &&
+        python main.py
+      "
     volumes:
       - .:/app
     ports:
