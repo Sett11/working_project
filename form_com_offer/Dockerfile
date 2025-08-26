@@ -1,8 +1,8 @@
 # 1. Используем базовый образ Python
 FROM python:3.11-slim
 
-# 2. Устанавливаем curl для healthcheck
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# 2. Устанавливаем curl для healthcheck и postgresql-client для проверки БД
+RUN apt-get update && apt-get install -y curl postgresql-client && rm -rf /var/lib/apt/lists/*
 
 # 3. Устанавливаем рабочую директорию в контейнере
 WORKDIR /app
@@ -15,6 +15,9 @@ RUN pip install --no-cache-dir --timeout=100 -r requirements.txt
 # 4. Копируем все остальные файлы проекта в рабочую директорию
 COPY . .
 
-# 5. Команда по умолчанию была убрана, так как она определяется
+# 5. Делаем скрипт инициализации исполняемым
+RUN chmod +x init.sh
+
+# 6. Команда по умолчанию была убрана, так как она определяется
 # для каждого сервиса отдельно в docker-compose.yml
 

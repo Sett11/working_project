@@ -6,13 +6,12 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_backend
     command: >
       sh -c "
-        echo '🌱 Запуск seeder для инициализации базы данных...' &&
-        python -m db.seeder &&
-        echo '✅ Seeder завершен, запускаем сервер...' &&
+        ./init.sh &&
         uvicorn back.back:app --host 0.0.0.0 --port 8001 --reload --log-level info --access-log
       "
     volumes:
       - .:/app
+      - seeder_flag:/app/.seeder_completed
     ports:
       - "8001:8001"
     depends_on:
@@ -104,3 +103,4 @@ services:
 
 volumes:
   postgres_data:
+  seeder_flag:
