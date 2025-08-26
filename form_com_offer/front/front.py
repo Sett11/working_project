@@ -859,6 +859,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                         general_order_params["discount"] = first_air_order_params["discount"]
                         logger.info(f"[DEBUG] load_compose_order: взяли discount из первого кондиционера: {first_air_order_params['discount']}")
                     
+                    logger.info(f"[DEBUG] load_compose_order: после обновления general_order_params={general_order_params}")
+                    
                     # Если все еще нет данных, используем дефолтные значения
                     if "visit_date" not in general_order_params:
                         general_order_params["visit_date"] = datetime.date.today().strftime('%Y-%m-%d')
@@ -866,6 +868,8 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     if "discount" not in general_order_params:
                         general_order_params["discount"] = 0
                         logger.info(f"[DEBUG] load_compose_order: установили дефолтный discount: {general_order_params['discount']}")
+                    
+                    logger.info(f"[DEBUG] load_compose_order: финальные general_order_params={general_order_params}")
                     
                     # Обновляем заказ, добавляя order_params
                     updated_compose_order_data = compose_order_data.copy()
@@ -902,6 +906,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                         general_order_params["visit_date"] = datetime.date.today().strftime('%Y-%m-%d')
                     if "discount" not in general_order_params:
                         general_order_params["discount"] = 0
+                    logger.info(f"[DEBUG] load_compose_order: нет кондиционеров, дефолтные general_order_params={general_order_params}")
             
             # Извлекаем данные из последнего кондиционера
             airs = compose_order_data.get("airs", [])
@@ -912,6 +917,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             logger.info(f"[DEBUG] load_compose_order: general_order_params={general_order_params}")
             logger.info(f"[DEBUG] load_compose_order: visit_date={general_order_params.get('visit_date', 'NOT_FOUND')}")
             logger.info(f"[DEBUG] load_compose_order: discount={general_order_params.get('discount', 'NOT_FOUND')}")
+            logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[5].value (discount) = {safe_int(general_order_params.get('discount', 0))}")
             
             logger.info(f"[DEBUG] load_compose_order: last_air_order_params={last_air_order_params}")
             logger.info(f"[DEBUG] load_compose_order: last_air_aircon_params={last_air_aircon_params}")
@@ -1870,14 +1876,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             if not order_id or order_id <= 0:
                 return ("Ошибка: Некорректный ID составного заказа!", None, None, "0",
                        gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),  # compose_name, compose_phone, compose_mail, compose_address, compose_date - НЕ ОБНОВЛЯЕМ
-                       50, "квартира", 0, False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
+                       50, "квартира", gr.update(), False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
                        "Любой", 2.7, "Средняя", 1, "Сидячая работа",  # compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity
                        0, 0, 0, "Любой", 0)  # compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price
         except Exception as e:
             logger.error(f"Ошибка преобразования order_id_hidden_value: {e}")
             return ("Ошибка: Некорректный ID составного заказа!", None, None, "0",
                    gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),  # compose_name, compose_phone, compose_mail, compose_address, compose_date - НЕ ОБНОВЛЯЕМ
-                   50, "квартира", 0, False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
+                   50, "квартира", gr.update(), False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
                    "Любой", 2.7, "Средняя", 1, "Сидячая работа",  # compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity
                    0, 0, 0, "Любой", 0)  # compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price
         
@@ -1953,7 +1959,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     # Возвращаем значения для очистки полей параметров кондиционера, но НЕ полей клиента
                     return (msg, order_id, order_id, str(aircon_count), 
                            gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),  # compose_name, compose_phone, compose_mail, compose_address, compose_date - НЕ ОБНОВЛЯЕМ
-                           50, "квартира", 0, False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
+                           50, "квартира", gr.update(), False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
                            "Любой", 2.7, "Средняя", 1, "Сидячая работа",  # compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity
                            0, 0, 0, "Любой", 0)  # compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price
                 else:
@@ -1961,7 +1967,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     logger.error(f"[DEBUG] add_next_aircon_handler: ошибка: {error_msg}")
                     return (f"Ошибка: {error_msg}", order_id_hidden_value, order_id_hidden_value, "0",
                            gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),  # compose_name, compose_phone, compose_mail, compose_address, compose_date - НЕ ОБНОВЛЯЕМ
-                           50, "квартира", 0, False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
+                           50, "квартира", gr.update(), False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
                            "Любой", 2.7, "Средняя", 1, "Сидячая работа",  # compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity
                            0, 0, 0, "Любой", 0)  # compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price
                     
@@ -1969,7 +1975,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             logger.error(f"Ошибка при добавлении кондиционера к составному заказу: {e}", exc_info=True)
             return (f"Ошибка: {e}", order_id_hidden_value, order_id_hidden_value, "0",
                    gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),  # compose_name, compose_phone, compose_mail, compose_address, compose_date - НЕ ОБНОВЛЯЕМ
-                   50, "квартира", 0, False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
+                   50, "квартира", gr.update(), False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
                    "Любой", 2.7, "Средняя", 1, "Сидячая работа",  # compose_mount_type, compose_ceiling_height, compose_illumination, compose_num_people, compose_activity
                    0, 0, 0, "Любой", 0)  # compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price
     
