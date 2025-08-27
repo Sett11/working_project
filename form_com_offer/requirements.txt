@@ -28,3 +28,5 @@ greenlet
 nest_asyncio
 filelock
 colorama
+psutil
+aiohttp

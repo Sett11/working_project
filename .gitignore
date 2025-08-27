@@ -6,6 +6,8 @@ __pycache__/
 *.py.class
 
 /.cursor
+/old_app_logs
+/old_app_logs/*
 
 # Environments
 .env
@@ -29,14 +31,12 @@ venv/
 *.md
 
 # Игнорируем файлы окружения
-.env
 
 # Игнорируем файлы конфигурации IDE
 .idea/
 *.iml
 
 # Игнорируем файлы логов
-*.log
 
 # Игнорируем временные файлы
 *.tmp

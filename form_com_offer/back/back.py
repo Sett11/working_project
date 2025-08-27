@@ -14,8 +14,8 @@ from utils.pdf_generator import generate_commercial_offer_pdf_async
 from db.schemas import FullOrderCreate
 import json
 from sqlalchemy import select
-import threading
 import time
+import asyncio
 
 logger = Logger(name=__name__, log_file="backend.log")
 app = FastAPI(title="Air-Con Commercial Offer API", version="0.1.0")
@@ -31,21 +31,13 @@ async def global_exception_handler(request, exc):
 async def startup_event():
     logger.info("Запуск FastAPI приложения...")
     
-    # Запускаем мониторинг пула соединений в фоновом режиме
-    def monitor_pool():
-        while True:
-            try:
-                from db.database import engine
-                pool = engine.pool
-                logger.info(f"Мониторинг пула: размер={pool.size()}, проверено={pool.checkedin()}, в использовании={pool.checkedout()}, переполнение={pool.overflow()}")
-                time.sleep(300)  # Проверяем каждые 5 минут
-            except Exception as e:
-                logger.error(f"Ошибка мониторинга пула: {e}")
-                time.sleep(60)  # При ошибке проверяем через минуту
-    
-    monitor_thread = threading.Thread(target=monitor_pool, daemon=True)
-    monitor_thread.start()
-    logger.info("Мониторинг пула соединений запущен")
+    # Запускаем автоматический мониторинг
+    try:
+        from utils.monitoring import monitor
+        await monitor.start_monitoring()
+        logger.info("✅ Автоматический мониторинг приложения запущен")
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска автоматического мониторинга: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -84,6 +76,21 @@ async def health_check():
         logger.error(f"Health check failed: {e}")
         return {"status": "unhealthy", "database": "disconnected", "error": str(e)}
 
+@app.get("/api/monitoring/status")
+async def get_monitoring_status():
+    """Расширенный эндпоинт для мониторинга состояния приложения"""
+    try:
+        # Используем автоматический монитор
+        from utils.monitoring import monitor
+        return await monitor.get_health_status()
+    except Exception as e:
+        logger.error(f"Monitoring status check failed: {e}")
+        return {
+            "timestamp": time.time(),
+            "overall_status": "error",
+            "error": str(e)
+        }
+
 @app.post("/api/recreate_pool")
 async def recreate_connection_pool():
     """Эндпоинт для принудительного пересоздания пула соединений"""
@@ -93,6 +100,102 @@ async def recreate_connection_pool():
         return {"status": "success", "message": "Пул соединений пересоздан"}
     except Exception as e:
         logger.error(f"Ошибка при пересоздании пула: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/cleanup_pool")
+async def cleanup_connection_pool():
+    """Эндпоинт для graceful очистки пула соединений"""
+    try:
+        from db.database import engine
+        pool = engine.pool
+        
+        # Получаем статистику до очистки
+        before_stats = {
+            "size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow()
+        }
+        
+        logger.info(f"Начинаем graceful очистку пула. Текущее состояние: {before_stats}")
+        
+        # Graceful shutdown: закрываем пул для новых соединений
+        pool.close()
+        
+        # Ждем завершения активных соединений (максимум 30 секунд)
+        max_wait_time = 30
+        wait_interval = 1
+        waited_time = 0
+        
+        while pool.checkedout() > 0 and waited_time < max_wait_time:
+            logger.info(f"Ожидаем завершения {pool.checkedout()} активных соединений...")
+            await asyncio.sleep(wait_interval)
+            waited_time += wait_interval
+        
+        if pool.checkedout() > 0:
+            logger.warning(f"Не удалось дождаться завершения {pool.checkedout()} соединений за {max_wait_time} секунд")
+        else:
+            logger.info("Все активные соединения завершены")
+        
+        # Теперь безопасно очищаем пул
+        pool.dispose()
+        
+        # Получаем статистику после очистки
+        after_stats = {
+            "size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow()
+        }
+        
+        logger.info(f"Graceful очистка пула завершена. До: {before_stats}, После: {after_stats}")
+        
+        return {
+            "status": "success", 
+            "message": "Пул соединений очищен gracefully",
+            "before_stats": before_stats,
+            "after_stats": after_stats,
+            "waited_time": waited_time,
+            "active_connections_remaining": pool.checkedout()
+        }
+    except Exception as e:
+        logger.error(f"Ошибка при graceful очистке пула: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/monitoring/start")
+async def start_monitoring():
+    """Эндпоинт для запуска автоматического мониторинга"""
+    try:
+        from utils.monitoring import monitor
+        await monitor.start_monitoring()
+        return {"status": "success", "message": "Автоматический мониторинг запущен"}
+    except Exception as e:
+        logger.error(f"Ошибка запуска мониторинга: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/monitoring/stop")
+async def stop_monitoring():
+    """Эндпоинт для остановки автоматического мониторинга"""
+    try:
+        from utils.monitoring import monitor
+        await monitor.stop_monitoring()
+        return {"status": "success", "message": "Автоматический мониторинг остановлен"}
+    except Exception as e:
+        logger.error(f"Ошибка остановки мониторинга: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/monitoring/control")
+async def get_monitoring_control():
+    """Эндпоинт для получения статуса автоматического мониторинга"""
+    try:
+        from utils.monitoring import monitor
+        return {
+            "monitoring_active": monitor.monitoring_active,
+            "alert_cooldown": monitor.alert_cooldown,
+            "last_alerts_count": len(monitor.last_alert_time)
+        }
+    except Exception as e:
+        logger.error(f"Ошибка получения статуса мониторинга: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/air_conditioners/", response_model=List[schemas.AirConditioner])
@@ -108,7 +211,12 @@ async def get_all_air_conditioners(skip: int = 0, limit: int = 100, db: AsyncSes
 
 @app.post("/api/select_aircons/")
 async def select_aircons_endpoint(payload: dict, db: AsyncSession = Depends(get_session)):
-    logger.info(f"Получен запрос на эндпоинт /api/select_aircons/. Payload: {json.dumps(payload, ensure_ascii=False)}")
+    # Логируем только ключевую информацию вместо полного payload
+    if "id" in payload:
+        logger.info(f"Получен запрос на эндпоинт /api/select_aircons/ для заказа ID: {payload['id']}")
+    else:
+        client_name = payload.get("client_data", {}).get('full_name', 'N/A')
+        logger.info(f"Получен запрос на эндпоинт /api/select_aircons/ для клиента: {client_name}")
     try:
         # Если в payload только id — достаём параметры из заказа
         if list(payload.keys()) == ["id"] or ("id" in payload and len(payload) == 1):
@@ -150,7 +258,12 @@ async def select_aircons_endpoint(payload: dict, db: AsyncSession = Depends(get_
 # --- Эндпоинт для генерации КП (С УЛУЧШЕНИЕМ) ---
 @app.post("/api/generate_offer/")
 async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_session)):
-    logger.info(f"Получен запрос на эндпоинт /api/generate_offer/. Payload: {json.dumps(payload, ensure_ascii=False)}")
+    # Логируем только ключевую информацию вместо полного payload
+    if "id" in payload:
+        logger.info(f"Получен запрос на эндпоинт /api/generate_offer/ для заказа ID: {payload['id']}")
+    else:
+        client_name = payload.get("client_data", {}).get('full_name', 'N/A')
+        logger.info(f"Получен запрос на эндпоинт /api/generate_offer/ для клиента: {client_name}")
     try:
         # Если в payload только id — подгружаем все данные заказа из базы
         if list(payload.keys()) == ["id"] or ("id" in payload and len(payload) == 1):
@@ -263,7 +376,12 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
 
 @app.post("/api/save_order/")
 async def save_order_endpoint(payload: dict, db: AsyncSession = Depends(get_session)):
-    logger.info(f"Получен запрос на эндпоинт /api/save_order/ (сохранение/обновление заказа). Payload: {json.dumps(payload, ensure_ascii=False)}")
+    # Логируем только ключевую информацию вместо полного payload
+    if "id" in payload:
+        logger.info(f"Получен запрос на эндпоинт /api/save_order/ для заказа ID: {payload['id']}")
+    else:
+        client_name = payload.get("client_data", {}).get('full_name', 'N/A')
+        logger.info(f"Получен запрос на эндпоинт /api/save_order/ для клиента: {client_name}")
     try:
         # --- Новый режим: только комментарий ---
         if list(payload.keys()) == ["id", "comment"] or ("id" in payload and "comment" in payload and len(payload) == 2):
@@ -546,10 +664,14 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
     """
     Сохраняет или обновляет составной заказ с новой структурой данных (airs + components).
     """
-    logger.info(f"Получен запрос на сохранение составного заказа: {json.dumps(payload, ensure_ascii=False)}")
+    # Логируем только ключевую информацию вместо полного payload
+    if "id" in payload:
+        logger.info(f"Получен запрос на сохранение составного заказа ID: {payload['id']}")
+    else:
+        logger.info("Получен запрос на создание нового составного заказа")
     try:
         compose_order_data = payload.get("compose_order_data", {})
-        logger.info(f"compose_order_data: {json.dumps(compose_order_data, ensure_ascii=False, indent=2)}")
+        # Убираем подробное логирование compose_order_data
         client_data = compose_order_data.get("client_data", {})
         
         # Проверяем, есть ли обновление комплектующих
@@ -644,7 +766,7 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
                     
                     # Безопасное преобразование типов для order_params
                     order_params = update_last_aircon.get("order_params", {})
-                    logger.info(f"[DEBUG] Обновление последнего кондиционера: order_params из payload: {json.dumps(order_params, ensure_ascii=False)}")
+                    # Убираем подробное DEBUG логирование
                     safe_order_params = {}
                     for key, value in order_params.items():
                         if key in ["room_area", "installation_price"]:
@@ -662,7 +784,7 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
                     
                     # Безопасное преобразование типов для aircon_params
                     aircon_params = update_last_aircon.get("aircon_params", {})
-                    logger.info(f"[DEBUG] Обновление последнего кондиционера: aircon_params из payload: {json.dumps(aircon_params, ensure_ascii=False)}")
+                    # Убираем подробное DEBUG логирование
                     safe_aircon_params = {}
                     for key, value in aircon_params.items():
                         if key in ["area", "ceiling_height", "other_power", "price_limit"]:
@@ -683,8 +805,7 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
                         else:
                             safe_aircon_params[key] = value
                     
-                    logger.info(f"[DEBUG] Обновление последнего кондиционера: safe_order_params: {json.dumps(safe_order_params, ensure_ascii=False)}")
-                    logger.info(f"[DEBUG] Обновление последнего кондиционера: safe_aircon_params: {json.dumps(safe_aircon_params, ensure_ascii=False)}")
+                    # Убираем подробное DEBUG логирование
                     
                     last_air["order_params"] = safe_order_params
                     last_air["aircon_params"] = safe_aircon_params
@@ -711,7 +832,9 @@ async def select_compose_aircons(payload: dict, db: AsyncSession = Depends(get_s
     """
     Подбирает кондиционеры для последнего добавленного кондиционера в составном заказе.
     """
-    logger.info(f"Получен запрос на подбор кондиционеров для составного заказа: {json.dumps(payload, ensure_ascii=False)}")
+    # Логируем только ключевую информацию вместо полного payload
+    order_id = payload.get("id")
+    logger.info(f"Получен запрос на подбор кондиционеров для составного заказа ID: {order_id}")
     try:
         order_id = payload.get("id")
         if not order_id:
@@ -817,7 +940,9 @@ async def add_aircon_to_compose_order(payload: dict, db: AsyncSession = Depends(
     Добавляет новый кондиционер к существующему составному заказу с новой структурой (airs).
     Также сохраняет подобранные кондиционеры для предыдущего элемента.
     """
-    logger.info(f"Получен запрос на добавление кондиционера к составному заказу: {json.dumps(payload, ensure_ascii=False)}")
+    # Логируем только ключевую информацию вместо полного payload
+    order_id = payload.get("id")
+    logger.info(f"Получен запрос на добавление кондиционера к составному заказу ID: {order_id}")
     try:
         order_id = payload.get("id")
         new_aircon_order = payload.get("new_aircon_order", {})
@@ -868,7 +993,9 @@ async def generate_compose_offer(payload: dict, db: AsyncSession = Depends(get_s
     """
     Генерирует PDF коммерческое предложение для составного заказа.
     """
-    logger.info(f"Получен запрос на генерацию КП для составного заказа: {json.dumps(payload, ensure_ascii=False)}")
+    # Логируем только ключевую информацию вместо полного payload
+    order_id = payload.get("id")
+    logger.info(f"Получен запрос на генерацию КП для составного заказа ID: {order_id}")
     try:
         order_id = payload.get("id")
         if not order_id:

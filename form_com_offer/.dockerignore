@@ -1,0 +1,16 @@
+# Исключаем папку мониторинга из Docker контекста
+monitoring/
+
+# Другие файлы, которые не нужны в контейнере
+.git/
+.gitignore
+README.md
+*.log
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+
+# НЕ исключаем pip.conf - он нужен для установки зависимостей
+!pip.conf

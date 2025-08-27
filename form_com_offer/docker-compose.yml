@@ -4,14 +4,25 @@ services:
   backend:
     build: .
     container_name: ${COMPOSE_PROJECT_NAME}_backend
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     command: >
       sh -c "
-        ./init.sh &&
+        bash ./init.sh &&
         uvicorn back.back:app --host 0.0.0.0 --port 8001 --reload --log-level info --access-log
       "
     volumes:
-      - .:/app
-      - seeder_flag:/app/.seeder_completed
+      - ./back:/app/back
+      - ./front:/app/front
+      - ./db:/app/db
+      - ./utils:/app/utils
+      - ./commercial_offer_pdf:/app/commercial_offer_pdf
+      - ./logs:/app/logs
+      - ./init.sh:/app/init.sh
+      - ./main.py:/app/main.py
+      - ./requirements.txt:/app/requirements.txt
+      - seeder_flag:/app/.seeder_flag
     ports:
       - "8001:8001"
     depends_on:
@@ -19,6 +30,9 @@ services:
         condition: service_healthy  # Ждём готовности БД
     environment:
       - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/form_com_offer_db
+      - DB_TIMEOUT=120
+      - DB_INTERVAL=5
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -38,9 +52,15 @@ services:
   frontend:
     build: .
     container_name: ${COMPOSE_PROJECT_NAME}_frontend
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     command: python main.py
     volumes:
-      - .:/app
+      - ./front:/app/front
+      - ./commercial_offer_pdf:/app/commercial_offer_pdf
+      - ./main.py:/app/main.py
+      - ./requirements.txt:/app/requirements.txt
     ports:
       - "7860:7860"
     depends_on:
@@ -96,10 +116,11 @@ services:
       -c max_parallel_maintenance_workers=1
     restart: always
     healthcheck:  # Добавляем проверку готовности
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
 
 volumes:
   postgres_data:

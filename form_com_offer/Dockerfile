@@ -10,7 +10,8 @@ WORKDIR /app
 # 4. Копируем файл с зависимостями и устанавливаем их
 # Этот шаг выполняется отдельно, чтобы использовать кэширование Docker
 COPY requirements.txt .
-RUN pip install --no-cache-dir --timeout=100 -r requirements.txt
+COPY pip.conf /etc/pip.conf
+RUN pip install --no-cache-dir --index-url https://pypi.org/simple/ --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt
 
 # 4. Копируем все остальные файлы проекта в рабочую директорию
 COPY . .

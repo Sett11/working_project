@@ -883,7 +883,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                 "compose_order_data": updated_compose_order_data,
                                 "status": compose_order_data.get("status", "draft")
                             }
-                            logger.info(f"[DEBUG] load_compose_order: обновляем заказ с order_params: {json.dumps(update_payload, ensure_ascii=False, indent=2)}")
+                            # Убираем подробное DEBUG логирование
                             
                             update_resp = await update_client.post(f"{BACKEND_URL}/api/save_compose_order/", json=update_payload)
                             update_resp.raise_for_status()
@@ -1197,7 +1197,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     # --- Обработчики кнопок ---
     async def select_aircons_handler(order_id_hidden_value):
         payload = {"id": order_id_hidden_value}
-        logger.info(f"[DEBUG] select_aircons_handler: payload: {json.dumps(payload, ensure_ascii=False)}")
+        # Убираем подробное DEBUG логирование payload
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(f"{BACKEND_URL}/api/select_aircons/", json=payload)
@@ -1236,7 +1236,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     async def generate_kp_handler(order_id_hidden_value):
         # Отправляем только id заказа, бэкенд сам достаёт все данные и меняет статус
         payload = {"id": order_id_hidden_value}
-        logger.info(f"[DEBUG] generate_kp_handler: payload: {json.dumps(payload, ensure_ascii=False)}")
+        # Убираем подробное DEBUG логирование payload
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(f"{BACKEND_URL}/api/generate_offer/", json=payload)
@@ -1274,7 +1274,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         }
         if order_id is not None and str(order_id).isdigit():
             payload["id"] = int(order_id)
-        logger.info(f"[DEBUG] save_kp_handler: payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+        # Убираем подробное DEBUG логирование payload
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(f"{BACKEND_URL}/api/save_order/", json=payload)
@@ -1392,12 +1392,12 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                         "components": selected_components,
                         "status": "completely filled"
                     }
-                    logger.info(f"[DEBUG] save_components_handler (compose): payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+                    # Убираем подробное DEBUG логирование payload
                     
                     resp = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=payload)
                     resp.raise_for_status()
                     data = resp.json()
-                    logger.info(f"[DEBUG] save_components_handler (compose): response: {json.dumps(data, ensure_ascii=False, indent=2)}")
+                    # Убираем подробное DEBUG логирование response
                     if data.get("success"):
                         msg = f"Комплектующие составного заказа успешно сохранены!"
                         return msg, order_id
@@ -1409,12 +1409,12 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     payload = {"components": selected_components, "status": "completely filled"}
                     if order_id is not None and str(order_id).isdigit():
                         payload["id"] = int(order_id)
-                    logger.info(f"[DEBUG] save_components_handler (regular): payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+                    # Убираем подробное DEBUG логирование payload
                     
                     resp = await client.post(f"{BACKEND_URL}/api/save_order/", json=payload)
                     resp.raise_for_status()
                     data = resp.json()
-                    logger.info(f"[DEBUG] save_components_handler (regular): response: {json.dumps(data, ensure_ascii=False, indent=2)}")
+                    # Убираем подробное DEBUG логирование response
                     if data.get("success"):
                         msg = f"Комплектующие успешно сохранены!"
                         return msg, order_id
@@ -1475,7 +1475,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                             "comment": comment_value
                         }
                         
-                        logger.info(f"[DEBUG] save_comment_handler: сохраняем комментарий для составного заказа: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+                        # Убираем подробное DEBUG логирование
                         
                         resp = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=payload)
                         resp.raise_for_status()
@@ -1579,7 +1579,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     "status": "draft"
                 }
                 
-                logger.info(f"[DEBUG] save_compose_client_handler: обновляем заказ: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+                # Убираем подробное DEBUG логирование
                 
                 async with httpx.AsyncClient() as client:
                     resp = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=payload)
@@ -1610,7 +1610,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     "status": "draft"
                 }
                 
-                logger.info(f"[DEBUG] save_compose_client_handler: создаем новый заказ: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+                # Убираем подробное DEBUG логирование
                 
                 async with httpx.AsyncClient() as client:
                     resp = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=payload)
@@ -1776,7 +1776,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                         "status": "partially filled"
                     }
                     
-                    logger.info(f"[DEBUG] save_compose_order_handler: payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+                    # Убираем подробное DEBUG логирование
                     
                     async with httpx.AsyncClient() as client:
                         resp = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=payload)
@@ -1804,7 +1804,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                 "status": "partially filled"
                             }
                             
-                            logger.info(f"[DEBUG] save_compose_order_handler: updating general params: {json.dumps(general_payload, ensure_ascii=False, indent=2)}")
+                            # Убираем подробное DEBUG логирование
                             
                             resp2 = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=general_payload)
                             resp2.raise_for_status()
@@ -1939,7 +1939,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 }
             }
             
-            logger.info(f"[DEBUG] add_next_aircon_handler: new_aircon_order: {json.dumps(new_aircon_order, ensure_ascii=False, indent=2)}")
+            # Убираем подробное DEBUG логирование
             
             # Отправляем запрос на добавление кондиционера
             async with httpx.AsyncClient() as client:
@@ -1994,7 +1994,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         try:
             # Отправляем только id заказа, бэкенд сам достанет все данные
             payload = {"id": order_id}
-            logger.info(f"[DEBUG] generate_compose_kp_handler: payload: {json.dumps(payload, ensure_ascii=False)}")
+            # Убираем подробное DEBUG логирование
             
             async with httpx.AsyncClient() as client:
                 response = await client.post(f"{BACKEND_URL}/api/generate_compose_offer/", json=payload)
