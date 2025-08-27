@@ -83,7 +83,8 @@ class ApplicationMonitor:
     async def _check_system_health(self):
         """Проверка системного здоровья"""
         try:
-            cpu_percent = psutil.cpu_percent(interval=1)
+            # Используем asyncio.to_thread для неблокирующего вызова
+            cpu_percent = await asyncio.to_thread(psutil.cpu_percent, interval=1)
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
             
@@ -101,16 +102,27 @@ class ApplicationMonitor:
             logger.error(f"Ошибка проверки системного здоровья: {e}")
     
     async def _check_database_health(self):
-        """Проверка здоровья базы данных"""
+        """Проверка здоровья базы данных с таймаутом и гарантированным закрытием сессии"""
+        session = None
         try:
             from db.database import AsyncSessionLocal
             from sqlalchemy import text
             
-            async with AsyncSessionLocal() as session:
-                await session.execute(text("SELECT 1"))
+            session = AsyncSessionLocal()
+            # Используем таймаут для предотвращения зависания
+            await asyncio.wait_for(session.execute(text("SELECT 1")), timeout=5.0)
                 
+        except asyncio.TimeoutError:
+            await self._send_alert("database", "Таймаут подключения к БД (5 секунд)")
         except Exception as e:
             await self._send_alert("database", f"Ошибка подключения к БД: {e}")
+        finally:
+            # Гарантированно закрываем сессию
+            if session:
+                try:
+                    await session.close()
+                except Exception as e:
+                    logger.error(f"Ошибка при закрытии сессии БД: {e}")
     
     async def _check_connection_pool(self):
         """Проверка состояния пула соединений"""
@@ -153,8 +165,8 @@ class ApplicationMonitor:
     async def get_health_status(self) -> Dict[str, Any]:
         """Получение текущего статуса здоровья приложения"""
         try:
-            # Системная информация
-            cpu_percent = psutil.cpu_percent(interval=1)
+            # Системная информация - используем неблокирующий вызов
+            cpu_percent = psutil.cpu_percent(interval=None)  # Возвращает последнее измеренное значение
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
             
@@ -173,27 +185,38 @@ class ApplicationMonitor:
             except Exception as e:
                 pool_stats = {"error": str(e)}
             
-            # Статус базы данных
+            # Статус базы данных с таймаутом
             db_status = "healthy"
+            session = None
             try:
                 from db.database import AsyncSessionLocal
                 from sqlalchemy import text
-                async with AsyncSessionLocal() as session:
-                    await session.execute(text("SELECT 1"))
+                session = AsyncSessionLocal()
+                await asyncio.wait_for(session.execute(text("SELECT 1")), timeout=5.0)
+            except asyncio.TimeoutError:
+                db_status = "timeout: превышен лимит времени подключения"
             except Exception as e:
                 db_status = f"error: {str(e)}"
+            finally:
+                if session:
+                    try:
+                        await session.close()
+                    except Exception as e:
+                        logger.error(f"Ошибка при закрытии сессии БД в get_health_status: {e}")
             
-            # Определяем общий статус
+            # Определяем общий статус с правильным приоритетом (critical > warning > healthy)
             overall_status = "healthy"
-            if (cpu_percent > 80 or memory.percent > 85 or 
-                disk.percent > 90 or db_status != "healthy" or
-                pool_stats.get("utilization_percent", 0) > 90):
-                overall_status = "warning"
             
+            # Сначала проверяем критические условия
             if (cpu_percent > 95 or memory.percent > 95 or 
                 disk.percent > 95 or db_status != "healthy" or
                 pool_stats.get("utilization_percent", 0) > 95):
                 overall_status = "critical"
+            # Затем проверяем предупреждения (только если не critical)
+            elif (cpu_percent > 80 or memory.percent > 85 or 
+                  disk.percent > 90 or db_status != "healthy" or
+                  pool_stats.get("utilization_percent", 0) > 90):
+                overall_status = "warning"
             
             return {
                 "timestamp": time.time(),

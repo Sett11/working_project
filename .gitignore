@@ -19,6 +19,8 @@ venv/
 # Logs
 *.log
 
+*.example
+
 # Документы
 *.pdf
 *.docx

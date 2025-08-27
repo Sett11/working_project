@@ -1,6 +1,7 @@
 """
 Модуль фронтенда Gradio для системы формирования коммерческих предложений по кондиционерам.
 """
+print("=== ИМПОРТ FRONT.PY ===")
 import gradio as gr
 import httpx
 from utils.mylogger import Logger
@@ -9,9 +10,27 @@ import os
 from collections import defaultdict
 import re
 import datetime
+print("=== ИМПОРТЫ ЗАВЕРШЕНЫ ===")
 
 # Инициализация логгера
 logger = Logger(name=__name__, log_file="frontend.log")
+
+# Тестовый лог для проверки работы логгера
+print("=== ТЕСТ PRINT ===")
+print(f"Текущая директория: {os.getcwd()}")
+print(f"Директория логов: {os.path.abspath('logs')}")
+
+logger.info("=== ФРОНТЕНД ЗАГРУЖЕН ===")
+logger.info(f"Текущая директория: {os.getcwd()}")
+logger.info(f"Директория логов: {os.path.abspath('logs')}")
+
+# Проверяем, что логгер действительно работает
+try:
+    logger.warning("ТЕСТОВОЕ ПРЕДУПРЕЖДЕНИЕ")
+    logger.error("ТЕСТОВАЯ ОШИБКА")
+    print("Логгер работает!")
+except Exception as e:
+    print(f"ОШИБКА ЛОГГЕРА: {e}")
 BACKEND_URL = "http://backend:8001"
 COMPONENTS_CATALOG_PATH = os.path.join(os.path.dirname(__file__), '../docs/components_catalog.json')
 PLACEHOLDER_IMAGE = os.path.abspath(os.path.join(os.path.dirname(__file__), '../docs/images_comp/placeholder.jpg'))

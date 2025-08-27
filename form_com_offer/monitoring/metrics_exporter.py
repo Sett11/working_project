@@ -8,7 +8,7 @@ import aiohttp
 import json
 from datetime import datetime
 from typing import Dict, Any, Optional
-from monitoring.mylogger import Logger
+from mylogger import Logger
 
 logger = Logger(name="metrics_exporter", log_file="metrics_exporter.log")
 
@@ -23,17 +23,28 @@ class MetricsExporter:
         self.session = None  # aiohttp сессия будет создана при первом использовании
         
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Получает или создает aiohttp сессию"""
+        """Получает или создает aiohttp сессию (безопасно для использования в контексте)"""
         if self.session is None or self.session.closed:
             timeout = aiohttp.ClientTimeout(total=10, connect=5)
             self.session = aiohttp.ClientSession(timeout=timeout)
+            logger.debug("Создана новая aiohttp сессия")
         return self.session
     
     async def close_session(self):
-        """Закрывает aiohttp сессию"""
+        """Закрывает aiohttp сессию (идемпотентный метод)"""
         if self.session and not self.session.closed:
             await self.session.close()
             self.session = None
+    
+    async def __aenter__(self):
+        """Async context manager entry - обеспечивает создание сессии и возвращает self"""
+        # Убеждаемся, что сессия создана
+        await self._get_session()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit - гарантированно закрывает сессию"""
+        await self.close_session()
         
     async def get_metrics(self) -> str:
         """Получает метрики в формате Prometheus"""

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.exc import InterfaceError, OperationalError, DBAPIError
 import asyncpg
+import asyncio
 import os
 from dotenv import load_dotenv
 from utils.mylogger import Logger
@@ -113,11 +114,17 @@ async def get_session():
                         retry_count += 1
                         if retry_count < max_retries:
                             try:
-                                await _recreate_connection_pool()
+                                await _recreate_connection_pool_with_retry()
                                 logger.info("✅ Пул соединений успешно пересоздан")
+                                # Добавляем небольшую задержку после успешного пересоздания
+                                await asyncio.sleep(0.5)
                                 continue
                             except Exception as recreate_error:
                                 logger.error(f"❌ Ошибка при пересоздании пула: {recreate_error}")
+                                # Добавляем экспоненциальную задержку перед следующей попыткой
+                                delay = min(2 ** retry_count, 30)  # Максимум 30 секунд
+                                logger.info(f"⏳ Ожидание {delay} секунд перед следующей попыткой...")
+                                await asyncio.sleep(delay)
                     raise
                 finally:
                     logger.debug(f"Асинхронная сессия базы данных {session_id} закрыта.")
@@ -136,10 +143,44 @@ async def get_session():
                 logger.error(f"❌ ИСЧЕРПАНЫ ВСЕ ПОПЫТКИ СОЗДАНИЯ СЕССИИ. Критическая ошибка!")
                 raise
             try:
-                await _recreate_connection_pool()
+                await _recreate_connection_pool_with_retry()
                 logger.info("✅ Пул соединений пересоздан после ошибки")
+                # Добавляем небольшую задержку после успешного пересоздания
+                await asyncio.sleep(0.5)
             except Exception as recreate_error:
                 logger.error(f"❌ Не удалось пересоздать пул: {recreate_error}")
+                # Добавляем экспоненциальную задержку перед следующей попыткой
+                delay = min(2 ** retry_count, 30)  # Максимум 30 секунд
+                logger.info(f"⏳ Ожидание {delay} секунд перед следующей попыткой...")
+                await asyncio.sleep(delay)
+
+async def _recreate_connection_pool_with_retry():
+    """
+    Пересоздает пул соединений с ограниченной политикой повторных попыток.
+    Использует экспоненциальную задержку между попытками.
+    """
+    max_pool_recreation_attempts = 3
+    attempt = 0
+    
+    while attempt < max_pool_recreation_attempts:
+        attempt += 1
+        logger.warning(f"🔄 Попытка пересоздания пула соединений {attempt}/{max_pool_recreation_attempts}")
+        
+        try:
+            await _recreate_connection_pool()
+            logger.info(f"✅ Пул соединений успешно пересоздан с попытки {attempt}")
+            return  # Успешное пересоздание, выходим из цикла
+        except Exception as e:
+            logger.error(f"❌ Попытка {attempt} пересоздания пула не удалась: {e}")
+            
+            if attempt >= max_pool_recreation_attempts:
+                logger.error(f"❌ ИСЧЕРПАНЫ ВСЕ ПОПЫТКИ ПЕРЕСОЗДАНИЯ ПУЛА ({max_pool_recreation_attempts}). Критическая ошибка!")
+                raise  # Прерываем выполнение при превышении максимального количества попыток
+            
+            # Экспоненциальная задержка перед следующей попыткой
+            delay = min(2 ** attempt, 30)  # Максимум 30 секунд
+            logger.info(f"⏳ Ожидание {delay} секунд перед следующей попыткой пересоздания пула...")
+            await asyncio.sleep(delay)
 
 async def _recreate_connection_pool():
     """
@@ -158,7 +199,6 @@ async def _recreate_connection_pool():
                 logger.warning(f"⚠️ Ошибка при закрытии старого engine: {dispose_error}")
         
         # Небольшая пауза для стабилизации
-        import asyncio
         await asyncio.sleep(1)
         
         # Создаём новый асинхронный движок SQLAlchemy с улучшенными настройками
