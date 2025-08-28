@@ -5,9 +5,7 @@
 Он импортирует готовый интерфейс из модуля `front.front` и запускает его,
 делая веб-интерфейс доступным в локальной сети.
 """
-print("=== MAIN.PY НАЧАЛО ===")
 from front.front import interface, logger as frontend_logger
-print("=== ИМПОРТ ИНТЕРФЕЙСА ЗАВЕРШЕН ===")
 import nest_asyncio
 from dotenv import load_dotenv
 

@@ -8,7 +8,7 @@ import aiohttp
 import json
 from datetime import datetime
 from typing import Dict, Any, Optional
-from mylogger import Logger
+from .mylogger import Logger
 
 logger = Logger(name="metrics_exporter", log_file="metrics_exporter.log")
 

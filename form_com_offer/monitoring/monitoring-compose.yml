@@ -44,7 +44,7 @@ services:
   # Экспортер метрик нашего приложения
   metrics-exporter:
     build:
-      context: ./monitoring
+      context: .
       dockerfile: metrics-exporter.Dockerfile
     container_name: aircon-metrics-exporter
     ports:

@@ -10,7 +10,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Копируем код экспортера и необходимые зависимости
 COPY . .
-COPY ../utils ./utils
 
 # Создаем пользователя для безопасности
 RUN useradd -m -u 1000 metrics && chown -R metrics:metrics /app
@@ -20,4 +19,4 @@ USER metrics
 EXPOSE 9091
 
 # Запускаем сервер метрик
-CMD ["python", "-m", "metrics_server"]
+CMD ["python", "-m", "monitoring.metrics_server"]
