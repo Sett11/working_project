@@ -26,6 +26,8 @@ class Logger:
         # Настраиваем обработчик для файла, если указан
         if log_file:
             # Создаем папку logs, если её нет
+            # В Docker контейнере директория logs монтируется в /app/logs
+            # Вне Docker создаем директорию logs в текущей директории
             logs_dir = os.path.join(os.getcwd(), 'logs')
             os.makedirs(logs_dir, exist_ok=True)
             

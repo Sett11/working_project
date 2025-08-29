@@ -7,11 +7,26 @@ import time
 import aiohttp
 import json
 import os
+from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
 from mylogger import Logger
 
-logger = Logger(name="metrics_exporter", log_file="logs/metrics_exporter.log")
+# Создаем директорию logs перед инициализацией Logger
+# В Docker контейнере директория logs монтируется в /app/logs
+# Вне Docker создаем директорию logs в текущей директории
+logs_dir = Path("logs")
+logs_dir.mkdir(parents=True, exist_ok=True)
+
+# Добавляем отладочную информацию
+print(f"Текущая рабочая директория: {os.getcwd()}")
+print(f"Директория logs: {logs_dir.absolute()}")
+print(f"Директория logs существует: {logs_dir.exists()}")
+
+logger = Logger(name="metrics_exporter", log_file="metrics_exporter.log")
+
+# Тестовое сообщение для проверки логирования
+logger.info("Экспортер метрик инициализирован")
 
 class MetricsExporter:
     """Экспортер метрик для Prometheus"""

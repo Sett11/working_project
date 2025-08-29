@@ -7,10 +7,16 @@ import signal
 import aiohttp
 from aiohttp import web
 import time
+import os
+from pathlib import Path
 from metrics_exporter import exporter
 from mylogger import Logger
 
-logger = Logger(name="metrics_server", log_file="logs/metrics_server.log")
+# Создаем директорию logs перед инициализацией Logger
+logs_dir = Path("logs")
+logs_dir.mkdir(parents=True, exist_ok=True)
+
+logger = Logger(name="metrics_server", log_file="metrics_server.log")
 
 # Глобальная переменная для события остановки
 _stop_event = None
