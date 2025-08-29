@@ -98,9 +98,9 @@ services:
       - PGDATA=/var/lib/postgresql/data/pgdata
     command: >
       postgres
-      -c max_connections=100
-      -c shared_buffers=256MB
-      -c effective_cache_size=1GB
+      -c max_connections=50
+      -c shared_buffers=512MB
+      -c effective_cache_size=2GB
       -c maintenance_work_mem=64MB
       -c checkpoint_completion_target=0.9
       -c wal_buffers=16MB

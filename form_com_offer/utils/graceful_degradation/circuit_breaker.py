@@ -1,0 +1,214 @@
+"""
+Модуль Circuit Breaker для graceful degradation при проблемах с БД.
+
+Circuit Breaker автоматически останавливает попытки подключения к БД
+при критических ошибках, предотвращая каскадные сбои.
+"""
+import asyncio
+import time
+from enum import Enum
+from typing import Optional, Callable, Any
+from utils.mylogger import Logger
+
+logger = Logger("circuit_breaker", "circuit_breaker.log")
+
+class CircuitState(Enum):
+    """Состояния Circuit Breaker"""
+    CLOSED = "closed"      # Нормальная работа
+    OPEN = "open"          # Блокировка запросов
+    HALF_OPEN = "half_open"  # Тестовые запросы
+
+class CircuitBreaker:
+    """
+    Circuit Breaker для защиты от каскадных сбоев БД.
+    
+    Принцип работы:
+    1. CLOSED: Нормальная работа, все запросы проходят
+    2. OPEN: При критических ошибках блокирует все запросы
+    3. HALF_OPEN: Периодически проверяет восстановление БД
+    """
+    
+    def __init__(
+        self,
+        failure_threshold: int = 5,        # Количество ошибок для открытия
+        recovery_timeout: int = 300,       # Время ожидания (5 минут)
+        expected_exception: type = Exception,  # Тип исключения для отслеживания
+        monitor_interval: int = 60         # Интервал мониторинга (1 минута)
+    ):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.expected_exception = expected_exception
+        self.monitor_interval = monitor_interval
+        
+        # Состояние
+        self.state = CircuitState.CLOSED
+        self.failure_count = 0
+        self.last_failure_time = None
+        self.last_success_time = None
+        
+        # Мониторинг
+        self._monitor_task = None
+        self._monitoring_active = False
+        
+        logger.info(f"Circuit Breaker инициализирован: threshold={failure_threshold}, "
+                   f"timeout={recovery_timeout}s, monitor_interval={monitor_interval}s")
+    
+    async def start_monitoring(self):
+        """Запуск автоматического мониторинга состояния"""
+        if self._monitoring_active:
+            return
+            
+        self._monitoring_active = True
+        self._monitor_task = asyncio.create_task(self._monitor_loop())
+        logger.info("Мониторинг Circuit Breaker запущен")
+    
+    async def stop_monitoring(self):
+        """Остановка мониторинга"""
+        self._monitoring_active = False
+        if self._monitor_task:
+            self._monitor_task.cancel()
+            try:
+                await self._monitor_task
+            except asyncio.CancelledError:
+                pass
+        logger.info("Мониторинг Circuit Breaker остановлен")
+    
+    async def _monitor_loop(self):
+        """Основной цикл мониторинга"""
+        while self._monitoring_active:
+            try:
+                await self._check_state_transition()
+                await asyncio.sleep(self.monitor_interval)
+            except Exception as e:
+                logger.error(f"Ошибка в цикле мониторинга Circuit Breaker: {e}")
+                await asyncio.sleep(10)
+    
+    async def _check_state_transition(self):
+        """Проверка необходимости смены состояния"""
+        current_time = time.time()
+        
+        if self.state == CircuitState.OPEN:
+            # Проверяем, не пора ли перейти в HALF_OPEN
+            if (self.last_failure_time and 
+                current_time - self.last_failure_time >= self.recovery_timeout):
+                await self._transition_to_half_open()
+        
+        elif self.state == CircuitState.HALF_OPEN:
+            # В HALF_OPEN состоянии не делаем автоматических переходов
+            # Переход происходит только при успешных/неуспешных запросах
+            pass
+    
+    async def _transition_to_half_open(self):
+        """Переход в состояние HALF_OPEN"""
+        self.state = CircuitState.HALF_OPEN
+        self.failure_count = 0
+        logger.warning("🔄 Circuit Breaker перешел в состояние HALF_OPEN - "
+                      "разрешаем тестовые запросы к БД")
+    
+    async def _transition_to_open(self):
+        """Переход в состояние OPEN (блокировка)"""
+        self.state = CircuitState.OPEN
+        self.last_failure_time = time.time()
+        logger.error(f"🚨 Circuit Breaker ОТКРЫТ - блокируем запросы к БД "
+                    f"на {self.recovery_timeout} секунд")
+    
+    async def _transition_to_closed(self):
+        """Переход в состояние CLOSED (нормальная работа)"""
+        self.state = CircuitState.CLOSED
+        self.failure_count = 0
+        self.last_success_time = time.time()
+        logger.info("✅ Circuit Breaker ЗАКРЫТ - нормальная работа БД восстановлена")
+    
+    def call(self, func: Callable, *args, **kwargs) -> Any:
+        """
+        Выполняет функцию с защитой Circuit Breaker.
+        
+        Args:
+            func: Функция для выполнения
+            *args, **kwargs: Аргументы функции
+            
+        Returns:
+            Результат выполнения функции
+            
+        Raises:
+            CircuitBreakerOpenError: Если Circuit Breaker открыт
+            Exception: Оригинальная ошибка функции
+        """
+        if self.state == CircuitState.OPEN:
+            raise CircuitBreakerOpenError(
+                f"Circuit Breaker открыт. Последняя ошибка: {self.last_failure_time}"
+            )
+        
+        try:
+            result = func(*args, **kwargs)
+            self._on_success()
+            return result
+        except self.expected_exception as e:
+            self._on_failure(e)
+            raise
+    
+    async def acall(self, func: Callable, *args, **kwargs) -> Any:
+        """
+        Асинхронная версия call().
+        """
+        if self.state == CircuitState.OPEN:
+            raise CircuitBreakerOpenError(
+                f"Circuit Breaker открыт. Последняя ошибка: {self.last_failure_time}"
+            )
+        
+        try:
+            result = await func(*args, **kwargs)
+            self._on_success()
+            return result
+        except self.expected_exception as e:
+            self._on_failure(e)
+            raise
+    
+    def _on_success(self):
+        """Обработка успешного запроса"""
+        if self.state == CircuitState.HALF_OPEN:
+            # В HALF_OPEN успех означает восстановление БД
+            asyncio.create_task(self._transition_to_closed())
+        else:
+            # В CLOSED просто сбрасываем счетчик ошибок
+            self.failure_count = 0
+            self.last_success_time = time.time()
+    
+    def _on_failure(self, error: Exception):
+        """Обработка неуспешного запроса"""
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+        
+        logger.warning(f"Ошибка БД #{self.failure_count}: {error}")
+        
+        if self.state == CircuitState.CLOSED:
+            if self.failure_count >= self.failure_threshold:
+                asyncio.create_task(self._transition_to_open())
+        
+        elif self.state == CircuitState.HALF_OPEN:
+            # В HALF_OPEN любая ошибка возвращает в OPEN
+            asyncio.create_task(self._transition_to_open())
+    
+    def get_status(self) -> dict:
+        """Получение текущего статуса Circuit Breaker"""
+        return {
+            "state": self.state.value,
+            "failure_count": self.failure_count,
+            "failure_threshold": self.failure_threshold,
+            "last_failure_time": self.last_failure_time,
+            "last_success_time": self.last_success_time,
+            "recovery_timeout": self.recovery_timeout,
+            "monitoring_active": self._monitoring_active
+        }
+
+class CircuitBreakerOpenError(Exception):
+    """Исключение, возникающее когда Circuit Breaker открыт"""
+    pass
+
+# Глобальный экземпляр Circuit Breaker для БД
+db_circuit_breaker = CircuitBreaker(
+    failure_threshold=3,      # 3 ошибки для открытия
+    recovery_timeout=300,     # 5 минут ожидания
+    expected_exception=(Exception,),  # Все исключения
+    monitor_interval=60       # Проверка каждую минуту
+)

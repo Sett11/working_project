@@ -11,6 +11,7 @@ from db.database import get_session, AsyncSessionLocal, engine
 from utils.mylogger import Logger
 from utils.aircon_selector import select_aircons
 from utils.pdf_generator import generate_commercial_offer_pdf_async
+from utils.graceful_degradation import graceful_fallback, graceful_manager
 from db.schemas import FullOrderCreate
 import json
 from sqlalchemy import select
@@ -38,10 +39,42 @@ async def startup_event():
         logger.info("✅ Автоматический мониторинг приложения запущен")
     except Exception as e:
         logger.error(f"❌ Ошибка запуска автоматического мониторинга: {e}")
+    
+    # Запускаем Circuit Breaker мониторинг
+    try:
+        from utils.graceful_degradation import db_circuit_breaker
+        await db_circuit_breaker.start_monitoring()
+        logger.info("✅ Circuit Breaker мониторинг запущен")
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска Circuit Breaker мониторинга: {e}")
+    
+    # Запускаем Graceful Degradation Manager
+    try:
+        from utils.graceful_degradation import graceful_manager
+        logger.info("✅ Graceful Degradation Manager инициализирован")
+    except Exception as e:
+        logger.error(f"❌ Ошибка инициализации Graceful Degradation Manager: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("Остановка FastAPI приложения.")
+    
+    # Останавливаем Circuit Breaker мониторинг
+    try:
+        from utils.graceful_degradation import db_circuit_breaker
+        await db_circuit_breaker.stop_monitoring()
+        logger.info("✅ Circuit Breaker мониторинг остановлен")
+    except Exception as e:
+        logger.error(f"❌ Ошибка остановки Circuit Breaker мониторинга: {e}")
+    
+    # Останавливаем Graceful Degradation Manager
+    try:
+        from utils.graceful_degradation import graceful_manager
+        if graceful_manager.is_in_degradation_mode():
+            graceful_manager.exit_degradation_mode()
+        logger.info("✅ Graceful Degradation Manager остановлен")
+    except Exception as e:
+        logger.error(f"❌ Ошибка остановки Graceful Degradation Manager: {e}")
 
 @app.get("/")
 async def read_root():
@@ -49,6 +82,7 @@ async def read_root():
     return {"message": "API бэкенда для подбора кондиционеров работает."}
 
 @app.get("/health")
+@graceful_fallback("health_check", cache_key="health_status", cache_ttl=60)
 async def health_check():
     """Эндпоинт для проверки здоровья приложения"""
     try:
@@ -77,18 +111,73 @@ async def health_check():
         return {"status": "unhealthy", "database": "disconnected", "error": str(e)}
 
 @app.get("/api/monitoring/status")
+@graceful_fallback("monitoring_status", cache_key="monitoring_status", cache_ttl=60)
 async def get_monitoring_status():
-    """Расширенный эндпоинт для мониторинга состояния приложения"""
+    """Расширенный эндпоинт для мониторинга состояния приложения с интеграцией Graceful Degradation"""
     try:
         # Используем автоматический монитор
         from utils.monitoring import monitor
-        return await monitor.get_health_status()
+        health_status = await monitor.get_health_status()
+        
+        # Добавляем информацию о состоянии БД с graceful degradation
+        from db.database import get_database_status
+        db_status = await get_database_status()
+        
+        # Обогащаем ответ информацией о graceful degradation
+        health_status["database_graceful_status"] = db_status
+        
+        return health_status
     except Exception as e:
         logger.error(f"Monitoring status check failed: {e}")
         return {
             "timestamp": time.time(),
             "overall_status": "error",
             "error": str(e)
+        }
+
+@app.get("/api/graceful-degradation/status")
+async def get_graceful_degradation_status():
+    """Эндпоинт для мониторинга состояния graceful degradation"""
+    try:
+        return graceful_manager.get_degradation_status()
+    except Exception as e:
+        logger.error(f"Graceful degradation status check failed: {e}")
+        return {
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
+@app.get("/api/database/status")
+@graceful_fallback("database_status", cache_key="db_status", cache_ttl=30)
+async def get_database_status_endpoint():
+    """Эндпоинт для получения детального статуса базы данных с Graceful Degradation"""
+    try:
+        from db.database import get_database_status
+        return await get_database_status()
+    except Exception as e:
+        logger.error(f"Database status check failed: {e}")
+        return {
+            "database_status": "error",
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
+@app.post("/api/graceful-degradation/recovery")
+async def attempt_graceful_recovery():
+    """Эндпоинт для принудительной попытки восстановления"""
+    try:
+        success = await graceful_manager.attempt_recovery()
+        return {
+            "success": success,
+            "message": "Восстановление выполнено" if success else "Восстановление не удалось",
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"Graceful recovery attempt failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": time.time()
         }
 
 @app.post("/api/recreate_pool")
@@ -532,6 +621,7 @@ async def get_compose_orders_list(db: AsyncSession = Depends(get_session)):
 
 # --- Эндпоинт: получить объединенный список всех заказов ---
 @app.get("/api/all_orders/")
+@graceful_fallback("orders_list", cache_key="all_orders_list", cache_ttl=300)
 async def get_all_orders_list(db: AsyncSession = Depends(get_session)):
     """
     Возвращает объединенный список всех заказов (обычных и составных) для фронта.
