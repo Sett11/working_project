@@ -30,6 +30,10 @@ scrape_configs:
         target_label: service
         regex: '(.*)'
         replacement: 'aircon-app'
+      - source_labels: [__address__]
+        target_label: graceful_degradation_enabled
+        regex: '(.*)'
+        replacement: 'true'
 
   # Конфигурация для мониторинга самого Prometheus
   - job_name: 'prometheus'

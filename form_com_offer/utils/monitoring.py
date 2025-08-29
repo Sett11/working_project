@@ -72,6 +72,7 @@ class ApplicationMonitor:
                 await self._check_system_health()
                 await self._check_database_health()
                 await self._check_connection_pool()
+                await self._check_graceful_degradation()
                 
                 # Пауза между проверками
                 await asyncio.sleep(60)  # Проверяем каждую минуту
@@ -148,6 +149,38 @@ class ApplicationMonitor:
         except Exception as e:
             logger.error(f"Ошибка проверки пула соединений: {e}")
     
+    async def _check_graceful_degradation(self):
+        """Проверка состояния graceful degradation"""
+        try:
+            from utils.graceful_degradation import graceful_manager
+            
+            # Получаем статус graceful degradation
+            gd_status = graceful_manager.get_degradation_status()
+            
+            # Проверяем, находимся ли в режиме degradation
+            if gd_status.get('degradation_mode', False):
+                degradation_duration = gd_status.get('degradation_duration', 0)
+                recovery_attempts = gd_status.get('recovery_attempts', 0)
+                max_attempts = gd_status.get('max_recovery_attempts', 5)
+                
+                # Алерт если degradation длится более 10 минут
+                if degradation_duration > 600:  # 10 минут
+                    await self._send_alert("graceful_degradation", 
+                        f"Длительный режим graceful degradation: {degradation_duration:.0f} секунд")
+                
+                # Алерт если исчерпаны попытки восстановления
+                if recovery_attempts >= max_attempts:
+                    await self._send_alert("graceful_degradation", 
+                        f"Исчерпаны попытки восстановления: {recovery_attempts}/{max_attempts}")
+                
+                # Алерт если degradation длится более 30 минут
+                if degradation_duration > 1800:  # 30 минут
+                    await self._send_alert("graceful_degradation", 
+                        f"Критически длительный режим graceful degradation: {degradation_duration:.0f} секунд")
+                        
+        except Exception as e:
+            logger.error(f"Ошибка проверки graceful degradation: {e}")
+    
     async def _send_alert(self, alert_type: str, message: str):
         """Отправка алерта с защитой от спама"""
         current_time = time.time()
@@ -169,6 +202,15 @@ class ApplicationMonitor:
             cpu_percent = psutil.cpu_percent(interval=None)  # Возвращает последнее измеренное значение
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
+            
+            # Информация о graceful degradation
+            graceful_status = {}
+            try:
+                from utils.graceful_degradation import graceful_manager
+                graceful_status = graceful_manager.get_degradation_status()
+            except Exception as e:
+                logger.error(f"Ошибка получения статуса graceful degradation: {e}")
+                graceful_status = {"error": str(e)}
             
             # Информация о пуле соединений
             pool_stats = {}
@@ -228,7 +270,8 @@ class ApplicationMonitor:
                     "disk_usage_percent": disk.percent
                 },
                 "database_status": db_status,
-                "pool_stats": pool_stats
+                "pool_stats": pool_stats,
+                "graceful_degradation": graceful_status
             }
             
         except Exception as e:

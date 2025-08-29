@@ -1,3 +1,7 @@
 # Зависимости для системы мониторинга
 psutil==5.9.5
 aiohttp==3.8.5
+
+# Зависимости для graceful degradation
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0

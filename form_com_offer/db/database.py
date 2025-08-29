@@ -18,6 +18,7 @@ from sqlalchemy.exc import InterfaceError, OperationalError, DBAPIError
 import asyncpg
 import asyncio
 import os
+import time
 from dotenv import load_dotenv
 from utils.mylogger import Logger
 from utils.graceful_degradation import (
@@ -343,7 +344,7 @@ async def get_database_status():
             "graceful_degradation": gd_status,
             "pool_stats": pool_stats,
             "connection_url": DATABASE_URL.split('@')[-1] if DATABASE_URL else None,
-            "timestamp": asyncio.get_event_loop().time()
+            "timestamp": time.time()
         }
         
     except Exception as e:
@@ -354,5 +355,5 @@ async def get_database_status():
             "circuit_breaker": db_circuit_breaker.get_status(),
             "graceful_degradation": graceful_manager.get_degradation_status(),
             "pool_stats": {},
-            "timestamp": asyncio.get_event_loop().time()
+            "timestamp": time.time()
         }

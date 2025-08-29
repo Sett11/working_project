@@ -51,6 +51,8 @@ services:
       - "9091:9091"
     environment:
       - API_URL=http://host.docker.internal:8001
+      - GRACEFUL_DEGRADATION_ENABLED=true
+      - MONITORING_INTERVAL=30
     restart: unless-stopped
     networks:
       - monitoring

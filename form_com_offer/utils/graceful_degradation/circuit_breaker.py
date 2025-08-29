@@ -6,6 +6,7 @@ Circuit Breaker автоматически останавливает попыт
 """
 import asyncio
 import time
+import os
 from enum import Enum
 from typing import Optional, Callable, Any
 from utils.mylogger import Logger
@@ -17,6 +18,10 @@ class CircuitState(Enum):
     CLOSED = "closed"      # Нормальная работа
     OPEN = "open"          # Блокировка запросов
     HALF_OPEN = "half_open"  # Тестовые запросы
+
+class CircuitBreakerOpenError(Exception):
+    """Исключение, возникающее когда Circuit Breaker открыт"""
+    pass
 
 class CircuitBreaker:
     """
@@ -49,6 +54,7 @@ class CircuitBreaker:
         # Мониторинг
         self._monitor_task = None
         self._monitoring_active = False
+        self._state_lock = asyncio.Lock()
         
         logger.info(f"Circuit Breaker инициализирован: threshold={failure_threshold}, "
                    f"timeout={recovery_timeout}s, monitor_interval={monitor_interval}s")
@@ -119,6 +125,37 @@ class CircuitBreaker:
         self.last_success_time = time.time()
         logger.info("✅ Circuit Breaker ЗАКРЫТ - нормальная работа БД восстановлена")
     
+    def _on_success(self):
+        """Обработка успешного запроса"""
+        if self.state == CircuitState.HALF_OPEN:
+            # В HALF_OPEN успех означает восстановление БД
+            asyncio.create_task(self._safe_transition_to_closed())
+        else:
+            # В CLOSED просто сбрасываем счетчик ошибок
+            self.failure_count = 0
+            self.last_success_time = time.time()
+
+    async def _safe_transition_to_closed(self):
+        """Thread-safe переход в CLOSED состояние"""
+        async with self._state_lock:
+            if self.state == CircuitState.HALF_OPEN:
+                await self._transition_to_closed()
+    
+    def _on_failure(self, error: Exception):
+        """Обработка неуспешного запроса"""
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+        
+        logger.warning(f"Ошибка БД #{self.failure_count}: {error}")
+        
+        if self.state == CircuitState.CLOSED:
+            if self.failure_count >= self.failure_threshold:
+                asyncio.create_task(self._transition_to_open())
+        
+        elif self.state == CircuitState.HALF_OPEN:
+            # В HALF_OPEN любая ошибка возвращает в OPEN
+            asyncio.create_task(self._transition_to_open())
+    
     def call(self, func: Callable, *args, **kwargs) -> Any:
         """
         Выполняет функцию с защитой Circuit Breaker.
@@ -164,33 +201,8 @@ class CircuitBreaker:
             self._on_failure(e)
             raise
     
-    def _on_success(self):
-        """Обработка успешного запроса"""
-        if self.state == CircuitState.HALF_OPEN:
-            # В HALF_OPEN успех означает восстановление БД
-            asyncio.create_task(self._transition_to_closed())
-        else:
-            # В CLOSED просто сбрасываем счетчик ошибок
-            self.failure_count = 0
-            self.last_success_time = time.time()
-    
-    def _on_failure(self, error: Exception):
-        """Обработка неуспешного запроса"""
-        self.failure_count += 1
-        self.last_failure_time = time.time()
-        
-        logger.warning(f"Ошибка БД #{self.failure_count}: {error}")
-        
-        if self.state == CircuitState.CLOSED:
-            if self.failure_count >= self.failure_threshold:
-                asyncio.create_task(self._transition_to_open())
-        
-        elif self.state == CircuitState.HALF_OPEN:
-            # В HALF_OPEN любая ошибка возвращает в OPEN
-            asyncio.create_task(self._transition_to_open())
-    
     def get_status(self) -> dict:
-        """Получение текущего статуса Circuit Breaker"""
+        """Получение статуса Circuit Breaker"""
         return {
             "state": self.state.value,
             "failure_count": self.failure_count,
@@ -201,14 +213,10 @@ class CircuitBreaker:
             "monitoring_active": self._monitoring_active
         }
 
-class CircuitBreakerOpenError(Exception):
-    """Исключение, возникающее когда Circuit Breaker открыт"""
-    pass
-
 # Глобальный экземпляр Circuit Breaker для БД
 db_circuit_breaker = CircuitBreaker(
-    failure_threshold=3,      # 3 ошибки для открытия
-    recovery_timeout=300,     # 5 минут ожидания
+    failure_threshold=int(os.getenv("CB_FAILURE_THRESHOLD", "3")),
+    recovery_timeout=int(os.getenv("CB_RECOVERY_TIMEOUT", "300")),
     expected_exception=(Exception,),  # Все исключения
-    monitor_interval=60       # Проверка каждую минуту
+    monitor_interval=int(os.getenv("CB_MONITOR_INTERVAL", "60"))
 )

@@ -6,6 +6,7 @@
 import json
 import time
 import os
+import asyncio
 from typing import Dict, Any, List, Optional
 from utils.mylogger import Logger
 
@@ -28,9 +29,13 @@ class FallbackManager:
         self._fallback_data = {}
         self._last_db_access = None
         self._fallback_storage_path = "logs/fallback_storage.json"
+        self._cleanup_task = None
         
         # Инициализируем fallback данные
         self._init_fallback_data()
+        
+        # Запускаем планировщик автоматической очистки
+        self._start_cleanup_scheduler()
         
         logger.info("Fallback Manager инициализирован")
     
@@ -53,6 +58,30 @@ class FallbackManager:
             },
             "timestamp": time.time(),
             "ttl": 300
+        }
+        
+        self._fallback_data["monitoring_status"] = {
+            "data": {
+                "timestamp": time.time(),
+                "overall_status": "degraded",
+                "system": {
+                    "cpu_percent": 0,
+                    "memory_percent": 0,
+                    "memory_available_mb": 0,
+                    "disk_usage_percent": 0
+                },
+                "database_status": "unavailable",
+                "pool_stats": {"error": "Database unavailable"},
+                "graceful_degradation": {
+                    "degradation_mode": True,
+                    "degradation_start_time": time.time(),
+                    "degradation_duration": 0,
+                    "recovery_attempts": 0,
+                    "max_recovery_attempts": 5
+                }
+            },
+            "timestamp": time.time(),
+            "ttl": 60
         }
         
         logger.info("Fallback данные инициализированы")
@@ -203,17 +232,17 @@ class FallbackManager:
         """Очистка устаревших данных"""
         current_time = time.time()
         
-        # Очистка кэша
+        # Очистка кэша - безопасная итерация по копии
         expired_cache_keys = [
-            key for key, item in self._cache.items()
+            key for key, item in list(self._cache.items())
             if current_time - item["timestamp"] > item["ttl"]
         ]
         for key in expired_cache_keys:
             del self._cache[key]
         
-        # Очистка fallback данных
+        # Очистка fallback данных - безопасная итерация по копии
         expired_fallback_keys = [
-            key for key, item in self._fallback_data.items()
+            key for key, item in list(self._fallback_data.items())
             if current_time - item["timestamp"] > item["ttl"]
         ]
         for key in expired_fallback_keys:
@@ -223,15 +252,56 @@ class FallbackManager:
             logger.info(f"Очищено устаревших данных: кэш={len(expired_cache_keys)}, "
                        f"fallback={len(expired_fallback_keys)}")
     
+    def _start_cleanup_scheduler(self):
+        """Запуск планировщика автоматической очистки"""
+        try:
+            # Проверяем, есть ли активный event loop
+            loop = asyncio.get_running_loop()
+            if loop and not self._cleanup_task:
+                self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+                logger.info("Планировщик автоматической очистки запущен")
+        except RuntimeError:
+            # Event loop не запущен, очистка будет происходить вручную
+            logger.info("Event loop не доступен, автоматическая очистка отключена")
+    
+    async def _cleanup_loop(self):
+        """Асинхронный цикл автоматической очистки"""
+        while True:
+            try:
+                await asyncio.sleep(300)  # Очистка каждые 5 минут
+                self.cleanup_expired_data()
+            except asyncio.CancelledError:
+                logger.info("Цикл автоматической очистки остановлен")
+                break
+            except Exception as e:
+                logger.error(f"Ошибка в цикле автоматической очистки: {e}")
+                await asyncio.sleep(60)  # Пауза при ошибке
+    
+    def close(self):
+        """Корректное завершение работы Fallback Manager"""
+        try:
+            if self._cleanup_task and not self._cleanup_task.done():
+                self._cleanup_task.cancel()
+                logger.info("Задача автоматической очистки отменена")
+        except Exception as e:
+            logger.error(f"Ошибка при отмене задачи очистки: {e}")
+        
+        # Выполняем финальную очистку
+        self.cleanup_expired_data()
+        logger.info("Fallback Manager завершен")
+    
     def get_status(self) -> Dict[str, Any]:
         """Получение статуса Fallback Manager"""
+        cleanup_task_status = "running" if (self._cleanup_task and not self._cleanup_task.done()) else "stopped"
+        
         return {
             "cache_size": len(self._cache),
             "fallback_data_size": len(self._fallback_data),
             "cache_ttl": self._cache_ttl,
             "last_db_access": self._last_db_access,
             "fallback_storage_path": self._fallback_storage_path,
-            "fallback_storage_exists": os.path.exists(self._fallback_storage_path)
+            "fallback_storage_exists": os.path.exists(self._fallback_storage_path),
+            "cleanup_task_status": cleanup_task_status
         }
 
 # Глобальный экземпляр Fallback Manager

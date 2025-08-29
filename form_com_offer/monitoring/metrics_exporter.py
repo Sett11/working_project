@@ -148,6 +148,33 @@ class MetricsExporter:
                     ""
                 ])
             
+            # Метрики Graceful Degradation
+            graceful_data = await self._fetch_graceful_degradation_data()
+            if graceful_data:
+                degradation_mode = 1 if graceful_data.get('degradation_mode', False) else 0
+                recovery_attempts = graceful_data.get('recovery_attempts', 0)
+                max_recovery_attempts = graceful_data.get('max_recovery_attempts', 5)
+                degradation_duration = graceful_data.get('degradation_duration', 0)
+                
+                metrics.extend([
+                    f"# HELP app_graceful_degradation_mode Graceful degradation mode status (0=normal, 1=degradation)",
+                    f"# TYPE app_graceful_degradation_mode gauge",
+                    f"app_graceful_degradation_mode {degradation_mode}",
+                    "",
+                    f"# HELP app_graceful_recovery_attempts Number of recovery attempts",
+                    f"# TYPE app_graceful_recovery_attempts gauge",
+                    f"app_graceful_recovery_attempts {recovery_attempts}",
+                    "",
+                    f"# HELP app_graceful_max_recovery_attempts Maximum number of recovery attempts",
+                    f"# TYPE app_graceful_max_recovery_attempts gauge",
+                    f"app_graceful_max_recovery_attempts {max_recovery_attempts}",
+                    "",
+                    f"# HELP app_graceful_degradation_duration_seconds Duration of degradation mode in seconds",
+                    f"# TYPE app_graceful_degradation_duration_seconds gauge",
+                    f"app_graceful_degradation_duration_seconds {degradation_duration}",
+                    ""
+                ])
+            
             return "\n".join(metrics)
             
         except Exception as e:
@@ -192,6 +219,26 @@ class MetricsExporter:
             return None
         except Exception as e:
             logger.error(f"Неожиданная ошибка при запросе к control API: {e}")
+            return None
+    
+    async def _fetch_graceful_degradation_data(self) -> Optional[Dict[str, Any]]:
+        """Получает данные graceful degradation"""
+        try:
+            session = await self._get_session()
+            async with session.get(f"{self.api_url}/api/graceful-degradation/status") as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    logger.error(f"Graceful degradation API вернул статус {response.status}")
+                    return None
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка HTTP-клиента при запросе к graceful degradation API: {e}")
+            return None
+        except asyncio.TimeoutError as e:
+            logger.error(f"Таймаут при запросе к graceful degradation API: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Неожиданная ошибка при запросе к graceful degradation API: {e}")
             return None
     
     def _status_to_number(self, status: str) -> int:

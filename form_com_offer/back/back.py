@@ -126,6 +126,10 @@ async def get_monitoring_status():
         # Обогащаем ответ информацией о graceful degradation
         health_status["database_graceful_status"] = db_status
         
+        # Добавляем информацию о graceful degradation из менеджера
+        if graceful_manager.is_in_degradation_mode():
+            health_status["graceful_degradation_warning"] = "Приложение работает в режиме graceful degradation"
+        
         return health_status
     except Exception as e:
         logger.error(f"Monitoring status check failed: {e}")

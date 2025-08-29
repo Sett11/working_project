@@ -10,6 +10,7 @@
 import functools
 import asyncio
 import time
+import random
 from typing import Callable, Any, Optional, Dict
 from utils.mylogger import Logger
 from .circuit_breaker import db_circuit_breaker, CircuitBreakerOpenError
@@ -121,11 +122,13 @@ class GracefulDegradationManager:
     Менеджер для управления graceful degradation.
     """
     
-    def __init__(self):
+    def __init__(self, base_backoff: float = 1.0, max_backoff: float = 60.0):
         self._degradation_mode = False
         self._degradation_start_time = None
         self._recovery_attempts = 0
         self._max_recovery_attempts = 5
+        self._base_backoff = base_backoff
+        self._max_backoff = max_backoff
         
         logger.info("Graceful Degradation Manager инициализирован")
     
@@ -141,7 +144,7 @@ class GracefulDegradationManager:
             duration = time.time() - self._degradation_start_time
             self._degradation_mode = False
             self._degradation_start_time = None
-            self._recovery_attempts = 0
+            self._recovery_attempts = 0  # Сброс счетчика попыток восстановления
             logger.info(f"✅ Выход из режима graceful degradation (длительность: {duration:.1f}s)")
     
     def is_in_degradation_mode(self) -> bool:
@@ -156,6 +159,8 @@ class GracefulDegradationManager:
             "degradation_duration": time.time() - self._degradation_start_time if self._degradation_start_time else 0,
             "recovery_attempts": self._recovery_attempts,
             "max_recovery_attempts": self._max_recovery_attempts,
+            "base_backoff": self._base_backoff,
+            "max_backoff": self._max_backoff,
             "circuit_breaker_status": db_circuit_breaker.get_status(),
             "fallback_manager_status": fallback_manager.get_status()
         }
@@ -170,7 +175,20 @@ class GracefulDegradationManager:
             return False
         
         self._recovery_attempts += 1
-        logger.info(f"Попытка восстановления #{self._recovery_attempts}")
+        
+        # Вычисляем экспоненциальную задержку с jitter
+        backoff_delay = min(
+            self._base_backoff * (2 ** (self._recovery_attempts - 1)), 
+            self._max_backoff
+        )
+        # Добавляем небольшой случайный jitter (±10% от задержки)
+        jitter = random.uniform(-0.1, 0.1) * backoff_delay
+        final_delay = max(0.1, backoff_delay + jitter)  # Минимум 0.1 секунды
+        
+        logger.info(f"Попытка восстановления #{self._recovery_attempts} - задержка: {final_delay:.2f}s")
+        
+        # Применяем задержку перед проверкой Circuit Breaker
+        await asyncio.sleep(final_delay)
         
         try:
             # Проверяем состояние Circuit Breaker
@@ -179,10 +197,12 @@ class GracefulDegradationManager:
                 self.exit_degradation_mode()
                 return True
             
-            # Если Circuit Breaker в HALF_OPEN, даем ему шанс
+            # Если Circuit Breaker в HALF_OPEN, используем сокращенную задержку
             if cb_status["state"] == "half_open":
-                logger.info("Circuit Breaker в HALF_OPEN состоянии - ожидаем...")
-                await asyncio.sleep(10)  # Даем время для тестовых запросов
+                logger.info("Circuit Breaker в HALF_OPEN состоянии - ожидаем дополнительное время...")
+                # Используем половину от текущей задержки, но не более 5 секунд
+                half_open_delay = min(final_delay * 0.5, 5.0)
+                await asyncio.sleep(half_open_delay)
                 return False
             
             return False
