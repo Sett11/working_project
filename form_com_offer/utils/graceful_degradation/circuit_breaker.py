@@ -68,27 +68,13 @@ class CircuitBreaker:
             coro: Корутина для выполнения
         """
         try:
-            # Пытаемся получить текущий event loop
-            loop = asyncio.get_event_loop()
-            
-            if loop.is_running():
-                # Если loop запущен, планируем задачу безопасно
-                loop.call_soon_threadsafe(asyncio.create_task, coro)
-                logger.debug("Корутина запланирована через call_soon_threadsafe")
-            else:
-                # Если loop не запущен, запускаем в новом потоке
-                def run_in_thread():
-                    try:
-                        asyncio.run(coro)
-                    except Exception as e:
-                        logger.error(f"Ошибка при выполнении корутины в потоке: {e}")
-                
-                thread = threading.Thread(target=run_in_thread, daemon=True)
-                thread.start()
-                logger.debug("Корутина запущена в отдельном потоке")
-                
+            # Пытаемся получить текущий running event loop
+            loop = asyncio.get_running_loop()
+            # Если loop запущен, планируем задачу безопасно
+            loop.call_soon_threadsafe(asyncio.create_task, coro)
+            logger.debug("Корутина запланирована через call_soon_threadsafe")
         except RuntimeError:
-            # Если нет event loop, запускаем в новом потоке
+            # Нет running event loop, запускаем в новом потоке
             def run_in_thread():
                 try:
                     asyncio.run(coro)
@@ -97,8 +83,8 @@ class CircuitBreaker:
             
             thread = threading.Thread(target=run_in_thread, daemon=True)
             thread.start()
-            logger.debug("Корутина запущена в отдельном потоке (нет event loop)")
-
+            logger.debug("Корутина запущена в отдельном потоке (нет running event loop)")
+    
     async def start_monitoring(self):
         """Запуск автоматического мониторинга состояния"""
         if self._monitoring_active:
