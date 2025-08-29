@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from mylogger import Logger
 
-logger = Logger(name="metrics_exporter", log_file="metrics_exporter.log")
+logger = Logger(name="metrics_exporter", log_file="logs/metrics_exporter.log")
 
 class MetricsExporter:
     """Экспортер метрик для Prometheus"""

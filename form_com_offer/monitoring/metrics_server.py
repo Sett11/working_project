@@ -10,7 +10,7 @@ import time
 from metrics_exporter import exporter
 from mylogger import Logger
 
-logger = Logger(name="metrics_server", log_file="metrics_server.log")
+logger = Logger(name="metrics_server", log_file="logs/metrics_server.log")
 
 # Глобальная переменная для события остановки
 _stop_event = None
@@ -132,12 +132,12 @@ async def run_metrics_server(host: str = "0.0.0.0", port: int = 9091, stop_event
     """Запускает сервер метрик
     
     Args:
-        host: Хост для привязки сервера (по умолчанию 127.0.0.1)
+        host: Хост для привязки сервера (по умолчанию 0.0.0.0)
         port: Порт для привязки сервера (по умолчанию 9091)
         stop_event: Событие для сигнализации остановки сервера
     
-    По умолчанию сервер доступен только на localhost (127.0.0.1).
-    Для внешнего доступа необходимо явно указать host или настроить через переменные окружения.
+    По умолчанию сервер доступен на всех интерфейсах (0.0.0.0).
+    Для ограничения доступа только к localhost используйте host="127.0.0.1".
     """
     global _stop_event
     
