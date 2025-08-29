@@ -7,6 +7,7 @@ Circuit Breaker автоматически останавливает попыт
 import asyncio
 import time
 import os
+import threading
 from enum import Enum
 from typing import Optional, Callable, Any
 from utils.mylogger import Logger
@@ -59,6 +60,45 @@ class CircuitBreaker:
         logger.info(f"Circuit Breaker инициализирован: threshold={failure_threshold}, "
                    f"timeout={recovery_timeout}s, monitor_interval={monitor_interval}s")
     
+    def _safe_schedule_coroutine(self, coro):
+        """
+        Безопасное планирование корутины из синхронного контекста.
+        
+        Args:
+            coro: Корутина для выполнения
+        """
+        try:
+            # Пытаемся получить текущий event loop
+            loop = asyncio.get_event_loop()
+            
+            if loop.is_running():
+                # Если loop запущен, планируем задачу безопасно
+                loop.call_soon_threadsafe(asyncio.create_task, coro)
+                logger.debug("Корутина запланирована через call_soon_threadsafe")
+            else:
+                # Если loop не запущен, запускаем в новом потоке
+                def run_in_thread():
+                    try:
+                        asyncio.run(coro)
+                    except Exception as e:
+                        logger.error(f"Ошибка при выполнении корутины в потоке: {e}")
+                
+                thread = threading.Thread(target=run_in_thread, daemon=True)
+                thread.start()
+                logger.debug("Корутина запущена в отдельном потоке")
+                
+        except RuntimeError:
+            # Если нет event loop, запускаем в новом потоке
+            def run_in_thread():
+                try:
+                    asyncio.run(coro)
+                except Exception as e:
+                    logger.error(f"Ошибка при выполнении корутины в потоке: {e}")
+            
+            thread = threading.Thread(target=run_in_thread, daemon=True)
+            thread.start()
+            logger.debug("Корутина запущена в отдельном потоке (нет event loop)")
+
     async def start_monitoring(self):
         """Запуск автоматического мониторинга состояния"""
         if self._monitoring_active:
@@ -129,7 +169,7 @@ class CircuitBreaker:
         """Обработка успешного запроса"""
         if self.state == CircuitState.HALF_OPEN:
             # В HALF_OPEN успех означает восстановление БД
-            asyncio.create_task(self._safe_transition_to_closed())
+            self._safe_schedule_coroutine(self._safe_transition_to_closed())
         else:
             # В CLOSED просто сбрасываем счетчик ошибок
             self.failure_count = 0
@@ -150,11 +190,11 @@ class CircuitBreaker:
         
         if self.state == CircuitState.CLOSED:
             if self.failure_count >= self.failure_threshold:
-                asyncio.create_task(self._transition_to_open())
+                self._safe_schedule_coroutine(self._transition_to_open())
         
         elif self.state == CircuitState.HALF_OPEN:
             # В HALF_OPEN любая ошибка возвращает в OPEN
-            asyncio.create_task(self._transition_to_open())
+            self._safe_schedule_coroutine(self._transition_to_open())
     
     def call(self, func: Callable, *args, **kwargs) -> Any:
         """

@@ -30,14 +30,12 @@ class FallbackManager:
         self._last_db_access = None
         self._fallback_storage_path = "logs/fallback_storage.json"
         self._cleanup_task = None
+        self._is_running = False
         
         # Инициализируем fallback данные
         self._init_fallback_data()
         
-        # Запускаем планировщик автоматической очистки
-        self._start_cleanup_scheduler()
-        
-        logger.info("Fallback Manager инициализирован")
+        logger.info("Fallback Manager инициализирован (планировщик не запущен)")
     
     def _init_fallback_data(self):
         """Инициализация базовых fallback данных"""
@@ -85,6 +83,47 @@ class FallbackManager:
         }
         
         logger.info("Fallback данные инициализированы")
+    
+    def start(self):
+        """Запуск планировщика автоматической очистки"""
+        if self._is_running:
+            logger.warning("Fallback Manager уже запущен")
+            return
+        
+        try:
+            # Проверяем, есть ли активный event loop
+            loop = asyncio.get_running_loop()
+            if loop:
+                self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+                self._is_running = True
+                logger.info("✅ Планировщик автоматической очистки запущен")
+            else:
+                logger.warning("Event loop не доступен, планировщик не запущен")
+        except RuntimeError:
+            logger.warning("Event loop не запущен, планировщик не запущен")
+        except Exception as e:
+            logger.error(f"Ошибка запуска планировщика: {e}")
+    
+    def stop(self):
+        """Остановка планировщика автоматической очистки"""
+        if not self._is_running:
+            logger.info("Fallback Manager уже остановлен")
+            return
+        
+        try:
+            if self._cleanup_task and not self._cleanup_task.done():
+                self._cleanup_task.cancel()
+                logger.info("✅ Задача автоматической очистки отменена")
+            
+            self._is_running = False
+            self._cleanup_task = None
+            
+            # Выполняем финальную очистку
+            self.cleanup_expired_data()
+            logger.info("✅ Fallback Manager остановлен")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при остановке Fallback Manager: {e}")
     
     def set_cache_ttl(self, ttl_seconds: int):
         """Установка времени жизни кэша"""
@@ -253,42 +292,29 @@ class FallbackManager:
                        f"fallback={len(expired_fallback_keys)}")
     
     def _start_cleanup_scheduler(self):
-        """Запуск планировщика автоматической очистки"""
-        try:
-            # Проверяем, есть ли активный event loop
-            loop = asyncio.get_running_loop()
-            if loop and not self._cleanup_task:
-                self._cleanup_task = asyncio.create_task(self._cleanup_loop())
-                logger.info("Планировщик автоматической очистки запущен")
-        except RuntimeError:
-            # Event loop не запущен, очистка будет происходить вручную
-            logger.info("Event loop не доступен, автоматическая очистка отключена")
+        """Запуск планировщика автоматической очистки (устаревший метод)"""
+        logger.warning("_start_cleanup_scheduler устарел, используйте start()")
+        self.start()
     
     async def _cleanup_loop(self):
         """Асинхронный цикл автоматической очистки"""
-        while True:
+        while self._is_running:
             try:
                 await asyncio.sleep(300)  # Очистка каждые 5 минут
-                self.cleanup_expired_data()
+                if self._is_running:  # Дополнительная проверка
+                    self.cleanup_expired_data()
             except asyncio.CancelledError:
                 logger.info("Цикл автоматической очистки остановлен")
                 break
             except Exception as e:
                 logger.error(f"Ошибка в цикле автоматической очистки: {e}")
-                await asyncio.sleep(60)  # Пауза при ошибке
+                if self._is_running:  # Дополнительная проверка
+                    await asyncio.sleep(60)  # Пауза при ошибке
     
     def close(self):
-        """Корректное завершение работы Fallback Manager"""
-        try:
-            if self._cleanup_task and not self._cleanup_task.done():
-                self._cleanup_task.cancel()
-                logger.info("Задача автоматической очистки отменена")
-        except Exception as e:
-            logger.error(f"Ошибка при отмене задачи очистки: {e}")
-        
-        # Выполняем финальную очистку
-        self.cleanup_expired_data()
-        logger.info("Fallback Manager завершен")
+        """Корректное завершение работы Fallback Manager (устаревший метод)"""
+        logger.warning("close() устарел, используйте stop()")
+        self.stop()
     
     def get_status(self) -> Dict[str, Any]:
         """Получение статуса Fallback Manager"""
@@ -301,8 +327,9 @@ class FallbackManager:
             "last_db_access": self._last_db_access,
             "fallback_storage_path": self._fallback_storage_path,
             "fallback_storage_exists": os.path.exists(self._fallback_storage_path),
-            "cleanup_task_status": cleanup_task_status
+            "cleanup_task_status": cleanup_task_status,
+            "is_running": self._is_running
         }
 
-# Глобальный экземпляр Fallback Manager
+# Глобальный экземпляр Fallback Manager (без автоматического запуска)
 fallback_manager = FallbackManager()

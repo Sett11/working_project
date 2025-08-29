@@ -54,10 +54,26 @@ async def startup_event():
         logger.info("✅ Graceful Degradation Manager инициализирован")
     except Exception as e:
         logger.error(f"❌ Ошибка инициализации Graceful Degradation Manager: {e}")
+    
+    # Запускаем Fallback Manager
+    try:
+        from utils.graceful_degradation import fallback_manager
+        fallback_manager.start()
+        logger.info("✅ Fallback Manager запущен")
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска Fallback Manager: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("Остановка FastAPI приложения.")
+    
+    # Останавливаем Fallback Manager
+    try:
+        from utils.graceful_degradation import fallback_manager
+        fallback_manager.stop()
+        logger.info("✅ Fallback Manager остановлен")
+    except Exception as e:
+        logger.error(f"❌ Ошибка остановки Fallback Manager: {e}")
     
     # Останавливаем Circuit Breaker мониторинг
     try:
