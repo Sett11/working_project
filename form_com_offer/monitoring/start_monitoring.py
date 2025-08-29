@@ -56,27 +56,39 @@ def main():
     
     # Проверяем, что мы в правильной директории
     current_dir = Path.cwd()
-    if not (current_dir / "monitoring" / "monitoring-compose.yml").exists():
-        print("❌ Файл monitoring/monitoring-compose.yml не найден. Запустите скрипт из корневой директории проекта.")
-        return False
+    
+    # Ищем файл monitoring-compose.yml в текущей папке или в папке monitoring
+    compose_file = current_dir / "monitoring-compose.yml"
+    if not compose_file.exists():
+        # Пробуем найти в папке monitoring
+        monitoring_dir = current_dir / "monitoring"
+        compose_file = monitoring_dir / "monitoring-compose.yml"
+        if compose_file.exists():
+            # Переходим в папку monitoring
+            os.chdir(monitoring_dir)
+            print(f"📁 Переходим в папку: {monitoring_dir}")
+        else:
+            print("❌ Файл monitoring-compose.yml не найден.")
+            print("   Запустите скрипт из папки monitoring или из корневой папки проекта.")
+            return False
     
     # Останавливаем существующие контейнеры мониторинга
     print("\n🛑 Остановка существующих контейнеров мониторинга...")
-    run_command(["docker-compose", "-f", "monitoring/monitoring-compose.yml", "down"], "Остановка контейнеров")
+    run_command(["docker-compose", "-f", "monitoring-compose.yml", "down"], "Остановка контейнеров")
     
     # Проверяем наличие .env файла
-    env_file = Path("monitoring/.env")
+    env_file = Path(".env")
     if not env_file.exists():
-        print("\n⚠️  ВНИМАНИЕ: Файл monitoring/.env не найден!")
+        print("\n⚠️  ВНИМАНИЕ: Файл .env не найден!")
         print("   Рекомендуется создать файл .env с безопасным паролем:")
-        print("   1. Скопируйте: cp monitoring/env.example monitoring/.env")
+        print("   1. Скопируйте: cp env.example .env")
         print("   2. Установите безопасный пароль в файле .env")
         print("   3. Перезапустите скрипт")
         print("   Используется пароль по умолчанию (небезопасно для продакшена)")
     
     # Запускаем систему мониторинга
     print("\n🚀 Запуск системы мониторинга...")
-    command = ["docker-compose", "-f", "monitoring/monitoring-compose.yml"]
+    command = ["docker-compose", "-f", "monitoring-compose.yml"]
     if env_file.exists():
         command.extend(["--env-file", str(env_file)])
     command.extend(["up", "-d"])
@@ -90,7 +102,7 @@ def main():
     
     # Проверяем статус контейнеров
     print("\n📊 Проверка статуса контейнеров...")
-    run_command(["docker-compose", "-f", "monitoring/monitoring-compose.yml", "ps"], "Проверка статуса")
+    run_command(["docker-compose", "-f", "monitoring-compose.yml", "ps"], "Проверка статуса")
     
     print("\n" + "=" * 50)
     print("🎉 Система мониторинга запущена!")
@@ -114,7 +126,7 @@ def main():
     print("   4. Убедитесь, что ваше приложение запущено на порту 8001")
     
     print("\n🛑 Для остановки мониторинга выполните:")
-    print("   docker-compose -f monitoring/monitoring-compose.yml down")
+    print("   docker-compose -f monitoring-compose.yml down")
     
     return True
 

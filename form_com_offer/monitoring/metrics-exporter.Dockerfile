@@ -19,4 +19,4 @@ USER metrics
 EXPOSE 9091
 
 # Запускаем сервер метрик
-CMD ["python", "-m", "monitoring.metrics_server"]
+CMD ["python", "metrics_server.py"]

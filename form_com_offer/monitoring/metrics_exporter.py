@@ -6,17 +6,19 @@ import asyncio
 import time
 import aiohttp
 import json
+import os
 from datetime import datetime
 from typing import Dict, Any, Optional
-from .mylogger import Logger
+from mylogger import Logger
 
 logger = Logger(name="metrics_exporter", log_file="metrics_exporter.log")
 
 class MetricsExporter:
     """Экспортер метрик для Prometheus"""
     
-    def __init__(self, api_url: str = "http://localhost:8001"):
-        self.api_url = api_url
+    def __init__(self, api_url: str = None):
+        # Получаем URL из переменной окружения или используем значение по умолчанию
+        self.api_url = api_url or os.getenv("API_URL", "http://localhost:8001")
         self.metrics_cache = {}
         self.last_update = 0
         self.cache_ttl = 30  # Кэшируем метрики на 30 секунд

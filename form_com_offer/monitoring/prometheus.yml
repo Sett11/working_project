@@ -10,7 +10,7 @@ scrape_configs:
   # Конфигурация для сбора метрик с нашего приложения
   - job_name: 'aircon-app-metrics'
     static_configs:
-      - targets: ['host.docker.internal:9091']  # Адрес нашего экспортера метрик
+      - targets: ['aircon-metrics-exporter:9091']  # Адрес нашего экспортера метрик
     scrape_interval: 30s
     metrics_path: '/metrics'
     

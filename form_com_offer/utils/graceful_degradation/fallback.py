@@ -31,6 +31,7 @@ class FallbackManager:
         self._fallback_storage_path = "logs/fallback_storage.json"
         self._cleanup_task = None
         self._is_running = False
+        self._loop = None  # Сохраняем текущий event loop
         
         # Инициализируем fallback данные
         self._init_fallback_data()
@@ -91,24 +92,26 @@ class FallbackManager:
             return
         
         try:
-            # Получаем активный event loop - если его нет, будет RuntimeError
-            asyncio.get_running_loop()
-            # Если дошли сюда, значит event loop доступен
-            self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+            # Получаем и сохраняем активный event loop
+            self._loop = asyncio.get_running_loop()
+            # Создаем задачу на сохраненном loop
+            self._cleanup_task = self._loop.create_task(self._cleanup_loop())
             self._is_running = True
             logger.info("✅ Планировщик автоматической очистки запущен")
             
         except RuntimeError as e:
             logger.warning(f"Event loop не запущен, планировщик не запущен: {e}")
-            # Убеждаемся, что _cleanup_task остается None
+            # Убеждаемся, что _cleanup_task и _loop остаются None
             self._cleanup_task = None
+            self._loop = None
             self._is_running = False
         except Exception as e:
             import traceback
             logger.error(f"Ошибка запуска планировщика: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
-            # Убеждаемся, что _cleanup_task остается None при ошибке
+            # Убеждаемся, что _cleanup_task и _loop остаются None при ошибке
             self._cleanup_task = None
+            self._loop = None
             self._is_running = False
     
     def stop(self):
@@ -119,11 +122,18 @@ class FallbackManager:
         
         try:
             if self._cleanup_task and not self._cleanup_task.done():
-                self._cleanup_task.cancel()
-                logger.info("✅ Задача автоматической очистки отменена")
+                if self._loop and self._loop.is_running():
+                    # Thread-safe отмена задачи на сохраненном loop
+                    self._loop.call_soon_threadsafe(self._cleanup_task.cancel)
+                    logger.info("✅ Задача автоматической очистки отменена (thread-safe)")
+                else:
+                    # Fallback отмена
+                    self._cleanup_task.cancel()
+                    logger.info("✅ Задача автоматической очистки отменена (fallback)")
             
             self._is_running = False
             self._cleanup_task = None
+            self._loop = None
             
             # Выполняем финальную очистку
             self.cleanup_expired_data()
@@ -140,7 +150,12 @@ class FallbackManager:
         
         try:
             if self._cleanup_task and not self._cleanup_task.done():
-                self._cleanup_task.cancel()
+                # Отменяем задачу на сохраненном loop
+                if self._loop and self._loop.is_running():
+                    self._loop.call_soon_threadsafe(self._cleanup_task.cancel)
+                else:
+                    self._cleanup_task.cancel()
+                
                 logger.info("✅ Задача автоматической очистки отменена")
                 
                 # Ожидаем завершения задачи с ограничением времени
@@ -156,6 +171,7 @@ class FallbackManager:
             
             self._is_running = False
             self._cleanup_task = None
+            self._loop = None
             
             # Выполняем финальную очистку
             self.cleanup_expired_data()
@@ -168,6 +184,7 @@ class FallbackManager:
             # Убеждаемся, что состояние корректно сброшено
             self._is_running = False
             self._cleanup_task = None
+            self._loop = None
     
     def set_cache_ttl(self, ttl_seconds: int):
         """Установка времени жизни кэша"""
@@ -363,6 +380,7 @@ class FallbackManager:
     def get_status(self) -> Dict[str, Any]:
         """Получение статуса Fallback Manager"""
         cleanup_task_status = "running" if (self._cleanup_task and not self._cleanup_task.done()) else "stopped"
+        loop_status = "available" if (self._loop and self._loop.is_running()) else "unavailable"
         
         return {
             "cache_size": len(self._cache),
@@ -372,6 +390,7 @@ class FallbackManager:
             "fallback_storage_path": self._fallback_storage_path,
             "fallback_storage_exists": os.path.exists(self._fallback_storage_path),
             "cleanup_task_status": cleanup_task_status,
+            "loop_status": loop_status,
             "is_running": self._is_running
         }
 

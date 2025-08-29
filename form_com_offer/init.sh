@@ -27,7 +27,7 @@ wait_for_database() {
     
     # Используем переменные без local для POSIX совместимости
     db_timeout=${DB_TIMEOUT:-60}  # Таймаут по умолчанию 60 секунд
-    db_interval=${DB_INTERVAL:-2}  # Интервал проверки по умолчанию 2 секунды
+    db_interval=${DB_INTERVAL:-5}  # Интервал проверки по умолчанию 5 секунд
     db_elapsed=0
     
     echo "⏳ Ожидание готовности базы данных (таймаут: ${db_timeout}с)..."
@@ -116,7 +116,7 @@ if ! check_flag_exists; then
     fi
 else
     if [ -f "$FLAG_FILE" ]; then
-        echo "✅ Seeder уже был выполнен ранее (файл-флаг найден: $FLAG_FILE)"
+    echo "✅ Seeder уже был выполнен ранее (файл-флаг найден: $FLAG_FILE)"
     else
         echo "✅ Seeder уже был выполнен ранее (маркерный файл найден: $FLAG_FILE/.seeder_completed)"
     fi

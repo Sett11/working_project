@@ -31,7 +31,7 @@ class MetricsServer:
     Для внешнего доступа необходимо явно указать host или настроить через переменные окружения.
     """
     
-    def __init__(self, host: str = "127.0.0.1", port: int = 9091, stop_event: asyncio.Event = None):
+    def __init__(self, host: str = "0.0.0.0", port: int = 9091, stop_event: asyncio.Event = None):
         self.host = host
         self.port = port
         self.stop_event = stop_event or asyncio.Event()
@@ -74,7 +74,8 @@ class MetricsServer:
             # Возвращаем метрики в формате Prometheus
             return web.Response(
                 text=metrics,
-                content_type='text/plain; version=0.0.4; charset=utf-8'
+                content_type='text/plain; version=0.0.4',
+                charset='utf-8'
             )
             
         except Exception as e:
@@ -82,7 +83,8 @@ class MetricsServer:
             return web.Response(
                 text="# ERROR: Failed to export metrics\n",
                 status=500,
-                content_type='text/plain; version=0.0.4; charset=utf-8'
+                content_type='text/plain; version=0.0.4',
+                charset='utf-8'
             )
     
     async def start(self):
@@ -126,7 +128,7 @@ class MetricsServer:
             self._running = False
 
 # Функция для запуска сервера
-async def run_metrics_server(host: str = "127.0.0.1", port: int = 9091, stop_event: asyncio.Event = None):
+async def run_metrics_server(host: str = "0.0.0.0", port: int = 9091, stop_event: asyncio.Event = None):
     """Запускает сервер метрик
     
     Args:
