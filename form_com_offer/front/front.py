@@ -521,11 +521,16 @@ def fill_components_fields_from_order(order, components_catalog):
     expected_count = len(catalog_components) * 3
     if len(updates) != expected_count:
         logger.warning(f"[DEBUG] fill_components_fields_from_order: WARNING! Generated {len(updates)} updates, expected {expected_count}")
-        # Дополняем до нужного количества
-        while len(updates) < expected_count:
+        # Дополняем до нужного количества с защитой от бесконечного цикла
+        max_iterations = expected_count * 2  # Защита от бесконечного цикла
+        iteration_count = 0
+        while len(updates) < expected_count and iteration_count < max_iterations:
             updates.append(gr.update(value=False))
             updates.append(gr.update(value=0))
             updates.append(gr.update(value=0.0))
+            iteration_count += 1
+        if iteration_count >= max_iterations:
+            logger.error(f"[DEBUG] fill_components_fields_from_order: CRITICAL! Infinite loop protection triggered")
         logger.info(f"[DEBUG] fill_components_fields_from_order: After padding: {len(updates)} updates")
     
     return updates
@@ -787,9 +792,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             # Проверяем, что comp_updates имеет правильную длину
             if len(comp_updates) != components_count:
                 logger.warning(f"[DEBUG] load_selected_order: comp_updates length ({len(comp_updates)}) != expected ({components_count})")
-                # Дополняем comp_updates до нужной длины
-                while len(comp_updates) < components_count:
+                # Дополняем comp_updates до нужной длины с защитой от бесконечного цикла
+                max_iterations = components_count * 2  # Защита от бесконечного цикла
+                iteration_count = 0
+                while len(comp_updates) < components_count and iteration_count < max_iterations:
                     comp_updates.append(gr.update())
+                    iteration_count += 1
+                if iteration_count >= max_iterations:
+                    logger.error(f"[DEBUG] load_selected_order: CRITICAL! Infinite loop protection triggered for comp_updates")
             # ИСПРАВЛЕНИЕ: Правильное количество compose полей (21, а не 22)
             result = [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + comp_updates + [gr.update(value=comment_value), gr.update(value=""), gr.update(value=order.get("id")), gr.update(value=order), gr.update(value=order.get("id"))] + [gr.update() for _ in range(21)] + [gr.update(value=""), gr.update(value=""), gr.update(value="0"), gr.update(value=""), gr.update(value="")]
             
@@ -797,9 +807,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             expected_count = 340  # Из логов
             if len(result) != expected_count:
                 logger.warning(f"[DEBUG] load_selected_order: result length ({len(result)}) != expected ({expected_count})")
-                # Дополняем до нужного количества
-                while len(result) < expected_count:
+                # Дополняем до нужного количества с защитой от бесконечного цикла
+                max_iterations = expected_count * 2  # Защита от бесконечного цикла
+                iteration_count = 0
+                while len(result) < expected_count and iteration_count < max_iterations:
                     result.append(gr.update())
+                    iteration_count += 1
+                if iteration_count >= max_iterations:
+                    logger.error(f"[DEBUG] load_selected_order: CRITICAL! Infinite loop protection triggered for result")
                 logger.info(f"[DEBUG] load_selected_order: after padding: {len(result)} values")
             logger.info(f"[DEBUG] load_selected_order: returning {len(result)} values")
             logger.info(f"[DEBUG] load_selected_order: updates length = {len(updates)}, comp_updates length = {len(comp_updates)}")
@@ -827,9 +842,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 expected_count = 340  # Из логов load_selected_btn.click
                 if len(result) != expected_count:
                     logger.warning(f"[DEBUG] load_compose_order (load error): result length ({len(result)}) != expected ({expected_count})")
-                    # Дополняем до нужного количества
-                    while len(result) < expected_count:
+                    # Дополняем до нужного количества с защитой от бесконечного цикла
+                    max_iterations = expected_count * 2  # Защита от бесконечного цикла
+                    iteration_count = 0
+                    while len(result) < expected_count and iteration_count < max_iterations:
                         result.append(gr.update())
+                        iteration_count += 1
+                    if iteration_count >= max_iterations:
+                        logger.error(f"[DEBUG] load_compose_order (load error): CRITICAL! Infinite loop protection triggered")
                     logger.info(f"[DEBUG] load_compose_order (load error): after padding: {len(result)} values")
                 
                 return result
@@ -1006,9 +1026,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             expected_count = 340  # Из логов load_selected_btn.click
             if len(result) != expected_count:
                 logger.warning(f"[DEBUG] load_compose_order (main): result length ({len(result)}) != expected ({expected_count})")
-                # Дополняем до нужного количества
-                while len(result) < expected_count:
+                # Дополняем до нужного количества с защитой от бесконечного цикла
+                max_iterations = expected_count * 2  # Защита от бесконечного цикла
+                iteration_count = 0
+                while len(result) < expected_count and iteration_count < max_iterations:
                     result.append(gr.update())
+                    iteration_count += 1
+                if iteration_count >= max_iterations:
+                    logger.error(f"[DEBUG] load_compose_order (main): CRITICAL! Infinite loop protection triggered")
                 logger.info(f"[DEBUG] load_compose_order (main): after padding: {len(result)} values")
             
             return result
@@ -1021,9 +1046,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             expected_count = 340  # Из логов load_selected_btn.click
             if len(result) != expected_count:
                 logger.warning(f"[DEBUG] load_compose_order (error): result length ({len(result)}) != expected ({expected_count})")
-                # Дополняем до нужного количества
-                while len(result) < expected_count:
+                # Дополняем до нужного количества с защитой от бесконечного цикла
+                max_iterations = expected_count * 2  # Защита от бесконечного цикла
+                iteration_count = 0
+                while len(result) < expected_count and iteration_count < max_iterations:
                     result.append(gr.update())
+                    iteration_count += 1
+                if iteration_count >= max_iterations:
+                    logger.error(f"[DEBUG] load_compose_order (error): CRITICAL! Infinite loop protection triggered")
                 logger.info(f"[DEBUG] load_compose_order (error): after padding: {len(result)} values")
             
             return result
@@ -1097,12 +1127,17 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             
             if actual_count != expected_count:
                 logger.warning(f"[DEBUG] show_main: actual_count ({actual_count}) != expected_count ({expected_count})")
-                # Дополняем до нужного количества
-                while actual_count < expected_count:
+                # Дополняем до нужного количества с защитой от бесконечного цикла
+                max_iterations = expected_count * 2  # Защита от бесконечного цикла
+                iteration_count = 0
+                while actual_count < expected_count and iteration_count < max_iterations:
                     values.append(gr.update(value=False))
                     values.append(gr.update(value=0))
                     values.append(gr.update(value=0.0))
                     actual_count += 3
+                    iteration_count += 1
+                if iteration_count >= max_iterations:
+                    logger.error(f"[DEBUG] show_main: CRITICAL! Infinite loop protection triggered for values padding")
                 logger.info(f"[DEBUG] show_main: after padding: {len(values)} values")
             
             return (
@@ -1118,9 +1153,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             # ИСПРАВЛЕНИЕ: Проверяем, что comp_updates имеет правильную длину
             if len(comp_updates) != components_count:
                 logger.warning(f"[DEBUG] show_main: comp_updates length ({len(comp_updates)}) != expected ({components_count})")
-                # Дополняем comp_updates до нужной длины
-                while len(comp_updates) < components_count:
+                # Дополняем comp_updates до нужной длины с защитой от бесконечного цикла
+                max_iterations = components_count * 2  # Защита от бесконечного цикла
+                iteration_count = 0
+                while len(comp_updates) < components_count and iteration_count < max_iterations:
                     comp_updates.append(gr.update())
+                    iteration_count += 1
+                if iteration_count >= max_iterations:
+                    logger.error(f"[DEBUG] show_main: CRITICAL! Infinite loop protection triggered for comp_updates")
             logger.info(f"[DEBUG] show_main: comment_value={comment_value}")
             # ИСПРАВЛЕНИЕ: Проверяем и дополняем количество значений для загруженного заказа
             result = [gr.update(visible=False), gr.update(visible=False), gr.update(visible=True)] + updates + comp_updates + [gr.update(value=comment_value), gr.update(value=""), gr.update(value=order.get("id")), gr.update(value=order), gr.update(value=order.get("id"))]
@@ -1129,9 +1169,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             expected_count = 314  # Из логов create_btn.click
             if len(result) != expected_count:
                 logger.warning(f"[DEBUG] show_main (loaded order): result length ({len(result)}) != expected ({expected_count})")
-                # Дополняем до нужного количества
-                while len(result) < expected_count:
+                # Дополняем до нужного количества с защитой от бесконечного цикла
+                max_iterations = expected_count * 2  # Защита от бесконечного цикла
+                iteration_count = 0
+                while len(result) < expected_count and iteration_count < max_iterations:
                     result.append(gr.update())
+                    iteration_count += 1
+                if iteration_count >= max_iterations:
+                    logger.error(f"[DEBUG] show_main (loaded order): CRITICAL! Infinite loop protection triggered")
                 logger.info(f"[DEBUG] show_main (loaded order): after padding: {len(result)} values")
             
             return tuple(result)

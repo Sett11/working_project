@@ -231,9 +231,9 @@ async def cleanup_connection_pool():
         # Graceful shutdown: закрываем пул для новых соединений
         pool.close()
         
-        # Ждем завершения активных соединений (максимум 30 секунд)
+        # Ждем завершения активных соединений (максимум 30 секунд, оптимизировано для снижения нагрузки)
         max_wait_time = 30
-        wait_interval = 1
+        wait_interval = 5  # Увеличено с 1 до 5 секунд для снижения нагрузки
         waited_time = 0
         
         while pool.checkedout() > 0 and waited_time < max_wait_time:

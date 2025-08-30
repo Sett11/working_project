@@ -152,11 +152,11 @@ async def get_session():
                                 try:
                                     await _recreate_connection_pool_with_retry()
                                     logger.info("✅ Пул соединений успешно пересоздан")
-                                    await asyncio.sleep(0.5)
+                                    await asyncio.sleep(2.0)  # Увеличено с 0.5 до 2.0 секунд для снижения нагрузки
                                     continue
                                 except Exception as recreate_error:
                                     logger.error(f"❌ Ошибка при пересоздании пула: {recreate_error}")
-                                    delay = min(2 ** retry_count, 30)
+                                    delay = min(2 ** retry_count, 15)  # Уменьшено с 30 до 15 секунд для снижения нагрузки
                                     logger.info(f"⏳ Ожидание {delay} секунд перед следующей попыткой...")
                                     await asyncio.sleep(delay)
                     raise
@@ -190,10 +190,10 @@ async def get_session():
                 try:
                     await _recreate_connection_pool_with_retry()
                     logger.info("✅ Пул соединений пересоздан после ошибки")
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(2.0)  # Увеличено с 0.5 до 2.0 секунд для снижения нагрузки
                 except Exception as recreate_error:
                     logger.error(f"❌ Не удалось пересоздать пул: {recreate_error}")
-                    delay = min(2 ** retry_count, 30)
+                    delay = min(2 ** retry_count, 15)  # Уменьшено с 30 до 15 секунд для снижения нагрузки
                     logger.info(f"⏳ Ожидание {delay} секунд перед следующей попыткой...")
                     await asyncio.sleep(delay)
 
@@ -239,8 +239,8 @@ async def _recreate_connection_pool_with_retry():
                 logger.error(f"❌ ИСЧЕРПАНЫ ВСЕ ПОПЫТКИ ПЕРЕСОЗДАНИЯ ПУЛА ({max_pool_recreation_attempts}). Критическая ошибка!")
                 raise  # Прерываем выполнение при превышении максимального количества попыток
             
-            # Экспоненциальная задержка перед следующей попыткой
-            delay = min(2 ** attempt, 30)  # Максимум 30 секунд
+            # Экспоненциальная задержка перед следующей попыткой (оптимизирована для снижения нагрузки)
+            delay = min(2 ** attempt, 15)  # Максимум 15 секунд (уменьшено с 30 для снижения нагрузки)
             logger.info(f"⏳ Ожидание {delay} секунд перед следующей попыткой пересоздания пула...")
             await asyncio.sleep(delay)
 

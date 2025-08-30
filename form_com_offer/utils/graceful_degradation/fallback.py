@@ -25,7 +25,7 @@ class FallbackManager:
     
     def __init__(self):
         self._cache = {}
-        self._cache_ttl = 300  # 5 минут TTL для кэша
+        self._cache_ttl = 600  # 10 минут TTL для кэша (увеличено с 5 минут для снижения нагрузки)
         self._fallback_data = {}
         self._last_db_access = None
         self._fallback_storage_path = "logs/fallback_storage.json"
@@ -45,7 +45,7 @@ class FallbackManager:
             "data": [],
             "message": "База данных временно недоступна. Данные могут быть устаревшими.",
             "timestamp": time.time(),
-            "ttl": 600  # 10 минут
+            "ttl": 1200  # 20 минут (увеличено с 10 минут)
         }
         
         self._fallback_data["health_status"] = {
@@ -56,7 +56,7 @@ class FallbackManager:
                 "fallback_mode": True
             },
             "timestamp": time.time(),
-            "ttl": 300
+            "ttl": 600  # Увеличено с 300 до 600 секунд (10 минут)
         }
         
         self._fallback_data["monitoring_status"] = {
@@ -80,7 +80,7 @@ class FallbackManager:
                 }
             },
             "timestamp": time.time(),
-            "ttl": 60
+            "ttl": 300  # Увеличено с 60 до 300 секунд (5 минут)
         }
         
         logger.info("Fallback данные инициализированы")
@@ -358,10 +358,10 @@ class FallbackManager:
         self.start()
     
     async def _cleanup_loop(self):
-        """Асинхронный цикл автоматической очистки"""
+        """Асинхронный цикл автоматической очистки (оптимизирован для снижения нагрузки на CPU)"""
         while self._is_running:
             try:
-                await asyncio.sleep(300)  # Очистка каждые 5 минут
+                await asyncio.sleep(900)  # Очистка каждые 15 минут (увеличено с 5 минут для снижения нагрузки)
                 if self._is_running:  # Дополнительная проверка
                     self.cleanup_expired_data()
             except asyncio.CancelledError:
@@ -370,7 +370,7 @@ class FallbackManager:
             except Exception as e:
                 logger.error(f"Ошибка в цикле автоматической очистки: {e}")
                 if self._is_running:  # Дополнительная проверка
-                    await asyncio.sleep(60)  # Пауза при ошибке
+                    await asyncio.sleep(300)  # Пауза при ошибке увеличена до 5 минут
     
     def close(self):
         """Корректное завершение работы Fallback Manager (устаревший метод)"""

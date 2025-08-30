@@ -39,7 +39,7 @@ class CircuitBreaker:
         failure_threshold: int = 5,        # Количество ошибок для открытия
         recovery_timeout: int = 300,       # Время ожидания (5 минут)
         expected_exception: type = Exception,  # Тип исключения для отслеживания
-        monitor_interval: int = 60         # Интервал мониторинга (1 минута)
+        monitor_interval: int = 300        # Интервал мониторинга (5 минут - увеличено с 1 минуты для снижения нагрузки на CPU)
     ):
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
@@ -106,14 +106,14 @@ class CircuitBreaker:
         logger.info("Мониторинг Circuit Breaker остановлен")
     
     async def _monitor_loop(self):
-        """Основной цикл мониторинга"""
+        """Основной цикл мониторинга (оптимизирован для снижения нагрузки на CPU)"""
         while self._monitoring_active:
             try:
                 await self._check_state_transition()
                 await asyncio.sleep(self.monitor_interval)
             except Exception as e:
                 logger.error(f"Ошибка в цикле мониторинга Circuit Breaker: {e}")
-                await asyncio.sleep(10)
+                await asyncio.sleep(60)  # Увеличено с 10 до 60 секунд для снижения нагрузки
     
     async def _check_state_transition(self):
         """Проверка необходимости смены состояния"""
