@@ -26,7 +26,19 @@ logger = Logger(name=__name__, log_file="db.log")
 
 # --- Основные модели ---
 
-# УДАЛЕНО: class User
+class User(Base):
+    """
+    Модель пользователя системы.
+    """
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True, index=True)  # Уникальный идентификатор пользователя
+    username = Column(String, unique=True, index=True)  # Логин пользователя
+    password_hash = Column(String, nullable=False)  # Хешированный пароль
+    created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата создания
+    last_login = Column(DateTime(timezone=True), nullable=True)  # Последний вход
+    is_active = Column(Boolean, default=True)  # Активность пользователя
+    current_token = Column(String, nullable=True)  # Текущий токен сессии
+    token_expires_at = Column(DateTime(timezone=True), nullable=True)  # Время истечения токена
 
 class Client(Base):
     """

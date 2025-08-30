@@ -1,7 +1,7 @@
 """
 Основной файл бэкенда, реализующий API на FastAPI.
 """
-from fastapi import FastAPI, Depends, HTTPException, Path
+from fastapi import FastAPI, Depends, HTTPException, Path, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import datetime
@@ -12,7 +12,9 @@ from utils.mylogger import Logger
 from utils.aircon_selector import select_aircons
 from utils.pdf_generator import generate_commercial_offer_pdf_async
 from utils.graceful_degradation import graceful_fallback, graceful_manager
-from db.schemas import FullOrderCreate
+from db.schemas import FullOrderCreate, UserCreate, UserLogin, TokenResponse, UserResponse
+from utils.auth import hash_password, verify_password, generate_token, get_token_expiry, verify_secret_key
+from utils.auth_middleware import auth_middleware, get_user_id_from_request, get_username_from_request
 import json
 from sqlalchemy import select
 import time
@@ -20,6 +22,9 @@ import asyncio
 
 logger = Logger(name=__name__, log_file="backend.log")
 app = FastAPI(title="Air-Con Commercial Offer API", version="0.1.0")
+
+# Добавляем middleware для аутентификации
+app.middleware("http")(auth_middleware)
 
 # Глобальный обработчик исключений
 @app.exception_handler(Exception)
@@ -125,6 +130,128 @@ async def health_check():
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return {"status": "unhealthy", "database": "disconnected", "error": str(e)}
+
+# --- Аутентификация ---
+
+@app.post("/api/auth/register", response_model=TokenResponse)
+async def register_user(user_data: UserCreate, db: AsyncSession = Depends(get_session)):
+    """
+    Регистрация нового пользователя.
+    """
+    logger.info(f"Попытка регистрации пользователя: {user_data.username}")
+    
+    # Проверяем секретный ключ
+    if not verify_secret_key(user_data.secret_key):
+        logger.warning(f"Неверный секретный ключ при регистрации: {user_data.username}")
+        raise HTTPException(status_code=400, detail="Неверный секретный ключ")
+    
+    # Проверяем, не существует ли уже пользователь с таким логином
+    existing_user = await crud.get_user_by_username(db, user_data.username)
+    if existing_user:
+        logger.warning(f"Попытка регистрации существующего пользователя: {user_data.username}")
+        raise HTTPException(status_code=400, detail="Пользователь с таким логином уже существует")
+    
+    # Хешируем пароль
+    password_hash = hash_password(user_data.password)
+    
+    # Создаем пользователя
+    try:
+        user = await crud.create_user(db, user_data, password_hash)
+        
+        # Генерируем токен
+        token = generate_token()
+        expires_at = get_token_expiry()
+        
+        # Сохраняем токен в БД
+        await crud.update_user_token(db, user.id, token, expires_at)
+        
+        logger.info(f"Пользователь успешно зарегистрирован: {user.username} (id={user.id})")
+        
+        return TokenResponse(
+            token=token,
+            expires_at=expires_at,
+            user=UserResponse(
+                id=user.id,
+                username=user.username,
+                created_at=user.created_at,
+                last_login=user.last_login,
+                is_active=user.is_active
+            )
+        )
+    except Exception as e:
+        logger.error(f"Ошибка при регистрации пользователя {user_data.username}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка при создании пользователя")
+
+
+@app.post("/api/auth/login", response_model=TokenResponse)
+async def login_user(login_data: UserLogin, db: AsyncSession = Depends(get_session)):
+    """
+    Вход пользователя в систему.
+    """
+    logger.info(f"Попытка входа пользователя: {login_data.username}")
+    
+    # Ищем пользователя
+    user = await crud.get_user_by_username(db, login_data.username)
+    if not user:
+        logger.warning(f"Попытка входа несуществующего пользователя: {login_data.username}")
+        raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+    
+    # Проверяем пароль
+    if not verify_password(login_data.password, user.password_hash):
+        logger.warning(f"Неверный пароль для пользователя: {login_data.username}")
+        raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+    
+    # Проверяем активность пользователя
+    if not user.is_active:
+        logger.warning(f"Попытка входа неактивного пользователя: {login_data.username}")
+        raise HTTPException(status_code=401, detail="Пользователь неактивен")
+    
+    # Генерируем новый токен
+    token = generate_token()
+    expires_at = get_token_expiry()
+    
+    # Сохраняем токен в БД
+    await crud.update_user_token(db, user.id, token, expires_at)
+    
+    logger.info(f"Пользователь успешно вошел в систему: {user.username} (id={user.id})")
+    
+    return TokenResponse(
+        token=token,
+        expires_at=expires_at,
+        user=UserResponse(
+            id=user.id,
+            username=user.username,
+            created_at=user.created_at,
+            last_login=user.last_login,
+            is_active=user.is_active
+        )
+    )
+
+
+@app.get("/api/auth/me", response_model=UserResponse)
+async def get_current_user_info(request: Request, db: AsyncSession = Depends(get_session)):
+    """
+    Получение информации о текущем пользователе.
+    """
+    user_id = get_user_id_from_request(request)
+    username = get_username_from_request(request)
+    
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Требуется аутентификация")
+    
+    logger.info(f"Запрос информации о пользователе: {username} (id={user_id})")
+    
+    user = await crud.get_user_by_username(db, username)
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
+    return UserResponse(
+        id=user.id,
+        username=user.username,
+        created_at=user.created_at,
+        last_login=user.last_login,
+        is_active=user.is_active
+    )
 
 @app.get("/api/monitoring/status")
 @graceful_fallback("monitoring_status", cache_key="monitoring_status", cache_ttl=60)

@@ -43,8 +43,12 @@ class Logger(logging.Logger):
     """
     Кастомный логгер с ротацией логов по времени (раз в сутки).
     Используется для записи логов приложения в файл с автоматическим созданием новой версии каждый день.
+    Поддерживает контекст пользователя (user_id).
     """
     def __init__(self, name, log_file, level=logging.INFO):
+        super().__init__(name, level)
+        self.user_id = None  # Контекст пользователя
+        
         """
         Инициализация класса Logger.
 
@@ -101,3 +105,48 @@ class Logger(logging.Logger):
                 except Exception:
                     # Если ничего не работает, просто игнорируем
                     safe_log_error(f"Не удалось создать никакой обработчик для логгера {name}")
+    
+    def set_user_context(self, user_id: int):
+        """
+        Установка контекста пользователя для логгера.
+        
+        Args:
+            user_id (int): ID пользователя
+        """
+        self.user_id = user_id
+    
+    def clear_user_context(self):
+        """
+        Очистка контекста пользователя.
+        """
+        self.user_id = None
+    
+    def _log_with_user_context(self, level, msg, *args, **kwargs):
+        """
+        Логирование с контекстом пользователя.
+        
+        Args:
+            level: Уровень логирования
+            msg: Сообщение
+            *args: Дополнительные аргументы
+            **kwargs: Дополнительные ключевые аргументы
+        """
+        if self.user_id is not None:
+            msg = f"[user_id={self.user_id}] {msg}"
+        super().log(level, msg, *args, **kwargs)
+    
+    def info(self, msg, *args, **kwargs):
+        """Логирование INFO с контекстом пользователя."""
+        self._log_with_user_context(logging.INFO, msg, *args, **kwargs)
+    
+    def warning(self, msg, *args, **kwargs):
+        """Логирование WARNING с контекстом пользователя."""
+        self._log_with_user_context(logging.WARNING, msg, *args, **kwargs)
+    
+    def error(self, msg, *args, **kwargs):
+        """Логирование ERROR с контекстом пользователя."""
+        self._log_with_user_context(logging.ERROR, msg, *args, **kwargs)
+    
+    def debug(self, msg, *args, **kwargs):
+        """Логирование DEBUG с контекстом пользователя."""
+        self._log_with_user_context(logging.DEBUG, msg, *args, **kwargs)

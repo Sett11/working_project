@@ -14,9 +14,116 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from . import models, schemas
 from utils.mylogger import Logger
+from datetime import datetime
 import json
 
 logger = Logger(name=__name__, log_file="db.log")
+
+# --- CRUD-операции для Пользователей (User) ---
+
+async def get_user_by_username(db: AsyncSession, username: str) -> models.User | None:
+    """
+    Получение пользователя по логину.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+        username (str): Логин пользователя.
+
+    Returns:
+        models.User | None: Объект пользователя или None, если пользователь не найден.
+    """
+    logger.info(f"[CRUD] get_user_by_username: username={username}")
+    result = await db.execute(select(models.User).where(models.User.username == username))
+    user = result.scalar_one_or_none()
+    logger.info(f"[CRUD] get_user_by_username: found={bool(user)}")
+    return user
+
+
+async def create_user(db: AsyncSession, user: schemas.UserCreate, password_hash: str) -> models.User:
+    """
+    Создание нового пользователя в базе данных.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+        user (schemas.UserCreate): Pydantic-схема с данными нового пользователя.
+        password_hash (str): Хешированный пароль.
+
+    Returns:
+        models.User: Созданный объект пользователя.
+    """
+    logger.info(f"[CRUD] create_user: username={user.username}")
+    db_user = models.User(
+        username=user.username,
+        password_hash=password_hash
+    )
+    
+    try:
+        db.add(db_user)
+        await db.commit()
+        await db.refresh(db_user)
+        logger.info(f"Пользователь '{user.username}' успешно создан с id={db_user.id}.")
+        return db_user
+    except Exception as e:
+        logger.error(f"Ошибка при создании пользователя '{user.username}': {e}", exc_info=True)
+        await db.rollback()
+        raise
+
+
+async def update_user_token(db: AsyncSession, user_id: int, token: str, expires_at: datetime) -> bool:
+    """
+    Обновление токена пользователя.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+        user_id (int): ID пользователя.
+        token (str): Новый токен.
+        expires_at (datetime): Время истечения токена.
+
+    Returns:
+        bool: True если обновление прошло успешно.
+    """
+    logger.info(f"[CRUD] update_user_token: user_id={user_id}")
+    try:
+        result = await db.execute(
+            select(models.User).where(models.User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            user.current_token = token
+            user.token_expires_at = expires_at
+            user.last_login = datetime.now()
+            await db.commit()
+            logger.info(f"Токен пользователя {user_id} обновлен.")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении токена пользователя {user_id}: {e}", exc_info=True)
+        await db.rollback()
+        raise
+
+
+async def get_user_by_token(db: AsyncSession, token: str) -> models.User | None:
+    """
+    Получение пользователя по токену.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+        token (str): Токен пользователя.
+
+    Returns:
+        models.User | None: Объект пользователя или None, если токен недействителен.
+    """
+    logger.info(f"[CRUD] get_user_by_token: token={token[:10]}...")
+    result = await db.execute(
+        select(models.User).where(
+            models.User.current_token == token,
+            models.User.token_expires_at > datetime.now(),
+            models.User.is_active == True
+        )
+    )
+    user = result.scalar_one_or_none()
+    logger.info(f"[CRUD] get_user_by_token: found={bool(user)}")
+    return user
 
 
 # --- CRUD-операции для Клиентов (Client) ---

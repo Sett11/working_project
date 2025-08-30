@@ -5,7 +5,7 @@
 Он импортирует готовый интерфейс из модуля `front.front` и запускает его,
 делая веб-интерфейс доступным в локальной сети.
 """
-from front.front import interface, logger as frontend_logger
+from front.front_with_auth import interface, logger as frontend_logger
 import nest_asyncio
 from dotenv import load_dotenv
 

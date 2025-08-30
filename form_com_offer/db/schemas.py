@@ -3,7 +3,7 @@
 """
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
-from datetime import date
+from datetime import date, datetime
 from utils.mylogger import Logger
 
 logger = Logger(name=__name__, log_file="db.log")
@@ -51,7 +51,28 @@ class AirConditionerCreate(AirConditionerBase):
 class AirConditioner(AirConditionerBase, OrmBase):
     id: int
 
-# УДАЛЕНО: UserBase, UserCreate, User
+# --- User Schemas ---
+class UserBase(BaseModel):
+    username: str
+
+class UserCreate(UserBase):
+    password: str
+    secret_key: str
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+class UserResponse(UserBase, OrmBase):
+    id: int
+    created_at: datetime
+    last_login: Optional[datetime] = None
+    is_active: bool
+
+class TokenResponse(BaseModel):
+    token: str
+    expires_at: datetime
+    user: UserResponse
 
 class ClientBase(BaseModel):
     full_name: str
