@@ -48,10 +48,6 @@ class Logger(logging.Logger):
     Поддерживает потокобезопасный контекст пользователя (user_id).
     """
     def __init__(self, name, log_file, level=logging.INFO):
-        super().__init__(name, level)
-        # Потокобезопасный контекст пользователя
-        self._user_id_ctx: ContextVar[int | None] = ContextVar("user_id", default=None)
-        
         """
         Инициализация класса Logger.
 
@@ -60,6 +56,9 @@ class Logger(logging.Logger):
         :param level: Уровень логгирования (по умолчанию INFO).
         """
         super().__init__(name, level)
+        # Используем глобальный контекст пользователя из user_context.py
+        from utils.user_context import user_id_var
+        self._user_id_ctx = user_id_var
 
         # Форматтер для логов: время, имя логгера, уровень, сообщение
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -109,26 +108,28 @@ class Logger(logging.Logger):
                     # Если ничего не работает, просто игнорируем
                     safe_log_error(f"Не удалось создать никакой обработчик для логгера {name}")
     
-    def set_user_context(self, user_id: int):
+    def set_user_context(self, user_id: str):
         """
         Установка контекста пользователя для логгера.
         
         Args:
-            user_id (int): ID пользователя
+            user_id (str): Username пользователя или 'system'
             
         Returns:
             Token: Токен контекста для возможности сброса
         """
-        return self._user_id_ctx.set(user_id)
+        from utils.user_context import set_user_id
+        return set_user_id(user_id)
     
     def clear_user_context(self):
         """
-        Очистка контекста пользователя.
+        Очистка контекста пользователя (устанавливает 'system').
         
         Returns:
             Token: Токен контекста для возможности сброса
         """
-        return self._user_id_ctx.set(None)
+        from utils.user_context import clear_user_id
+        return clear_user_id()
     
     def reset_user_context(self, token):
         """
@@ -137,7 +138,8 @@ class Logger(logging.Logger):
         Args:
             token: Токен контекста, полученный от set_user_context или clear_user_context
         """
-        self._user_id_ctx.reset(token)
+        from utils.user_context import reset_user_id
+        reset_user_id(token)
     
     def _log_with_user_context(self, level, msg, *args, **kwargs):
         """
@@ -149,9 +151,10 @@ class Logger(logging.Logger):
             *args: Дополнительные аргументы
             **kwargs: Дополнительные ключевые аргументы
         """
-        user_id = self._user_id_ctx.get()
-        if user_id is not None:
-            msg = f"[user_id={user_id}] {msg}"
+        from utils.user_context import get_user_id
+        user_id = get_user_id()
+        if user_id != "system":
+            msg = f"user_id={user_id} | {msg}"
         super().log(level, msg, *args, **kwargs)
     
     def info(self, msg, *args, **kwargs):
