@@ -22,6 +22,7 @@ services:
       - ./init.sh:/app/init.sh
       - ./main.py:/app/main.py
       - ./requirements.txt:/app/requirements.txt
+      - ./.env:/app/.env
       - seeder_flag:/app/.seeder_flag
     ports:
       - "8001:8001"
@@ -30,6 +31,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - DATABASE_URL_SYNC=postgresql://postgres:postgres@db:5432/form_com_offer_db
+      - SECRET_KEY=${SECRET_KEY}
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
@@ -58,6 +60,9 @@ services:
       - ./commercial_offer_pdf:/app/commercial_offer_pdf
       - ./main.py:/app/main.py
       - ./requirements.txt:/app/requirements.txt
+      - ./.env:/app/.env
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
     ports:
       - "7860:7860"
     depends_on:

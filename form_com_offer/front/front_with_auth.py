@@ -281,6 +281,24 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             gr.update(visible=True)    # main_app_screen
         )
     
+    def auto_navigate_after_auth():
+        """Автоматический переход к приложению после успешной аутентификации."""
+        auth_manager = get_auth_manager()
+        if auth_manager.is_authenticated():
+            return (
+                f"Авторизован как: {auth_manager.username}",
+                gr.update(visible=False),  # proceed_btn
+                gr.update(visible=False),  # auth_screen
+                gr.update(visible=True)    # main_app_screen
+            )
+        else:
+            return (
+                "Не авторизован",
+                gr.update(visible=False),  # proceed_btn
+                gr.update(visible=True),   # auth_screen
+                gr.update(visible=False)   # main_app_screen
+            )
+    
     # Привязка обработчиков аутентификации
     check_auth_btn.click(
         fn=check_authentication,
@@ -292,6 +310,18 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         outputs=[auth_screen, main_app_screen]
     )
     
+    # Автоматическая проверка аутентификации при загрузке
+    auth_interface.load(
+        fn=check_authentication,
+        outputs=[auth_status, proceed_btn, auth_screen, main_app_screen]
+    )
+    
+    # Автоматический переход после успешной аутентификации
+    auth_interface.load(
+        fn=auto_navigate_after_auth,
+        outputs=[auth_status, proceed_btn, auth_screen, main_app_screen]
+    )
+    
     logout_btn.click(
         fn=logout_and_return_to_auth,
         outputs=[auth_status, proceed_btn, auth_screen, main_app_screen]
@@ -299,7 +329,12 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     
     # Обработчики для основного интерфейса (упрощенные версии)
     def show_start():
+        """Показать стартовый экран и скрыть остальные."""
         return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)
+    
+    def show_main_order():
+        """Показать основной экран заказа и скрыть остальные."""
+        return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True)
     
     async def show_orders():
         auth_manager = get_auth_manager()
@@ -326,7 +361,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), [], gr.update(choices=[], value=None), gr.update(visible=True, value=f"Ошибка: {e}")
     
     create_btn.click(
-        fn=show_start,
+        fn=show_main_order,
         outputs=[start_screen, orders_list_screen, main_order_screen]
     )
     

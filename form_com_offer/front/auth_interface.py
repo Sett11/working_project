@@ -94,19 +94,19 @@ def register_user(username: str, password: str, secret_key: str) -> Tuple[str, b
                 user_id=data["user"]["id"]
             )
             logger.info(f"Пользователь успешно зарегистрирован: {username}")
-            return f"Пользователь {username} успешно зарегистрирован и вошел в систему!", True
+            return f"✅ Пользователь {username} успешно зарегистрирован и вошел в систему!\n\nНажмите 'Проверить статус' для перехода к приложению.", True
         else:
             error_data = response.json()
             error_msg = error_data.get("detail", "Неизвестная ошибка")
             logger.warning(f"Ошибка регистрации: {error_msg}")
-            return f"Ошибка регистрации: {error_msg}", False
+            return f"❌ Ошибка регистрации: {error_msg}", False
             
     except httpx.RequestError as e:
         logger.error(f"Ошибка подключения к backend при регистрации: {e}")
-        return "Ошибка подключения к серверу", False
+        return "❌ Ошибка подключения к серверу", False
     except Exception as e:
         logger.error(f"Неожиданная ошибка при регистрации: {e}")
-        return f"Неожиданная ошибка: {str(e)}", False
+        return f"❌ Неожиданная ошибка: {str(e)}", False
 
 
 def login_user(username: str, password: str) -> Tuple[str, bool]:
@@ -125,7 +125,7 @@ def login_user(username: str, password: str) -> Tuple[str, bool]:
         
         # Проверяем входные данные
         if not username or not password:
-            return "Логин и пароль обязательны", False
+            return "❌ Логин и пароль обязательны", False
         
         # Отправляем запрос на вход
         with httpx.Client() as client:
@@ -146,19 +146,19 @@ def login_user(username: str, password: str) -> Tuple[str, bool]:
                 user_id=data["user"]["id"]
             )
             logger.info(f"Пользователь успешно вошел: {username}")
-            return f"Добро пожаловать, {username}!", True
+            return f"✅ Добро пожаловать, {username}!\n\nНажмите 'Проверить статус' для перехода к приложению.", True
         else:
             error_data = response.json()
             error_msg = error_data.get("detail", "Неизвестная ошибка")
             logger.warning(f"Ошибка входа: {error_msg}")
-            return f"Ошибка входа: {error_msg}", False
+            return f"❌ Ошибка входа: {error_msg}", False
             
     except httpx.RequestError as e:
         logger.error(f"Ошибка подключения к backend при входе: {e}")
-        return "Ошибка подключения к серверу", False
+        return "❌ Ошибка подключения к серверу", False
     except Exception as e:
         logger.error(f"Неожиданная ошибка при входе: {e}")
-        return f"Неожиданная ошибка: {str(e)}", False
+        return f"❌ Неожиданная ошибка: {str(e)}", False
 
 
 def logout_user() -> Tuple[str, bool]:
@@ -179,8 +179,21 @@ def create_auth_interface() -> gr.Blocks:
     Returns:
         gr.Blocks: Gradio интерфейс аутентификации
     """
+    
+    def clear_fields():
+        """Очистка полей после успешной аутентификации."""
+        return "", "", "", "", ""  # login_username, login_password, reg_username, reg_password, reg_secret_key
+    
     with gr.Blocks(title="Аутентификация") as auth_interface:
         gr.Markdown("# 🔐 Система аутентификации")
+        
+        # Общий результат для отображения сообщений
+        auth_result = gr.Textbox(
+            label="Результат",
+            interactive=False,
+            visible=True,
+            lines=2
+        )
         
         with gr.Row():
             with gr.Column(scale=1):
@@ -200,11 +213,6 @@ def create_auth_interface() -> gr.Blocks:
                 )
                 
                 login_btn = gr.Button("Войти", variant="primary")
-                login_output = gr.Textbox(
-                    label="Результат",
-                    interactive=False,
-                    visible=False
-                )
             
             with gr.Column(scale=1):
                 gr.Markdown("### Регистрация")
@@ -230,25 +238,26 @@ def create_auth_interface() -> gr.Blocks:
                 )
                 
                 reg_btn = gr.Button("Зарегистрироваться", variant="secondary")
-                reg_output = gr.Textbox(
-                    label="Результат",
-                    interactive=False,
-                    visible=False
-                )
         
         # Обработчики событий
         login_btn.click(
             fn=login_user,
             inputs=[login_username, login_password],
-            outputs=[login_output],
+            outputs=[auth_result],
             show_progress=True
+        ).then(
+            fn=clear_fields,
+            outputs=[login_username, login_password, reg_username, reg_password, reg_secret_key]
         )
         
         reg_btn.click(
             fn=register_user,
             inputs=[reg_username, reg_password, reg_secret_key],
-            outputs=[reg_output],
+            outputs=[auth_result],
             show_progress=True
+        ).then(
+            fn=clear_fields,
+            outputs=[login_username, login_password, reg_username, reg_password, reg_secret_key]
         )
     
     return auth_interface

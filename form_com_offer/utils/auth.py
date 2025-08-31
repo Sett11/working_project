@@ -15,6 +15,13 @@ import os
 from typing import Optional
 from utils.mylogger import Logger
 
+# Загружаем переменные окружения
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv может быть не установлен
+
 logger = Logger(name=__name__, log_file="auth.log")
 
 

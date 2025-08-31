@@ -35,23 +35,21 @@ async def get_current_user(request: Request) -> Optional[dict]:
     if not token:
         return None
     
-    # Получаем сессию БД
-    db: AsyncSession = next(get_session())
-    try:
-        # Ищем пользователя по токену
-        user = await crud.get_user_by_token(db, token)
-        if user:
-            return {
-                "id": user.id,
-                "username": user.username,
-                "is_active": user.is_active
-            }
-        return None
-    except Exception as e:
-        logger.error(f"Ошибка при получении пользователя: {e}")
-        return None
-    finally:
-        await db.close()
+    # Получаем сессию БД с использованием асинхронного контекстного менеджера
+    async with get_session() as db:
+        try:
+            # Ищем пользователя по токену
+            user = await crud.get_user_by_token(db, token)
+            if user:
+                return {
+                    "id": user.id,
+                    "username": user.username,
+                    "is_active": user.is_active
+                }
+            return None
+        except Exception as e:
+            logger.error(f"Ошибка при получении пользователя: {e}")
+            return None
 
 
 async def auth_middleware(request: Request, call_next):

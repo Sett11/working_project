@@ -6,12 +6,14 @@
 - Автоматическое создание директории для логов
 - Унифицированный формат логирования
 - Безопасная обработка ошибок при создании файловых обработчиков
+- Потокобезопасный контекст пользователя с использованием ContextVar
 """
 import logging
 from logging.handlers import TimedRotatingFileHandler
 import os
 from pathlib import Path
 import sys
+from contextvars import ContextVar
 
 def ensure_log_directory(log_file):
     """
@@ -43,11 +45,12 @@ class Logger(logging.Logger):
     """
     Кастомный логгер с ротацией логов по времени (раз в сутки).
     Используется для записи логов приложения в файл с автоматическим созданием новой версии каждый день.
-    Поддерживает контекст пользователя (user_id).
+    Поддерживает потокобезопасный контекст пользователя (user_id).
     """
     def __init__(self, name, log_file, level=logging.INFO):
         super().__init__(name, level)
-        self.user_id = None  # Контекст пользователя
+        # Потокобезопасный контекст пользователя
+        self._user_id_ctx: ContextVar[int | None] = ContextVar("user_id", default=None)
         
         """
         Инициализация класса Logger.
@@ -112,14 +115,29 @@ class Logger(logging.Logger):
         
         Args:
             user_id (int): ID пользователя
+            
+        Returns:
+            Token: Токен контекста для возможности сброса
         """
-        self.user_id = user_id
+        return self._user_id_ctx.set(user_id)
     
     def clear_user_context(self):
         """
         Очистка контекста пользователя.
+        
+        Returns:
+            Token: Токен контекста для возможности сброса
         """
-        self.user_id = None
+        return self._user_id_ctx.set(None)
+    
+    def reset_user_context(self, token):
+        """
+        Сброс контекста пользователя к предыдущему значению.
+        
+        Args:
+            token: Токен контекста, полученный от set_user_context или clear_user_context
+        """
+        self._user_id_ctx.reset(token)
     
     def _log_with_user_context(self, level, msg, *args, **kwargs):
         """
@@ -131,8 +149,9 @@ class Logger(logging.Logger):
             *args: Дополнительные аргументы
             **kwargs: Дополнительные ключевые аргументы
         """
-        if self.user_id is not None:
-            msg = f"[user_id={self.user_id}] {msg}"
+        user_id = self._user_id_ctx.get()
+        if user_id is not None:
+            msg = f"[user_id={user_id}] {msg}"
         super().log(level, msg, *args, **kwargs)
     
     def info(self, msg, *args, **kwargs):
