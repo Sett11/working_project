@@ -780,6 +780,7 @@ async def get_all_orders_list(db: AsyncSession = Depends(get_session)):
     Возвращает объединенный список всех заказов (обычных и составных) для фронта.
     """
     try:
+        logger.info("=== /api/all_orders/ вызван ===")
         # Получаем обычные заказы
         result = await db.execute(select(crud.models.Order))
         orders = result.scalars().all()
@@ -794,6 +795,7 @@ async def get_all_orders_list(db: AsyncSession = Depends(get_session)):
         
         # Добавляем обычные заказы
         for order in orders:
+            logger.info(f"Обрабатываем обычный заказ id={order.id}")
             order_data = json.loads(order.order_data)
             client_data = order_data.get("client_data", {})
             all_orders.append({
@@ -808,6 +810,7 @@ async def get_all_orders_list(db: AsyncSession = Depends(get_session)):
         
         # Добавляем составные заказы
         for order in compose_orders:
+            logger.info(f"Обрабатываем составной заказ id={order.id}")
             compose_order_data = json.loads(order.compose_order_data)
             client_data = compose_order_data.get("client_data", {})
             all_orders.append({
@@ -824,6 +827,7 @@ async def get_all_orders_list(db: AsyncSession = Depends(get_session)):
         all_orders.sort(key=lambda x: x["created_at"], reverse=True)
         
         logger.info(f"Отправлен объединенный список заказов: {len(all_orders)} заказов")
+        logger.info(f"Детали заказов: {all_orders}")
         return all_orders
     except Exception as e:
         logger.error(f"Ошибка при получении объединенного списка заказов: {e}", exc_info=True)

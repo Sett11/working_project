@@ -9,7 +9,7 @@
 import gradio as gr
 import httpx
 import json
-from typing import Optional, Tuple
+from typing import Optional
 from utils.mylogger import Logger
 
 logger = Logger(name=__name__, log_file="frontend.log")
@@ -55,7 +55,7 @@ class AuthManager:
 auth_manager = AuthManager()
 
 
-def register_user(username: str, password: str, secret_key: str) -> Tuple[str, bool]:
+def register_user(username: str, password: str, secret_key: str) -> str:
     """
     Регистрация нового пользователя.
     
@@ -65,14 +65,14 @@ def register_user(username: str, password: str, secret_key: str) -> Tuple[str, b
         secret_key: Секретный ключ
         
     Returns:
-        Tuple[str, bool]: (сообщение, успех)
+        str: Сообщение о результате
     """
     try:
         logger.info(f"Попытка регистрации пользователя: {username}")
         
         # Проверяем входные данные
         if not username or not password or not secret_key:
-            return "Все поля обязательны для заполнения", False
+            return "❌ Все поля обязательны для заполнения"
         
         # Отправляем запрос на регистрацию
         with httpx.Client() as client:
@@ -94,22 +94,22 @@ def register_user(username: str, password: str, secret_key: str) -> Tuple[str, b
                 user_id=data["user"]["id"]
             )
             logger.info(f"Пользователь успешно зарегистрирован: {username}")
-            return f"✅ Пользователь {username} успешно зарегистрирован и вошел в систему!\n\nНажмите 'Проверить статус' для перехода к приложению.", True
+            return f"✅ Пользователь {username} успешно зарегистрирован и вошел в систему!\n\nНажмите 'Проверить статус' для перехода к приложению."
         else:
             error_data = response.json()
             error_msg = error_data.get("detail", "Неизвестная ошибка")
             logger.warning(f"Ошибка регистрации: {error_msg}")
-            return f"❌ Ошибка регистрации: {error_msg}", False
+            return f"❌ Ошибка регистрации: {error_msg}"
             
     except httpx.RequestError as e:
         logger.error(f"Ошибка подключения к backend при регистрации: {e}")
-        return "❌ Ошибка подключения к серверу", False
+        return "❌ Ошибка подключения к серверу"
     except Exception as e:
         logger.error(f"Неожиданная ошибка при регистрации: {e}")
-        return f"❌ Неожиданная ошибка: {str(e)}", False
+        return f"❌ Неожиданная ошибка: {str(e)}"
 
 
-def login_user(username: str, password: str) -> Tuple[str, bool]:
+def login_user(username: str, password: str) -> str:
     """
     Вход пользователя в систему.
     
@@ -118,14 +118,14 @@ def login_user(username: str, password: str) -> Tuple[str, bool]:
         password: Пароль
         
     Returns:
-        Tuple[str, bool]: (сообщение, успех)
+        str: Сообщение о результате
     """
     try:
         logger.info(f"Попытка входа пользователя: {username}")
         
         # Проверяем входные данные
         if not username or not password:
-            return "❌ Логин и пароль обязательны", False
+            return "❌ Логин и пароль обязательны"
         
         # Отправляем запрос на вход
         with httpx.Client() as client:
@@ -146,30 +146,30 @@ def login_user(username: str, password: str) -> Tuple[str, bool]:
                 user_id=data["user"]["id"]
             )
             logger.info(f"Пользователь успешно вошел: {username}")
-            return f"✅ Добро пожаловать, {username}!\n\nНажмите 'Проверить статус' для перехода к приложению.", True
+            return f"✅ Добро пожаловать, {username}!\n\nНажмите 'Проверить статус' для перехода к приложению."
         else:
             error_data = response.json()
             error_msg = error_data.get("detail", "Неизвестная ошибка")
             logger.warning(f"Ошибка входа: {error_msg}")
-            return f"❌ Ошибка входа: {error_msg}", False
+            return f"❌ Ошибка входа: {error_msg}"
             
     except httpx.RequestError as e:
         logger.error(f"Ошибка подключения к backend при входе: {e}")
-        return "❌ Ошибка подключения к серверу", False
+        return "❌ Ошибка подключения к серверу"
     except Exception as e:
         logger.error(f"Неожиданная ошибка при входе: {e}")
-        return f"❌ Неожиданная ошибка: {str(e)}", False
+        return f"❌ Неожиданная ошибка: {str(e)}"
 
 
-def logout_user() -> Tuple[str, bool]:
+def logout_user() -> str:
     """
     Выход пользователя из системы.
     
     Returns:
-        Tuple[str, bool]: (сообщение, успех)
+        str: Сообщение о результате
     """
     auth_manager.clear_auth_data()
-    return "Вы успешно вышли из системы", True
+    return "✅ Вы успешно вышли из системы"
 
 
 def create_auth_interface() -> gr.Blocks:

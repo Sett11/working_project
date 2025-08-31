@@ -10,7 +10,7 @@ from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
-from db.database import get_session
+from db.database import AsyncSessionLocal
 from db import crud
 from utils.auth import extract_token_from_header
 from utils.mylogger import Logger
@@ -35,8 +35,8 @@ async def get_current_user(request: Request) -> Optional[dict]:
     if not token:
         return None
     
-    # Получаем сессию БД с использованием асинхронного контекстного менеджера
-    async with get_session() as db:
+    # Получаем сессию БД напрямую
+    async with AsyncSessionLocal() as db:
         try:
             # Ищем пользователя по токену
             user = await crud.get_user_by_token(db, token)
