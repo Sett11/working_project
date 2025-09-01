@@ -56,9 +56,6 @@ class Logger(logging.Logger):
         :param level: Уровень логгирования (по умолчанию INFO).
         """
         super().__init__(name, level)
-        # Используем глобальный контекст пользователя из user_context.py
-        from utils.user_context import user_id_var
-        self._user_id_ctx = user_id_var
 
         # Форматтер для логов: время, имя логгера, уровень, сообщение
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')

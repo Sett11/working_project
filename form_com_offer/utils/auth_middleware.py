@@ -15,7 +15,7 @@ from db.database import AsyncSessionLocal
 from db import crud
 from utils.auth import extract_token_from_header
 from utils.mylogger import Logger
-from utils.user_context import set_user_id
+from utils.user_context import set_user_id, reset_user_id
 
 logger = Logger(name=__name__, log_file="auth.log")
 
@@ -68,22 +68,30 @@ async def auth_middleware(request: Request, call_next):
     # Исключаем эндпоинты аутентификации из проверки
     auth_paths = ['/api/auth/register', '/api/auth/login', '/docs', '/openapi.json', '/health']
     if any(request.url.path.startswith(path) for path in auth_paths):
-        # Устанавливаем user_id=system для неавторизованных запросов
-        set_user_id("system")
-        response = await call_next(request)
-        return response
+        # Сохраняем текущий контекст и устанавливаем user_id=system для неавторизованных запросов
+        context_token = set_user_id("system")
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            # Восстанавливаем предыдущий контекст
+            reset_user_id(context_token)
     
     # Получаем пользователя
     user = await get_current_user(request)
     
     if not user:
-        # Устанавливаем user_id=system для неавторизованных запросов
-        set_user_id("system")
-        logger.warning(f"Неавторизованный доступ к {request.url.path}")
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"detail": "Требуется аутентификация"}
-        )
+        # Сохраняем текущий контекст и устанавливаем user_id=system для неавторизованных запросов
+        context_token = set_user_id("system")
+        try:
+            logger.warning(f"Неавторизованный доступ к {request.url.path}")
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"detail": "Требуется аутентификация"}
+            )
+        finally:
+            # Восстанавливаем предыдущий контекст
+            reset_user_id(context_token)
     
     # Устанавливаем user_id в контекст логгера
     set_user_id(user["username"])

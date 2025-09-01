@@ -8,7 +8,9 @@ __pycache__/
 /.cursor
 /old_app_logs
 /old_app_logs/*
-
+old_app_logs
+old_app_logs/*
+postgres_data
 # Environments
 .env
 .venv
