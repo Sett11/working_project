@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Включаем Bash strict-mode для безопасного выполнения
+set -euo pipefail
+IFS=$'\n\t'
+
 # Скрипт для мониторинга состояния PostgreSQL базы данных
 # Использование: ./monitor_db.sh
 
@@ -12,34 +16,44 @@ MONITORING_ENABLED="${MONITORING_ENABLED:-true}"
 MONITORING_INTERVAL="${MONITORING_INTERVAL:-300}"
 MONITORING_LOG_QUERIES="${MONITORING_LOG_QUERIES:-true}"
 
-echo "🔍 Мониторинг состояния базы данных $DB_NAME"
-echo "================================================"
-echo "🔧 Настройки: мониторинг=$MONITORING_ENABLED, интервал=${MONITORING_INTERVAL}с"
+# Определяем user_id для логирования (по умолчанию 'root_app' для системных операций)
+USER_ID="${USER_ID:-root_app}"
+
+# Функция логирования с user_id
+log_message() {
+    local level="$1"
+    local message="$2"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - user_id=${USER_ID} | [MONITOR] ${level}: ${message}"
+}
+
+log_message "INFO" "🔍 Мониторинг состояния базы данных $DB_NAME"
+log_message "INFO" "================================================"
+log_message "INFO" "🔧 Настройки: мониторинг=$MONITORING_ENABLED, интервал=${MONITORING_INTERVAL}с"
 
 # Проверяем подключение к БД
-echo "📡 Проверка подключения к БД..."
+log_message "INFO" "📡 Проверка подключения к БД..."
 if pg_isready -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -U "$DB_USER" >/dev/null 2>&1; then
-    echo "✅ Подключение к БД успешно"
+    log_message "INFO" "✅ Подключение к БД успешно"
 else
-    echo "❌ Ошибка подключения к БД"
+    log_message "ERROR" "❌ Ошибка подключения к БД"
     exit 1
 fi
 
 # Получаем информацию о размере БД
-echo ""
-echo "📊 Информация о размере БД:"
+log_message "INFO" ""
+log_message "INFO" "📊 Информация о размере БД:"
 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "
 SELECT 
     pg_size_pretty(pg_database_size('$DB_NAME')) as database_size,
-    pg_size_pretty(pg_total_relation_size('clients')) as clients_table_size,
-    pg_size_pretty(pg_total_relation_size('orders')) as orders_table_size,
-    pg_size_pretty(pg_total_relation_size('air_conditioners')) as air_conditioners_table_size,
-    pg_size_pretty(pg_total_relation_size('components')) as components_table_size;
+    pg_size_pretty(COALESCE(pg_total_relation_size(to_regclass('clients')), 0)) as clients_table_size,
+    pg_size_pretty(COALESCE(pg_total_relation_size(to_regclass('orders')), 0)) as orders_table_size,
+    pg_size_pretty(COALESCE(pg_total_relation_size(to_regclass('air_conditioners')), 0)) as air_conditioners_table_size,
+    pg_size_pretty(COALESCE(pg_total_relation_size(to_regclass('components')), 0)) as components_table_size;
 "
 
 # Получаем статистику подключений
-echo ""
-echo "🔗 Статистика подключений:"
+log_message "INFO" ""
+log_message "INFO" "🔗 Статистика подключений:"
 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "
 SELECT 
     count(*) as active_connections,
@@ -51,25 +65,33 @@ WHERE state = 'active';
 
 # Получаем информацию о медленных запросах (если включено)
 if [ "$MONITORING_LOG_QUERIES" = "true" ]; then
-    echo ""
-    echo "🐌 Медленные запросы (последние 10):"
-    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "
-    SELECT 
-        query,
-        calls,
-        total_time,
-        mean_time,
-        rows
-    FROM pg_stat_statements 
-    WHERE query NOT LIKE '%pg_stat_statements%'
-    ORDER BY mean_time DESC 
-    LIMIT 10;
-    "
+    log_message "INFO" ""
+    log_message "INFO" "🐌 Медленные запросы (последние 10):"
+    
+    # Проверяем наличие расширения pg_stat_statements
+    if psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "
+        SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements';
+    " | grep -q "1"; then
+        psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "
+        SELECT 
+            query,
+            calls,
+            total_time,
+            mean_time,
+            rows
+        FROM pg_stat_statements 
+        WHERE query NOT LIKE '%pg_stat_statements%'
+        ORDER BY mean_time DESC 
+        LIMIT 10;
+        "
+    else
+        log_message "INFO" "ℹ️  pg_stat_statements не установлено, пропускаем медленные запросы"
+    fi
 fi
 
 # Получаем информацию о блокировках
-echo ""
-echo "🔒 Активные блокировки:"
+log_message "INFO" ""
+log_message "INFO" "🔒 Активные блокировки:"
 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "
 SELECT 
     locktype,
@@ -78,12 +100,12 @@ SELECT
     mode,
     granted
 FROM pg_locks 
-WHERE NOT granted OR locktype != 'relation';
+WHERE NOT granted OR locktype = 'relation';
 "
 
 # Получаем информацию о вакууме
-echo ""
-echo "🧹 Статистика автовакуума:"
+log_message "INFO" ""
+log_message "INFO" "🧹 Статистика автовакуума:"
 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "
 SELECT 
     schemaname,
