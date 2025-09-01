@@ -11,6 +11,9 @@ __pycache__/
 old_app_logs
 old_app_logs/*
 postgres_data
+backups
+grafana_data
+prometheus_data
 # Environments
 .env
 .venv

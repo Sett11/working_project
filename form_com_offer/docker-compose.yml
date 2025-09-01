@@ -64,7 +64,7 @@ services:
       - ./db/db_utils:/db_utils  # Утилиты для управления БД
       - backups:/backups  # Именованный том для резервных копий
     ports:
-      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+      - "${POSTGRES_PORT}:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
