@@ -77,6 +77,16 @@ async def auth_middleware(request: Request, call_next):
             # Восстанавливаем предыдущий контекст
             reset_user_id(context_token)
     
+    # Делаем публичными эндпоинты мониторинга
+    monitoring_prefixes = ['/api/monitoring', '/api/graceful-degradation']
+    if any(request.url.path.startswith(prefix) for prefix in monitoring_prefixes):
+        context_token = set_user_id("system")
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            reset_user_id(context_token)
+    
     # Получаем пользователя
     user = await get_current_user(request)
     

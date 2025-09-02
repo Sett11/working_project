@@ -6,6 +6,7 @@ monitoring/
 .gitignore
 README.md
 README_DEPLOYMENT.md
+README_POWERSHELL.md
 *.log
 __pycache__/
 *.pyc
@@ -13,9 +14,6 @@ __pycache__/
 .venv/
 venv/
 
-# Скрипты развертывания (удалены)
-# start_with_fix.sh
-# fix_postgres.sh
 
 # НЕ исключаем pip.conf - он нужен для установки зависимостей
 !pip.conf
