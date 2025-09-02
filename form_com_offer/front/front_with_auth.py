@@ -399,17 +399,13 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         if not auth_manager.is_authenticated():
             return build_error_response("Требуется аутентификация", len(components_ui_inputs))
         
-        logger.info(f"[DEBUG] load_selected_order_with_auth: selected={selected}")
         if not selected:
-            logger.info(f"[DEBUG] load_selected_order_with_auth: error - не выбран заказ")
             return build_error_response("Пожалуйста, выберите заказ для загрузки", len(components_ui_inputs))
         
         # Извлекаем ID и тип заказа из строки
         parts = selected.split("|")
         order_id = int(parts[0].strip())
         order_type = parts[1].strip() if len(parts) > 1 else "Order"
-        
-        logger.info(f"[DEBUG] load_selected_order_with_auth: order_id={order_id}, order_type={order_type}")
         
         if order_type == "Compose":
             # Загружаем составной заказ
@@ -423,7 +419,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     resp.raise_for_status()
                     order = resp.json()
                 
-                logger.info(f"[DEBUG] load_selected_order_with_auth: loaded order={order}")
+
                 placeholder = get_placeholder_order()
                 updates, _, comment_value = fill_fields_from_order_diff(order, placeholder)
                 comp_updates = fill_components_fields_from_order(order, {"components": components_catalog_for_ui if components_catalog_for_ui else COMPONENTS_CATALOG.get("components", [])})
@@ -444,7 +440,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
 
     async def load_compose_order_with_auth(order_id):
         """Загружает составной заказ в вкладку 'Формирование составного заказа' с аутентификацией"""
-        logger.info(f"[DEBUG] load_compose_order_with_auth: order_id={order_id}, type={type(order_id)}")
+
         
         auth_manager = get_auth_manager()
         if not auth_manager.is_authenticated():
@@ -458,7 +454,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 resp.raise_for_status()
                 compose_order_data = resp.json()
             
-            logger.info(f"[DEBUG] load_compose_order_with_auth: loaded compose_order_data={compose_order_data}")
+
             
             if "error" in compose_order_data:
                 result = [gr.update(visible=True, value=f"Ошибка: {compose_order_data['error']}"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(21)] + [gr.update() for _ in components_ui_inputs] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()] + [gr.update() for _ in range(21)] + [gr.update(value=""), gr.update(value=""), gr.update(value="0"), gr.update(value=""), gr.update(value="")]
@@ -477,7 +473,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             
             # Если order_params пустой или не содержит нужных полей, используем данные из первого кондиционера
             if not general_order_params or "visit_date" not in general_order_params or "discount" not in general_order_params:
-                logger.info("[DEBUG] load_compose_order_with_auth: order_params пустой или неполный, берем данные из первого кондиционера")
+
                 
                 # Извлекаем данные из первого кондиционера
                 airs = compose_order_data.get("airs", [])
@@ -549,7 +545,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             
             # Возвращаем обновления в правильном порядке
             # Формат: [load_error(1), orders_list_screen(1), main_order_screen(1), обычные_поля(22), components, comment(5), compose_поля(22), compose_статусы(4)]
-            logger.info(f"[DEBUG] load_compose_order_with_auth: setting compose_order_id_hidden to {order_id}")
+            
             result = [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + [gr.update() for _ in range(21)] + comp_updates + [gr.update(value=comment_value), gr.update(value=""), gr.update(value=order_id), gr.update(value=compose_order_data), gr.update(value=order_id)] + compose_fields_updates + [gr.update(value=""), order_id, gr.update(value="0"), gr.update(value=""), gr.update(value="")]
             
             # Дополняем до нужного количества
@@ -672,7 +668,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             return "Требуется аутентификация", order_id_hidden_value
         
         order_id = compose_order_id_hidden_value if compose_order_id_hidden_value and compose_order_id_hidden_value != 0 else order_id_hidden_value
-        logger.info(f"[DEBUG] save_components_with_auth: order_id_hidden_value={order_id_hidden_value}, compose_order_id_hidden_value={compose_order_id_hidden_value}, using order_id={order_id}")
+
         
         selected_components = []
         i = 0
@@ -916,16 +912,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
 
     async def save_compose_order_with_auth(compose_order_id_hidden_value, client_name, client_phone, client_mail, client_address, visit_date, room_area, room_type, discount, wifi, inverter, price_limit, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price):
         """Сохранение данных кондиционера для составного заказа с аутентификацией."""
-        logger.info(f"[DEBUG] save_compose_order_with_auth: compose_order_id_hidden_value={compose_order_id_hidden_value}, type={type(compose_order_id_hidden_value)}")
+
         
         auth_manager = get_auth_manager()
         if not auth_manager.is_authenticated():
             return "Требуется аутентификация", None, None, "0"
         
         if not compose_order_id_hidden_value or compose_order_id_hidden_value <= 0:
-            logger.error(f"[DEBUG] save_compose_order_with_auth: compose_order_id_hidden_value is invalid: {compose_order_id_hidden_value}, type: {type(compose_order_id_hidden_value)}")
-            logger.error(f"[DEBUG] save_compose_order_with_auth: compose_order_id_hidden_value == 0: {compose_order_id_hidden_value == 0}")
-            logger.error(f"[DEBUG] save_compose_order_with_auth: compose_order_id_hidden_value is None: {compose_order_id_hidden_value is None}")
+            
             return "Ошибка: сначала сохраните данные клиента!", None, None, "0"
         
         try:
@@ -989,7 +983,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     return f"Ошибка: {current_order_data['error']}", compose_order_id_hidden_value, compose_order_id_hidden_value, "0"
                 
                 existing_airs = current_order_data.get("airs", [])
-                logger.info(f"[DEBUG] save_compose_order_with_auth: existing_airs count={len(existing_airs)}")
+
                 
                 if len(existing_airs) == 0:
                     # Создаем первый кондиционер
@@ -1184,7 +1178,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 if data.get("success"):
                     aircon_count = data.get("aircon_count", 0)
                     msg = f"Пожалуйста, введите данные для следующего кондиционера"
-                    logger.info(f"[DEBUG] add_next_aircon_with_auth: успешно добавлен кондиционер, всего: {aircon_count}")
+    
                     return (msg, order_id, order_id, str(aircon_count), 
                            gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),
                            50, "квартира", gr.update(), False, False, 10000,
@@ -1192,7 +1186,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                            0, 0, 0, "Любой", 0)
                 else:
                     error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
-                    logger.error(f"[DEBUG] add_next_aircon_with_auth: ошибка: {error_msg}")
+    
                     return (f"Ошибка: {error_msg}", order_id_hidden_value, order_id_hidden_value, "0",
                            gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),
                            50, "квартира", gr.update(), False, False, 10000,

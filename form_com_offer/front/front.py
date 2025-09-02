@@ -385,7 +385,7 @@ def fill_fields_from_order(order):
         values.append(comp.get("selected", False))
         values.append(comp.get("qty", 0))
         values.append(comp.get("length", 0.0))
-    logger.info(f"[DEBUG] fill_fields_from_order: values count={len(values)}; values={values}")
+    
     return [gr.update(value=v) for v in values], order.get("comment", "Оставьте комментарий...")
 
 def fill_fields_from_order_diff(order, placeholder):
@@ -439,7 +439,7 @@ def fill_fields_from_order_diff(order, placeholder):
                 comp_diffs.append(gr.update())
     # ИСПРАВЛЕНИЕ: Загружаем комментарий из заказа
     comment_value = order.get("comment", "Оставьте комментарий...")
-    logger.info(f"[DEBUG] fill_fields_from_order_diff: comment_value={comment_value}")
+    
     return updates, comp_diffs, comment_value
 
 def update_components_tab(order_state):
@@ -454,12 +454,10 @@ def update_components_tab(order_state):
             oname = c.get("name", "").replace(" ", "").lower()
             if cname == oname:
                 found = c
-                logger.info(f"[DEBUG] update_components_tab: match catalog='{catalog_comp.get('name')}' <-> order='{c.get('name')}'")
                 break
         updates.append(gr.update(value=found.get("selected", False) if found else False))
         updates.append(gr.update(value=int(found.get("qty", 0)) if found else 0))
         updates.append(gr.update(value=int(found.get("length", 0)) if found else 0))
-    logger.info(f"[DEBUG] update_components_tab: обновляю {len(updates)} полей комплектующих (по имени, нечувствительно к регистру и пробелам)")
     return updates
 
 # --- Новый подход: управление экранами через screen_state и gr.Group(visible=...) ---
@@ -478,18 +476,14 @@ def fill_components_fields_from_order(order, components_catalog):
     """
     updates = []
     order_components = order.get("components", [])
-    logger.info(f"[DEBUG] fill_components_fields_from_order: order_components={order_components}")
-    
     # ИСПРАВЛЕНИЕ: Всегда используем components_catalog_for_ui если он доступен
     if ('components_catalog_for_ui' in globals() and 
         components_catalog_for_ui and 
         len(components_catalog_for_ui) > 0):
         catalog_components = components_catalog_for_ui
-        logger.info(f"[DEBUG] fill_components_fields_from_order: using components_catalog_for_ui with {len(catalog_components)} components")
 
     else:
         catalog_components = components_catalog.get("components", [])
-        logger.info(f"[DEBUG] fill_components_fields_from_order: using components_catalog with {len(catalog_components)} components")
     
     # ИСПРАВЛЕНИЕ: Обрабатываем ВСЕ компоненты из каталога
     for i, catalog_comp in enumerate(catalog_components):
@@ -512,15 +506,9 @@ def fill_components_fields_from_order(order, components_catalog):
                 updates.append(gr.update(value=0))
                 updates.append(gr.update(value=0.0))
     
-    logger.info(f"[DEBUG] fill_components_fields_from_order: generated {len(updates)} updates")
-    logger.info(f"[DEBUG] fill_components_fields_from_order: expected updates = {len(catalog_components) * 3}")
-    logger.info(f"[DEBUG] fill_components_fields_from_order: components_catalog_for_ui length = {len(components_catalog_for_ui) if 'components_catalog_for_ui' in globals() else 'NOT_DEFINED'}")
-    logger.info(f"[DEBUG] fill_components_fields_from_order: COMPONENTS_CATALOG length = {len(COMPONENTS_CATALOG.get('components', []))}")
-    
     # ИСПРАВЛЕНИЕ: Проверяем, что количество обновлений соответствует ожидаемому
     expected_count = len(catalog_components) * 3
     if len(updates) != expected_count:
-        logger.warning(f"[DEBUG] fill_components_fields_from_order: WARNING! Generated {len(updates)} updates, expected {expected_count}")
         # Дополняем до нужного количества с защитой от бесконечного цикла
         max_iterations = expected_count * 2  # Защита от бесконечного цикла
         iteration_count = 0
@@ -530,8 +518,7 @@ def fill_components_fields_from_order(order, components_catalog):
             updates.append(gr.update(value=0.0))
             iteration_count += 1
         if iteration_count >= max_iterations:
-            logger.error(f"[DEBUG] fill_components_fields_from_order: CRITICAL! Infinite loop protection triggered")
-        logger.info(f"[DEBUG] fill_components_fields_from_order: After padding: {len(updates)} updates")
+            logger.error(f"CRITICAL! Infinite loop protection triggered")
     
     return updates
 
@@ -634,13 +621,10 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                     length_input = gr.Number(visible=False)
                             # ИСПРАВЛЕНИЕ: Проверяем, что добавляем только объекты Gradio
                             if checkbox is None or qty_input is None or length_input is None:
-                                logger.error(f"[DEBUG] UI creation: ERROR - one of the inputs is None for component {comp.get('name')}")
                                 continue
                             
                             # Проверяем типы объектов
                             if not hasattr(checkbox, '_id') or not hasattr(qty_input, '_id') or not hasattr(length_input, '_id'):
-                                logger.error(f"[DEBUG] UI creation: ERROR - one of the inputs is not a Gradio object for component {comp.get('name')}")
-                                logger.error(f"[DEBUG] UI creation: checkbox type: {type(checkbox)}, qty_input type: {type(qty_input)}, length_input type: {type(length_input)}")
                                 continue
                             
                             components_ui_inputs.extend([checkbox, qty_input, length_input])
@@ -761,12 +745,10 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             f"{o['id']} | {o.get('order_type', 'Order')} | {o['client_name']} | {o.get('address', 'Адрес клиента')} | {o['created_at']} | {o['status']}"
             for o in orders_sorted
         ]
-        logger.info(f"[DEBUG] show_orders: choices={choices}")
+
         return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), order_state.value, gr.update(choices=choices, value=None), gr.update(visible=False, value=""), gr.update(value=None)
     async def load_selected_order(selected):
-        logger.info(f"[DEBUG] load_selected_order: selected={selected}")
         if not selected:
-            logger.info(f"[DEBUG] load_selected_order: error - не выбран заказ")
             return build_error_response("Пожалуйста, выберите заказ для загрузки", len(components_ui_inputs))
         
         # Извлекаем ID и тип заказа из строки
@@ -774,15 +756,12 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         order_id = int(parts[0].strip())
         order_type = parts[1].strip() if len(parts) > 1 else "Order"
         
-        logger.info(f"[DEBUG] load_selected_order: order_id={order_id}, order_type={order_type}")
-        
         if order_type == "Compose":
             # Загружаем составной заказ
             return await load_compose_order(order_id)
         else:
             # Загружаем обычный заказ
             order = await fetch_order_data(order_id)
-            logger.info(f"[DEBUG] load_selected_order: loaded order={order}")
             placeholder = get_placeholder_order()
             updates, _, comment_value = fill_fields_from_order_diff(order, placeholder)
             # Для обычных заказов используем fill_components_fields_from_order с components_catalog_for_ui
@@ -791,7 +770,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             components_count = len(components_catalog_for_ui if 'components_catalog_for_ui' in globals() and components_catalog_for_ui else COMPONENTS_CATALOG.get("components", [])) * 3
             # Проверяем, что comp_updates имеет правильную длину
             if len(comp_updates) != components_count:
-                logger.warning(f"[DEBUG] load_selected_order: comp_updates length ({len(comp_updates)}) != expected ({components_count})")
                 # Дополняем comp_updates до нужной длины с защитой от бесконечного цикла
                 max_iterations = components_count * 2  # Защита от бесконечного цикла
                 iteration_count = 0
@@ -799,14 +777,13 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     comp_updates.append(gr.update())
                     iteration_count += 1
                 if iteration_count >= max_iterations:
-                    logger.error(f"[DEBUG] load_selected_order: CRITICAL! Infinite loop protection triggered for comp_updates")
+                    logger.error(f"CRITICAL! Infinite loop protection triggered for comp_updates")
             # ИСПРАВЛЕНИЕ: Правильное количество compose полей (21, а не 22)
             result = [gr.update(visible=False, value=""), gr.update(visible=False), gr.update(visible=True)] + updates + comp_updates + [gr.update(value=comment_value), gr.update(value=""), gr.update(value=order.get("id")), gr.update(value=order), gr.update(value=order.get("id"))] + [gr.update() for _ in range(21)] + [gr.update(value=""), gr.update(value=""), gr.update(value="0"), gr.update(value=""), gr.update(value="")]
             
             # ИСПРАВЛЕНИЕ: Проверяем и дополняем количество значений
             expected_count = 340  # Из логов
             if len(result) != expected_count:
-                logger.warning(f"[DEBUG] load_selected_order: result length ({len(result)}) != expected ({expected_count})")
                 # Дополняем до нужного количества с защитой от бесконечного цикла
                 max_iterations = expected_count * 2  # Защита от бесконечного цикла
                 iteration_count = 0
@@ -814,18 +791,12 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     result.append(gr.update())
                     iteration_count += 1
                 if iteration_count >= max_iterations:
-                    logger.error(f"[DEBUG] load_selected_order: CRITICAL! Infinite loop protection triggered for result")
-                logger.info(f"[DEBUG] load_selected_order: after padding: {len(result)} values")
-            logger.info(f"[DEBUG] load_selected_order: returning {len(result)} values")
-            logger.info(f"[DEBUG] load_selected_order: updates length = {len(updates)}, comp_updates length = {len(comp_updates)}")
-            logger.info(f"[DEBUG] load_selected_order: components_ui_inputs length = {len(components_ui_inputs)}, valid_components_ui_inputs length = {len(valid_components_ui_inputs)}")
+                    logger.error(f"CRITICAL! Infinite loop protection triggered for result")
             # Возвращаем: load_error(1), orders_list_screen(1), main_order_screen(1), обычные_поля(22), components, comment(5), compose_поля(22), compose_статусы(4)
             return result
 
     async def load_compose_order(order_id):
         """Загружает составной заказ в вкладку 'Формирование составного заказа'"""
-        logger.info(f"[DEBUG] load_compose_order: order_id={order_id}")
-        
         try:
             # Получаем данные составного заказа
             async with httpx.AsyncClient() as client:
@@ -833,15 +804,12 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 resp.raise_for_status()
                 compose_order_data = resp.json()
             
-            logger.info(f"[DEBUG] load_compose_order: loaded compose_order_data={compose_order_data}")
-            
             if "error" in compose_order_data:
                 result = [gr.update(visible=True, value=f"Ошибка: {compose_order_data['error']}"), gr.update(visible=True), gr.update(visible=False)] + [gr.update() for _ in range(21)] + [gr.update() for _ in valid_components_ui_inputs] + [gr.update(value="Оставьте комментарий..."), gr.update(value=""), gr.update(value=None), gr.update(), gr.update()] + [gr.update() for _ in range(21)] + [gr.update(value=""), gr.update(value=""), gr.update(value="0"), gr.update(value=""), gr.update(value="")]
                 
                 # ИСПРАВЛЕНИЕ: Проверяем и дополняем количество значений в случае ошибки загрузки
                 expected_count = 340  # Из логов load_selected_btn.click
                 if len(result) != expected_count:
-                    logger.warning(f"[DEBUG] load_compose_order (load error): result length ({len(result)}) != expected ({expected_count})")
                     # Дополняем до нужного количества с защитой от бесконечного цикла
                     max_iterations = expected_count * 2  # Защита от бесконечного цикла
                     iteration_count = 0
@@ -849,8 +817,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                         result.append(gr.update())
                         iteration_count += 1
                     if iteration_count >= max_iterations:
-                        logger.error(f"[DEBUG] load_compose_order (load error): CRITICAL! Infinite loop protection triggered")
-                    logger.info(f"[DEBUG] load_compose_order (load error): after padding: {len(result)} values")
+                        logger.error(f"CRITICAL! Infinite loop protection triggered")
                 
                 return result
             
@@ -861,7 +828,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             
             # ИСПРАВЛЕНИЕ: Если order_params пустой или не содержит нужных полей, используем данные из первого кондиционера
             if not general_order_params or "visit_date" not in general_order_params or "discount" not in general_order_params:
-                logger.info("[DEBUG] load_compose_order: order_params пустой или неполный, берем данные из первого кондиционера")
+
                 
                 # Извлекаем данные из первого кондиционера
                 airs = compose_order_data.get("airs", [])
@@ -875,23 +842,15 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     # Берем дату и скидку из первого кондиционера
                     if "visit_date" not in general_order_params and "visit_date" in first_air_order_params:
                         general_order_params["visit_date"] = first_air_order_params["visit_date"]
-                        logger.info(f"[DEBUG] load_compose_order: взяли visit_date из первого кондиционера: {first_air_order_params['visit_date']}")
                     
                     if "discount" not in general_order_params and "discount" in first_air_order_params:
                         general_order_params["discount"] = first_air_order_params["discount"]
-                        logger.info(f"[DEBUG] load_compose_order: взяли discount из первого кондиционера: {first_air_order_params['discount']}")
-                    
-                    logger.info(f"[DEBUG] load_compose_order: после обновления general_order_params={general_order_params}")
                     
                     # Если все еще нет данных, используем дефолтные значения
                     if "visit_date" not in general_order_params:
                         general_order_params["visit_date"] = datetime.date.today().strftime('%Y-%m-%d')
-                        logger.info(f"[DEBUG] load_compose_order: установили дефолтную visit_date: {general_order_params['visit_date']}")
                     if "discount" not in general_order_params:
                         general_order_params["discount"] = 0
-                        logger.info(f"[DEBUG] load_compose_order: установили дефолтный discount: {general_order_params['discount']}")
-                    
-                    logger.info(f"[DEBUG] load_compose_order: финальные general_order_params={general_order_params}")
                     
                     # Обновляем заказ, добавляя order_params
                     updated_compose_order_data = compose_order_data.copy()
@@ -912,13 +871,12 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                             update_data = update_resp.json()
                             
                             if update_data.get("success"):
-                                logger.info(f"[DEBUG] load_compose_order: заказ успешно обновлен с order_params")
                                 # Обновляем локальные данные
                                 compose_order_data = updated_compose_order_data
                             else:
-                                logger.warning(f"[DEBUG] load_compose_order: не удалось обновить заказ: {update_data.get('error', 'unknown error')}")
+                                logger.warning(f"Не удалось обновить заказ: {update_data.get('error', 'unknown error')}")
                     except Exception as e:
-                        logger.warning(f"[DEBUG] load_compose_order: ошибка при обновлении заказа: {e}")
+                        logger.warning(f"Ошибка при обновлении заказа: {e}")
                         # Продолжаем с текущими значениями
                 else:
                     # Если нет кондиционеров, используем дефолтные значения
@@ -928,7 +886,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                         general_order_params["visit_date"] = datetime.date.today().strftime('%Y-%m-%d')
                     if "discount" not in general_order_params:
                         general_order_params["discount"] = 0
-                    logger.info(f"[DEBUG] load_compose_order: нет кондиционеров, дефолтные general_order_params={general_order_params}")
             
             # Извлекаем данные из последнего кондиционера
             airs = compose_order_data.get("airs", [])
@@ -936,15 +893,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             last_air_order_params = last_air.get("order_params", {})
             last_air_aircon_params = last_air.get("aircon_params", {})
             
-            logger.info(f"[DEBUG] load_compose_order: general_order_params={general_order_params}")
-            logger.info(f"[DEBUG] load_compose_order: visit_date={general_order_params.get('visit_date', 'NOT_FOUND')}")
-            logger.info(f"[DEBUG] load_compose_order: discount={general_order_params.get('discount', 'NOT_FOUND')}")
-            logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[5].value (discount) = {safe_int(general_order_params.get('discount', 0))}")
-            
-            logger.info(f"[DEBUG] load_compose_order: last_air_order_params={last_air_order_params}")
-            logger.info(f"[DEBUG] load_compose_order: last_air_aircon_params={last_air_aircon_params}")
-            logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[4].value (visit_date) = {general_order_params.get('visit_date', 'NOT_FOUND')}")
-            logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[5].value (discount) = {safe_int(general_order_params.get('discount', 0))}")
+
             
             # ИСПРАВЛЯЕМ порядок полей для составного заказа согласно outputs в load_selected_btn.click():
             # compose_name, compose_phone, compose_mail, compose_address, compose_date, compose_discount, 
@@ -977,28 +926,14 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             
             # Загружаем комплектующие
             components = compose_order_data.get("components", [])
-            logger.info(f"[DEBUG] load_compose_order: components from compose_order_data: {components}")
             
             comp_updates = fill_components_fields_from_order({"components": components}, {"components": components_catalog_for_ui if 'components_catalog_for_ui' in globals() and components_catalog_for_ui else COMPONENTS_CATALOG.get("components", [])})
-            logger.info(f"[DEBUG] load_compose_order: comp_updates length: {len(comp_updates)}")
             
             # Загружаем комментарий
             comment_value = compose_order_data.get("comment", "Оставьте комментарий...")
-            logger.info(f"[DEBUG] load_compose_order: comment_value={comment_value}")
             
             # Возвращаем обновления в правильном порядке согласно outputs
             # Формат: [load_error(1), orders_list_screen(1), main_order_screen(1), обычные_поля(22), components, comment(5), compose_поля(22), compose_статусы(4)]
-            
-            # Отладочная информация
-            logger.info(f"[DEBUG] load_compose_order: compose_fields_updates length: {len(compose_fields_updates)}")
-            logger.info(f"[DEBUG] load_compose_order: comp_updates length: {len(comp_updates)}")
-            logger.info(f"[DEBUG] load_compose_order: client_data: {client_data}")
-            logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[0]: {compose_fields_updates[0]}")
-            logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[1]: {compose_fields_updates[1]}")
-            logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[0].value: {getattr(compose_fields_updates[0], 'value', 'N/A')}")
-            logger.info(f"[DEBUG] load_compose_order: compose_fields_updates[1].value: {getattr(compose_fields_updates[1], 'value', 'N/A')}")
-            logger.info(f"[DEBUG] load_compose_order: last_air_order_params: {last_air_order_params}")
-            logger.info(f"[DEBUG] load_compose_order: last_air_aircon_params: {last_air_aircon_params}")
             
             # Возвращаем обновления в правильном порядке согласно outputs
             # Формат: [load_error(1), orders_list_screen(1), main_order_screen(1), обычные_поля(21), components(195), comment(5), compose_поля(21), compose_статусы(4)]
@@ -1020,12 +955,9 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 gr.update(value=""),                 # compose_kp_status
             ]
             
-            logger.info(f"[DEBUG] load_compose_order: total result length: {len(result)}")
-            
             # ИСПРАВЛЕНИЕ: Проверяем и дополняем количество значений в основном случае
             expected_count = 340  # Из логов load_selected_btn.click
             if len(result) != expected_count:
-                logger.warning(f"[DEBUG] load_compose_order (main): result length ({len(result)}) != expected ({expected_count})")
                 # Дополняем до нужного количества с защитой от бесконечного цикла
                 max_iterations = expected_count * 2  # Защита от бесконечного цикла
                 iteration_count = 0
@@ -1033,8 +965,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     result.append(gr.update())
                     iteration_count += 1
                 if iteration_count >= max_iterations:
-                    logger.error(f"[DEBUG] load_compose_order (main): CRITICAL! Infinite loop protection triggered")
-                logger.info(f"[DEBUG] load_compose_order (main): after padding: {len(result)} values")
+                    logger.error(f"CRITICAL! Infinite loop protection triggered")
             
             return result
             
@@ -1045,7 +976,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             # ИСПРАВЛЕНИЕ: Проверяем и дополняем количество значений в случае ошибки
             expected_count = 340  # Из логов load_selected_btn.click
             if len(result) != expected_count:
-                logger.warning(f"[DEBUG] load_compose_order (error): result length ({len(result)}) != expected ({expected_count})")
                 # Дополняем до нужного количества с защитой от бесконечного цикла
                 max_iterations = expected_count * 2  # Защита от бесконечного цикла
                 iteration_count = 0
@@ -1053,8 +983,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     result.append(gr.update())
                     iteration_count += 1
                 if iteration_count >= max_iterations:
-                    logger.error(f"[DEBUG] load_compose_order (error): CRITICAL! Infinite loop protection triggered")
-                logger.info(f"[DEBUG] load_compose_order (error): after padding: {len(result)} values")
+                    logger.error(f"CRITICAL! Infinite loop protection triggered")
             
             return result
 
@@ -1111,8 +1040,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             
             # comment_box, save_comment_status, order_id_hidden, order_state, order_id_state
             comment_value = placeholder.get("comment", "Оставьте комментарий...")
-            logger.info(f"[DEBUG] show_main: comment_value = {comment_value}")
-            logger.info(f"[DEBUG] show_main: placeholder type = {type(placeholder)}")
+
             # ИСПРАВЛЕНИЕ: Убеждаемся, что comment_value - это строка, а не объект
             if not isinstance(comment_value, str):
                 comment_value = str(comment_value) if comment_value is not None else "Оставьте комментарий..."
@@ -1121,12 +1049,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             # ИСПРАВЛЕНИЕ: Проверяем, что количество значений соответствует ожидаемому
             expected_count = len(valid_components_ui_inputs) if 'valid_components_ui_inputs' in globals() else len(catalog_components) * 3
             actual_count = len(values) - 29  # 29 = 3 (screens) + 21 (fields) + 5 (comment fields)
-            logger.info(f"[DEBUG] show_main: valid_components_ui_inputs length = {len(valid_components_ui_inputs) if 'valid_components_ui_inputs' in globals() else 'NOT_DEFINED'}")
-            logger.info(f"[DEBUG] show_main: catalog_components length = {len(catalog_components)}")
-            logger.info(f"[DEBUG] show_main: expected_count = {expected_count}, actual_count = {actual_count}")
-            
             if actual_count != expected_count:
-                logger.warning(f"[DEBUG] show_main: actual_count ({actual_count}) != expected_count ({expected_count})")
                 # Дополняем до нужного количества с защитой от бесконечного цикла
                 max_iterations = expected_count * 2  # Защита от бесконечного цикла
                 iteration_count = 0
@@ -1137,8 +1060,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     actual_count += 3
                     iteration_count += 1
                 if iteration_count >= max_iterations:
-                    logger.error(f"[DEBUG] show_main: CRITICAL! Infinite loop protection triggered for values padding")
-                logger.info(f"[DEBUG] show_main: after padding: {len(values)} values")
+                    logger.error(f"CRITICAL! Infinite loop protection triggered for values padding")
             
             return (
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=True),
@@ -1152,7 +1074,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             components_count = len(components_catalog_for_ui if 'components_catalog_for_ui' in globals() and components_catalog_for_ui else COMPONENTS_CATALOG.get("components", [])) * 3
             # ИСПРАВЛЕНИЕ: Проверяем, что comp_updates имеет правильную длину
             if len(comp_updates) != components_count:
-                logger.warning(f"[DEBUG] show_main: comp_updates length ({len(comp_updates)}) != expected ({components_count})")
                 # Дополняем comp_updates до нужной длины с защитой от бесконечного цикла
                 max_iterations = components_count * 2  # Защита от бесконечного цикла
                 iteration_count = 0
@@ -1160,15 +1081,13 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     comp_updates.append(gr.update())
                     iteration_count += 1
                 if iteration_count >= max_iterations:
-                    logger.error(f"[DEBUG] show_main: CRITICAL! Infinite loop protection triggered for comp_updates")
-            logger.info(f"[DEBUG] show_main: comment_value={comment_value}")
+                    logger.error(f"CRITICAL! Infinite loop protection triggered for comp_updates")
             # ИСПРАВЛЕНИЕ: Проверяем и дополняем количество значений для загруженного заказа
             result = [gr.update(visible=False), gr.update(visible=False), gr.update(visible=True)] + updates + comp_updates + [gr.update(value=comment_value), gr.update(value=""), gr.update(value=order.get("id")), gr.update(value=order), gr.update(value=order.get("id"))]
             
             # ИСПРАВЛЕНИЕ: Проверяем, что количество значений соответствует ожидаемому
             expected_count = 314  # Из логов create_btn.click
             if len(result) != expected_count:
-                logger.warning(f"[DEBUG] show_main (loaded order): result length ({len(result)}) != expected ({expected_count})")
                 # Дополняем до нужного количества с защитой от бесконечного цикла
                 max_iterations = expected_count * 2  # Защита от бесконечного цикла
                 iteration_count = 0
@@ -1176,55 +1095,35 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     result.append(gr.update())
                     iteration_count += 1
                 if iteration_count >= max_iterations:
-                    logger.error(f"[DEBUG] show_main (loaded order): CRITICAL! Infinite loop protection triggered")
-                logger.info(f"[DEBUG] show_main (loaded order): after padding: {len(result)} values")
+                    logger.error(f"CRITICAL! Infinite loop protection triggered")
             
             return tuple(result)
 
     def on_select_order(row):
-        logger.info(f"[DEBUG] on_select_order: row={row}")
         if row and len(row) > 0:
             order_id = row[0]
             order = fetch_order_data(order_id)
-            logger.info(f"[DEBUG] on_select_order: loaded order={order}")
             return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), order, orders_table_data.value
-        logger.info(f"[DEBUG] on_select_order: fallback")
         return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), order_state.value, orders_table_data.value
 
     # ИСПРАВЛЕНИЕ: Полностью пересоздаем список компонентов
-    logger.info(f"[DEBUG] create_btn.click: components_ui_inputs length = {len(components_ui_inputs)}")
-    
-    # Проверяем первые несколько элементов для диагностики
-    for i in range(min(5, len(components_ui_inputs))):
-        comp = components_ui_inputs[i]
-        logger.info(f"[DEBUG] create_btn.click: component {i}: type={type(comp)}, value={comp}")
     
     # Создаем новый список только с валидными компонентами
     valid_components_ui_inputs = []
     for i, comp in enumerate(components_ui_inputs):
         if comp is None:
-            logger.warning(f"[DEBUG] create_btn.click: component {i} is None, using gr.update()")
             valid_components_ui_inputs.append(gr.update())
         elif isinstance(comp, str):
-            logger.warning(f"[DEBUG] create_btn.click: component {i} is string '{comp}', using gr.update()")
             valid_components_ui_inputs.append(gr.update())
         elif not hasattr(comp, '_id'):
-            logger.warning(f"[DEBUG] create_btn.click: component {i} has no _id attribute, type: {type(comp)}, using gr.update()")
             valid_components_ui_inputs.append(gr.update())
         else:
             valid_components_ui_inputs.append(comp)
     
-    logger.info(f"[DEBUG] create_btn.click: valid_components_ui_inputs length = {len(valid_components_ui_inputs)}")
-    
     # ИСПРАВЛЕНИЕ: Проверяем все переменные перед использованием
     all_outputs = [start_screen, orders_list_screen, main_order_screen, name, phone, mail, address, date, area, type_room, discount, wifi, inverter, price, mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price] + valid_components_ui_inputs + [comment_box, save_comment_status, order_id_hidden, order_state, order_id_state]
     
-    # Проверяем все элементы на наличие атрибута _id
-    for i, output in enumerate(all_outputs):
-        if output is None:
-            logger.error(f"[DEBUG] create_btn.click: output {i} is None")
-        elif not hasattr(output, '_id'):
-            logger.error(f"[DEBUG] create_btn.click: output {i} is not a Gradio object, type: {type(output)}, value: {output}")
+
     
     create_btn.click(fn=lambda: show_main(), outputs=all_outputs)
     load_btn.click(fn=show_orders, outputs=[start_screen, orders_list_screen, main_order_screen, order_state, orders_radio, load_error])
@@ -1346,12 +1245,9 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         # Сохраняем только комплектующие (по id заказа)
         # Используем ID составного заказа, если он доступен, иначе обычного заказа
         order_id = compose_order_id_hidden_value if compose_order_id_hidden_value and compose_order_id_hidden_value != 0 else order_id_hidden_value
-        logger.info(f"[DEBUG] save_components_handler: order_id_hidden_value={order_id_hidden_value}, compose_order_id_hidden_value={compose_order_id_hidden_value}, using order_id={order_id}")
         selected_components = []
         i = 0
         # ИСПРАВЛЕНИЕ: Всегда используем components_catalog_for_ui для соответствия UI
-        logger.info(f"[DEBUG] save_components_handler: components_catalog_for_ui length = {len(components_catalog_for_ui)}")
-        logger.info(f"[DEBUG] save_components_handler: components_inputs length = {len(components_inputs)}")
         
         # Итерируемся в порядке, совпадающем с UI
         processing_errors = []
@@ -1359,7 +1255,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             # Проверяем, что у нас достаточно элементов в components_inputs
             if i + 2 >= len(components_inputs):
                 error_msg = f"Недостаточно элементов в components_inputs: индекс {i}, ожидается минимум {i+3}, доступно {len(components_inputs)}"
-                logger.error(f"[DEBUG] save_components_handler: {error_msg}")
+                logger.error(f"{error_msg}")
                 processing_errors.append(f"Компонент '{component_data.get('name', 'Unknown')}': {error_msg}")
                 continue
                 
@@ -1387,21 +1283,13 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 comp_item["unit"] = "шт."
                 comp_item["qty"] = int(qty) if qty else 0
                 comp_item["length"] = 0
-            # Подробное логирование для проверки корректного сопоставления и сохранения
-            try:
-                logger.info(
-                    f"[DEBUG] save_components_handler item: name='{comp_item['name']}', category='{component_data.get('category')}', "
-                    f"is_measurable={is_measurable}, selected={is_selected}, unit='{comp_item['unit']}', "
-                    f"qty={comp_item['qty']}, length={comp_item['length']}"
-                )
-            except Exception:
-                pass
+
             selected_components.append(comp_item)
         
         # Проверяем наличие ошибок обработки
         if processing_errors:
             error_summary = f"Ошибки при обработке компонентов: {'; '.join(processing_errors)}"
-            logger.error(f"[DEBUG] save_components_handler: {error_summary}")
+            logger.error(f"{error_summary}")
             return f"Ошибка: {error_summary}", order_id
         
         # Определяем тип заказа и отправляем на соответствующий эндпоинт
@@ -1409,7 +1297,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             # Если у нас есть ID составного заказа и он совпадает с текущим order_id, используем его
             if compose_order_id_hidden_value and compose_order_id_hidden_value != 0 and compose_order_id_hidden_value == order_id:
                 order_type = 'Compose'
-                logger.info(f"[DEBUG] save_components_handler: using compose order, order_id={order_id}")
             else:
                 # Получаем информацию о заказе
                 async with httpx.AsyncClient() as client:
@@ -1428,7 +1315,6 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                         return f"Ошибка: Заказ с ID {order_id} не найден", order_id
                     
                     order_type = order_info.get('order_type', 'Order')
-                    logger.info(f"[DEBUG] save_components_handler: order_id={order_id}, order_type={order_type}")
             
             # Теперь обрабатываем в зависимости от типа заказа
             async with httpx.AsyncClient() as client:
@@ -1498,7 +1384,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     )
 
     async def save_comment_handler(order_id_hidden_value, comment_value):
-        logger.info(f"[DEBUG] save_comment_handler: order_id_hidden_value={order_id_hidden_value}")
+
         try:
             order_id = int(order_id_hidden_value)
             if not order_id or order_id <= 0:
@@ -1538,7 +1424,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     # Не составной заказ, пробуем обычный заказ
                     pass
         except Exception as e:
-            logger.warning(f"[DEBUG] save_comment_handler: не удалось определить тип заказа: {e}")
+                            logger.warning(f"Не удалось определить тип заказа: {e}")
             # Продолжаем с обычным заказом
         
         # Обычный заказ
@@ -1562,7 +1448,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     
     async def save_compose_client_handler(order_id_hidden_value, client_name, client_phone, client_mail, client_address, visit_date, discount):
         """Обработчик сохранения данных клиента для составного заказа"""
-        logger.info(f"[DEBUG] save_compose_client_handler: order_id_hidden_value={order_id_hidden_value}, client_name={client_name}, client_phone={client_phone}")
+
         
         try:
             # Проверяем обязательные поля
@@ -1604,7 +1490,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             
             if existing_order_id:
                 # Обновляем существующий заказ
-                logger.info(f"[DEBUG] save_compose_client_handler: обновляем существующий заказ ID={existing_order_id}")
+
                 
                 # Сначала получаем текущие данные заказа
                 async with httpx.AsyncClient() as get_client:
@@ -1640,7 +1526,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                         return f"Ошибка: {error_msg}", None, None
             else:
                 # Создаем новый заказ
-                logger.info(f"[DEBUG] save_compose_client_handler: создаем новый заказ")
+
                 
                 # Создаем базовую структуру составного заказа
                 compose_order_data = {
@@ -1677,7 +1563,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     
     async def delete_compose_order_handler(order_id_hidden_value):
         """Обработчик удаления составного заказа"""
-        logger.info(f"[DEBUG] delete_compose_order_handler: order_id_hidden_value={order_id_hidden_value}")
+
         
         try:
             order_id = int(order_id_hidden_value)
@@ -1708,16 +1594,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                        room_area, room_type, discount, wifi, inverter, price_limit, mount_type, 
                                        ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price):
         """Обработчик сохранения данных кондиционера для составного заказа"""
-        logger.info(f"[DEBUG] save_compose_order_handler: order_id_hidden_value={order_id_hidden_value}")
-        logger.info(f"[DEBUG] save_compose_order_handler: room_area={room_area} (type: {type(room_area)})")
-        logger.info(f"[DEBUG] save_compose_order_handler: discount={discount} (type: {type(discount)})")
-        logger.info(f"[DEBUG] save_compose_order_handler: price_limit={price_limit} (type: {type(price_limit)})")
-        logger.info(f"[DEBUG] save_compose_order_handler: ceiling_height={ceiling_height} (type: {type(ceiling_height)})")
-        logger.info(f"[DEBUG] save_compose_order_handler: num_people={num_people} (type: {type(num_people)})")
-        logger.info(f"[DEBUG] save_compose_order_handler: num_computers={num_computers} (type: {type(num_computers)})")
-        logger.info(f"[DEBUG] save_compose_order_handler: num_tvs={num_tvs} (type: {type(num_tvs)})")
-        logger.info(f"[DEBUG] save_compose_order_handler: other_power={other_power} (type: {type(other_power)})")
-        logger.info(f"[DEBUG] save_compose_order_handler: installation_price={installation_price} (type: {type(installation_price)})")
+
         
         # Проверка обязательных полей
         if not order_id_hidden_value or order_id_hidden_value <= 0:
@@ -1787,7 +1664,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     return f"Ошибка: {current_order_data['error']}", order_id_hidden_value, order_id_hidden_value
                 
                 existing_airs = current_order_data.get("airs", [])
-                logger.info(f"[DEBUG] save_compose_order_handler: existing_airs count={len(existing_airs)}")
+
                 
                 if len(existing_airs) == 0:
                     # Создаем первый кондиционер через add_aircon_to_compose_order
@@ -1875,7 +1752,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
 
     async def select_compose_aircons_handler(order_id_hidden_value):
         """Обработчик подбора кондиционеров для составного заказа"""
-        logger.info(f"[DEBUG] select_compose_aircons_handler: order_id_hidden_value={order_id_hidden_value}")
+
         
         try:
             order_id = int(order_id_hidden_value)
@@ -1907,16 +1784,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                                     room_area, room_type, discount, wifi, inverter, price_limit, mount_type, 
                                     ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand, installation_price):
         """Обработчик добавления следующего кондиционера"""
-        logger.info(f"[DEBUG] add_next_aircon_handler: order_id_hidden_value={order_id_hidden_value}")
-        logger.info(f"[DEBUG] add_next_aircon_handler: room_area={room_area} (type: {type(room_area)})")
-        logger.info(f"[DEBUG] add_next_aircon_handler: discount={discount} (type: {type(discount)})")
-        logger.info(f"[DEBUG] add_next_aircon_handler: price_limit={price_limit} (type: {type(price_limit)})")
-        logger.info(f"[DEBUG] add_next_aircon_handler: ceiling_height={ceiling_height} (type: {type(ceiling_height)})")
-        logger.info(f"[DEBUG] add_next_aircon_handler: num_people={num_people} (type: {type(num_people)})")
-        logger.info(f"[DEBUG] add_next_aircon_handler: num_computers={num_computers} (type: {type(num_computers)})")
-        logger.info(f"[DEBUG] add_next_aircon_handler: num_tvs={num_tvs} (type: {type(num_tvs)})")
-        logger.info(f"[DEBUG] add_next_aircon_handler: other_power={other_power} (type: {type(other_power)})")
-        logger.info(f"[DEBUG] add_next_aircon_handler: installation_price={installation_price} (type: {type(installation_price)})")
+
         
         try:
             order_id = int(order_id_hidden_value)
@@ -2002,7 +1870,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 if data.get("success"):
                     aircon_count = data.get("aircon_count", 0)
                     msg = f"Пожалуйста, введите данные для следующего кондиционера"
-                    logger.info(f"[DEBUG] add_next_aircon_handler: успешно добавлен кондиционер, всего: {aircon_count}")
+    
                     # Возвращаем значения для очистки полей параметров кондиционера, но НЕ полей клиента
                     return (msg, order_id, order_id, str(aircon_count), 
                            gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),  # compose_name, compose_phone, compose_mail, compose_address, compose_date - НЕ ОБНОВЛЯЕМ
@@ -2011,7 +1879,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                            0, 0, 0, "Любой", 0)  # compose_num_computers, compose_num_tvs, compose_other_power, compose_brand, compose_installation_price
                 else:
                     error_msg = data.get("error", "Неизвестная ошибка от бэкенда.")
-                    logger.error(f"[DEBUG] add_next_aircon_handler: ошибка: {error_msg}")
+    
                     return (f"Ошибка: {error_msg}", order_id_hidden_value, order_id_hidden_value, "0",
                            gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),  # compose_name, compose_phone, compose_mail, compose_address, compose_date - НЕ ОБНОВЛЯЕМ
                            50, "квартира", gr.update(), False, False, 10000,  # compose_area, compose_type_room, compose_discount, compose_wifi, compose_inverter, compose_price
@@ -2028,7 +1896,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
     
     async def generate_compose_kp_handler(order_id_hidden_value):
         """Обработчик генерации КП для составного заказа"""
-        logger.info(f"[DEBUG] generate_compose_kp_handler: order_id_hidden_value={order_id_hidden_value}")
+
         
         try:
             order_id = int(order_id_hidden_value)

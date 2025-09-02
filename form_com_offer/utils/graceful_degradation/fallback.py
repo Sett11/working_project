@@ -26,6 +26,7 @@ class FallbackManager:
     def __init__(self):
         self._cache = {}
         self._cache_ttl = 600  # 10 минут TTL для кэша (увеличено с 5 минут для снижения нагрузки)
+        self._max_cache_size = 1000  # Максимальное количество элементов в кэше
         self._fallback_data = {}
         self._last_db_access = None
         self._fallback_storage_path = "logs/fallback_storage.json"
@@ -191,6 +192,22 @@ class FallbackManager:
         self._cache_ttl = ttl_seconds
         logger.info(f"TTL кэша установлен: {ttl_seconds} секунд")
     
+    def set_max_cache_size(self, max_size: int):
+        """Установка максимального размера кэша"""
+        self._max_cache_size = max_size
+        logger.info(f"Максимальный размер кэша установлен: {max_size} элементов")
+        
+        # Если текущий размер превышает новый лимит, удаляем лишние элементы
+        if len(self._cache) > max_size:
+            # Сортируем по времени и удаляем самые старые
+            sorted_items = sorted(self._cache.items(), key=lambda x: x[1]["timestamp"])
+            items_to_remove = len(self._cache) - max_size
+            
+            for i in range(items_to_remove):
+                del self._cache[sorted_items[i][0]]
+            
+            logger.info(f"Кэш превышал лимит, удалено {items_to_remove} старых элементов")
+    
     def get_cached_data(self, key: str) -> Optional[Any]:
         """Получение данных из кэша"""
         if key not in self._cache:
@@ -206,14 +223,22 @@ class FallbackManager:
         return cached_item["data"]
     
     def set_cached_data(self, key: str, data: Any, ttl_seconds: Optional[int] = None):
-        """Сохранение данных в кэш"""
+        """Сохранение данных в кэш с ограничением размера"""
         ttl = ttl_seconds or self._cache_ttl
+        
+        # Проверяем размер кэша и удаляем старые элементы если нужно
+        if len(self._cache) >= self._max_cache_size:
+            # Удаляем самый старый элемент (LRU - Least Recently Used)
+            oldest_key = min(self._cache.keys(), key=lambda k: self._cache[k]["timestamp"])
+            del self._cache[oldest_key]
+            logger.info(f"Кэш переполнен, удален старый элемент: {oldest_key}")
+        
         self._cache[key] = {
             "data": data,
             "timestamp": time.time(),
             "ttl": ttl
         }
-        logger.info(f"Данные сохранены в кэш: {key} (TTL: {ttl}s)")
+        logger.info(f"Данные сохранены в кэш: {key} (TTL: {ttl}s, размер кэша: {len(self._cache)}/{self._max_cache_size})")
     
     def set_fallback_data(self, key: str, data: Any, ttl_seconds: int = 300):
         """Установка заглушки в кэш"""
@@ -384,6 +409,7 @@ class FallbackManager:
         
         return {
             "cache_size": len(self._cache),
+            "max_cache_size": self._max_cache_size,
             "fallback_data_size": len(self._fallback_data),
             "cache_ttl": self._cache_ttl,
             "last_db_access": self._last_db_access,

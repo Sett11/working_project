@@ -2,14 +2,14 @@
 Модуль кастомного логгера для проекта.
 
 Содержит:
-- Класс Logger с ротацией логов по времени (раз в сутки)
+- Класс Logger с ротацией логов по размеру (максимум 10MB на файл, максимум 5 файлов)
 - Автоматическое создание директории для логов
 - Унифицированный формат логирования
 - Безопасная обработка ошибок при создании файловых обработчиков
 - Потокобезопасный контекст пользователя с использованием ContextVar
 """
 import logging
-from logging.handlers import TimedRotatingFileHandler
+from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
 import sys
@@ -43,8 +43,8 @@ def safe_log_error(message):
 
 class Logger(logging.Logger):
     """
-    Кастомный логгер с ротацией логов по времени (раз в сутки).
-    Используется для записи логов приложения в файл с автоматическим созданием новой версии каждый день.
+    Кастомный логгер с ротацией логов по размеру (максимум 10MB на файл, максимум 5 файлов).
+    Используется для записи логов приложения в файл с автоматическим созданием новой версии при превышении размера.
     Поддерживает потокобезопасный контекст пользователя (user_id).
     """
     def __init__(self, name, log_file, level=logging.INFO):
@@ -69,9 +69,8 @@ class Logger(logging.Logger):
             log_path = str(Path("logs") / log_file)
             ensure_log_directory(log_path)
             
-            # Попытка создать обработчик для ротации файлов по времени (раз в сутки)
-            handler = TimedRotatingFileHandler(log_path, when="midnight", interval=1, encoding='utf-8')
-            handler.suffix = "%Y-%m-%d"
+            # Попытка создать обработчик для ротации файлов по размеру (максимум 10MB на файл, максимум 5 файлов)
+            handler = RotatingFileHandler(log_path, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
             handler.setFormatter(formatter)
             
             # Добавление обработчика в логгер только при успешном создании
