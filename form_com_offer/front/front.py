@@ -562,7 +562,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     gr.Markdown("### 2. Параметры заказа")
                     type_room = gr.Dropdown(["квартира", "дом", "офис", "производство"], label="Тип помещения", value=get_placeholder_order()["order_params"]["room_type"])
                     area = gr.Slider(10, 160, label="Площадь помещения (м²)", value=get_placeholder_order()["order_params"]["room_area"])
-                    discount = gr.Slider(0, 50, label="Индивидуальная скидка (%)", value=get_placeholder_order()["order_params"]["discount"])
+                    discount = gr.Slider(0, 50, step=1, label="Индивидуальная скидка (%)", value=get_placeholder_order()["order_params"]["discount"])
                     installation_price = gr.Number(label="Стоимость монтажа (BYN)", minimum=0, step=1, value=get_placeholder_order()["order_params"]["installation_price"])
             gr.Markdown("### 3. Требования к кондиционеру")
             with gr.Row():
@@ -571,7 +571,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 inverter = gr.Checkbox(label="Инверторный компрессор", value=get_placeholder_order()["aircon_params"]["inverter"])
                 wifi = gr.Checkbox(label="Wi-Fi управление", value=get_placeholder_order()["aircon_params"]["wifi"])
             with gr.Row():
-                mount_type = gr.Dropdown(["Любой", "настенный", "кассетного типа", "потолочный", "напольный", "колонный"], label="Тип монтажа", value=get_placeholder_order()["aircon_params"]["mount_type"])
+                mount_type = gr.Dropdown(["Любой", "настенный", "кассетного типа", "потолочный", "напольный"], label="Тип монтажа", value=get_placeholder_order()["aircon_params"]["mount_type"])
             gr.Markdown("### 4. Дополнительные параметры для расчета мощности")
             with gr.Row():
                 ceiling_height = gr.Slider(2.0, 5.0, step=0.1, label="Высота потолков (м)", value=get_placeholder_order()["aircon_params"]["ceiling_height"])
@@ -662,7 +662,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 with gr.Column():
                     compose_address = gr.Textbox(label="Адрес", value=get_placeholder_order()["client_data"]["address"])
                     compose_date = gr.Textbox(label="Дата визита монтажника", value=get_placeholder_order()["order_params"]["visit_date"])
-                    compose_discount = gr.Slider(0, 50, label="Индивидуальная скидка (%)", value=get_placeholder_order()["order_params"]["discount"])
+                    compose_discount = gr.Slider(0, 50, step=1, label="Индивидуальная скидка (%)", value=get_placeholder_order()["order_params"]["discount"])
             
             # Кнопка сохранения данных клиента
             compose_save_client_status = gr.Textbox(label="Статус сохранения данных клиента", interactive=False)
@@ -687,7 +687,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                 compose_inverter = gr.Checkbox(label="Инверторный компрессор", value=get_placeholder_order()["aircon_params"]["inverter"])
                 compose_wifi = gr.Checkbox(label="Wi-Fi управление", value=get_placeholder_order()["aircon_params"]["wifi"])
             with gr.Row():
-                compose_mount_type = gr.Dropdown(["Любой", "настенный", "кассетного типа", "потолочный", "напольный", "колонный"], label="Тип монтажа", value=get_placeholder_order()["aircon_params"]["mount_type"])
+                compose_mount_type = gr.Dropdown(["Любой", "настенный", "кассетного типа", "потолочный", "напольный"], label="Тип монтажа", value=get_placeholder_order()["aircon_params"]["mount_type"])
             
             gr.Markdown("### Дополнительные параметры для расчета мощности")
             with gr.Row():

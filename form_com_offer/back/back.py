@@ -554,7 +554,6 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
             ac_dict = schemas.AirConditioner.from_orm(ac).dict()
             specs = []
             if ac_dict.get('cooling_power_kw'): specs.append(f"Охлаждение: {ac_dict['cooling_power_kw']} кВт")
-            if ac_dict.get('energy_efficiency_class'): specs.append(f"Класс: {ac_dict['energy_efficiency_class']}")
             if ac_dict.get('is_inverter'): specs.append("Инверторный")
             if ac_dict.get('has_wifi'): specs.append("Wi-Fi")
             description = ac_dict.get('description', '')
