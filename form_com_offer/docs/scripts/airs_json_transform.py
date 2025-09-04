@@ -7,7 +7,6 @@
 2. Фильтрует кондиционеры по критериям:
    - model_name = "moke"
    - series содержит "Колонный"
-   - description содержит "полупромышленной"
 3. Сохраняет результат в new_airs.json
 """
 
@@ -63,17 +62,12 @@ def transform_airs_data(input_file: str, output_file: str):
                 should_remove = True
                 print(f"🚫 Удаляю: series содержит 'Колонный' - {air.get('series', 'N/A')}")
             
-            # Критерий 3: description содержит "полупромышленной"
-            elif "полупромышленной" in air.get("description", ""):
-                should_remove = True
-                print(f"🚫 Удаляю: description содержит 'полупромышленной' - {air.get('description', 'N/A')}")
-            
-            # Критерий 4: model_name пустой
+            # Критерий 3: model_name пустой
             elif air.get("model_name") == "":
                 should_remove = True
                 print(f"🚫 Удаляю: model_name пустой - '{air.get('model_name', 'N/A')}'")
             
-            # Критерий 5: model_name уже встречался (дублирование)
+            # Критерий 4: model_name уже встречался (дублирование)
             elif air.get("model_name") in seen_model_names:
                 should_remove = True
                 print(f"🚫 Удаляю: дубликат model_name - {air.get('model_name', 'N/A')}")
