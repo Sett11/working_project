@@ -100,7 +100,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     inverter = gr.Checkbox(label="Инверторный компрессор", value=get_placeholder_order()["aircon_params"]["inverter"])
                     wifi = gr.Checkbox(label="Wi-Fi управление", value=get_placeholder_order()["aircon_params"]["wifi"])
                 with gr.Row():
-                    mount_type = gr.Dropdown(["Любой", "настенный", "кассетного типа", "потолочный", "напольный"], label="Тип монтажа", value=get_placeholder_order()["aircon_params"]["mount_type"])
+                    mount_type = gr.Dropdown(["Любой", "настенный", "кассетного типа", "канальный", "напольный", "потолочный", "напольно-потолочный", "консольно-подпотолочный", "наружный блок"], label="Тип монтажа", value=get_placeholder_order()["aircon_params"]["mount_type"])
                 
                 gr.Markdown("### 4. Дополнительные параметры для расчета мощности")
                 with gr.Row():
@@ -212,7 +212,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
                     compose_inverter = gr.Checkbox(label="Инверторный компрессор", value=get_placeholder_order()["aircon_params"]["inverter"])
                     compose_wifi = gr.Checkbox(label="Wi-Fi управление", value=get_placeholder_order()["aircon_params"]["wifi"])
                 with gr.Row():
-                    compose_mount_type = gr.Dropdown(["Любой", "настенный", "кассетного типа", "потолочный", "напольный"], label="Тип монтажа", value=get_placeholder_order()["aircon_params"]["mount_type"])
+                    compose_mount_type = gr.Dropdown(["Любой", "настенный", "кассетного типа", "канальный", "напольный", "потолочный", "напольно-потолочный", "консольно-подпотолочный", "наружный блок"], label="Тип монтажа", value=get_placeholder_order()["aircon_params"]["mount_type"])
                 
                 gr.Markdown("### Дополнительные параметры для расчета мощности")
                 with gr.Row():
