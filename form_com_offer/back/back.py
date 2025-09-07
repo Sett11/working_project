@@ -1151,7 +1151,7 @@ async def select_compose_aircons(payload: dict, db: AsyncSession = Depends(get_s
                 result_text += f"   Инверторный\n"
             if ac.has_wifi:
                 result_text += f"   Wi-Fi\n"
-            result_text += f"   Тип монтажа: {ac.mount_type}\n\n"
+            result_text += f"   Тип кондиционера: {ac.mount_type}\n\n"
         
         # Сохраняем подобранные кондиционеры в постоянное поле
         last_air["selected_aircons"] = [
