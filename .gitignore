@@ -14,6 +14,8 @@ postgres_data
 backups
 grafana_data
 prometheus_data
+images_airs
+buffer
 # Environments
 .env
 .venv
