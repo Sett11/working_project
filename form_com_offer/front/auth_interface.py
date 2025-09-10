@@ -202,7 +202,8 @@ def create_auth_interface() -> gr.Blocks:
                 login_username = gr.Textbox(
                     label="Логин",
                     placeholder="Введите логин",
-                    show_label=True
+                    show_label=True,
+                    type="password"
                 )
                 
                 login_password = gr.Textbox(
@@ -220,7 +221,8 @@ def create_auth_interface() -> gr.Blocks:
                 reg_username = gr.Textbox(
                     label="Логин",
                     placeholder="Введите логин",
-                    show_label=True
+                    show_label=True,
+                    type="password"
                 )
                 
                 reg_password = gr.Textbox(

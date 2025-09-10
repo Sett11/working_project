@@ -44,6 +44,7 @@ class AirConditionerBase(BaseModel):
     is_inverter: Optional[bool] = False
     has_wifi: Optional[bool] = False
     mount_type: Optional[str] = None
+    image_path: Optional[str] = None
 
 class AirConditionerCreate(AirConditionerBase):
     pass

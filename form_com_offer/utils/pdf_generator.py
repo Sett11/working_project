@@ -6,7 +6,7 @@
 import datetime
 import os
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import mm
@@ -31,6 +31,67 @@ except ImportError:
     crud = None
 
 logger = Logger("pdf_generator", "pdf_generator.log")
+
+
+def get_aircon_image_path(image_path_from_json):
+    """
+    Получает полный путь к изображению кондиционера.
+    
+    Args:
+        image_path_from_json (str): Путь к изображению из JSON (например, "images_airs/img_1.png")
+        
+    Returns:
+        str: Полный путь к изображению или None, если файл не найден
+    """
+    if not image_path_from_json:
+        return None
+    
+    try:
+        # Получаем базовую директорию проекта (папка form_com_offer)
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Строим полный путь к изображению
+        # Пример image_path_from_json: "images_airs/img_1.png"
+        # Результат: /path/to/form_com_offer/docs/images_airs/img_1.png
+        full_path = os.path.join(base_dir, 'docs', image_path_from_json)
+        
+        # Проверяем существование файла
+        if os.path.exists(full_path):
+            return full_path
+        else:
+            logger.warning(f"Изображение кондиционера не найдено: {full_path}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Ошибка при получении изображения кондиционера для {image_path_from_json}: {e}")
+        return None
+
+
+def get_logo_path():
+    """
+    Получает полный путь к логотипу фирмы.
+    
+    Returns:
+        str: Полный путь к логотипу или None, если файл не найден
+    """
+    try:
+        # Получаем базовую директорию проекта (папка form_com_offer)
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Строим полный путь к логотипу
+        # Результат: /path/to/form_com_offer/utils/image_for_pdf/everis.png
+        logo_path = os.path.join(base_dir, 'utils', 'image_for_pdf', 'everis.png')
+        
+        # Проверяем существование файла
+        if os.path.exists(logo_path):
+            return logo_path
+        else:
+            logger.warning(f"Логотип не найден: {logo_path}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Ошибка при получении логотипа: {e}")
+        return None
 
 
 # --- Константы ---
@@ -219,6 +280,16 @@ async def generate_commercial_offer_pdf(
         story = []
 
         # --- Шапка документа ---
+        # Добавляем логотип фирмы
+        logo_path = get_logo_path()
+        if logo_path:
+            try:
+                logo = Image(logo_path, width=30*mm, height=20*mm)
+                story.append(logo)
+                story.append(Spacer(1, 5))
+            except Exception as e:
+                logger.error(f"Ошибка загрузки логотипа: {e}")
+        
         story.append(Paragraph("ООО «Эвериз Сервис»", styleBold))
         story.append(Paragraph("г. Минск, ул. Орловская, 40, пом. 25б, 220030", styleN))
         story.append(Paragraph("УНП 192812488", styleN))
@@ -275,14 +346,15 @@ async def generate_commercial_offer_pdf(
             if variant.get('items'):
                 # Заголовки таблицы
                 ac_table_data = [[
+                    Paragraph("Изображение", styleTableHeader),
                     Paragraph("Наименование товара", styleTableHeader),
                     Paragraph("Характеристики", styleTableHeader),
                     Paragraph("Ед. изм.", styleTableHeader),
                     Paragraph("Кол-во", styleTableHeader),
                     Paragraph("Цена за ед., BYN", styleTableHeader),
-                    Paragraph("Скидка, %", styleTableHeader),
+                    Paragraph("Скидка %", styleTableHeader),
                     Paragraph("Сумма с учетом скидки, BYN", styleTableHeader),
-                    Paragraph("Срок поставки", styleTableHeader)
+                    Paragraph("Срок\nпоставки", styleTableHeader)
                 ]]
                 
                 for ac in variant['items']:
@@ -300,36 +372,49 @@ async def generate_commercial_offer_pdf(
                     if len(specs_text) > 300:
                         specs_text = specs_text[:297] + "..."
 
-                    # Ограничиваем длину названия
+                    # Получаем полное название без сокращений
                     name_text = ac.get('name', '')
-                    if len(name_text) > 60:
-                        name_text = name_text[:57] + "..."
+                    
+                    # Получаем изображение кондиционера
+                    image_path = get_aircon_image_path(ac.get('image_path'))
+                    if image_path:
+                        try:
+                            # Создаем объект изображения с фиксированным размером
+                            aircon_image = Image(image_path, width=30*mm, height=20*mm)
+                        except Exception as e:
+                            logger.error(f"Ошибка загрузки изображения {image_path}: {e}")
+                            aircon_image = Paragraph("Нет фото", styleTableCell)
+                    else:
+                        aircon_image = Paragraph("Нет фото", styleTableCell)
                     
                     ac_table_data.append([
+                        aircon_image,
                         Paragraph(name_text, styleTableCell),
                         Paragraph(specs_text, styleTableCell),
                         Paragraph(ac.get('unit', 'шт.'), styleTableCell),
                         Paragraph(str(qty), styleTableCell),
-                        Paragraph(f"{price:.2f}", styleTableCell),
+                        Paragraph(f"{price:.0f}" if price == int(price) else f"{price:.2f}", styleTableCell),
                         Paragraph(f"{discount:.2f}", styleTableCell),
                         Paragraph(f"{total_with_discount:.2f}", styleTableCell),
-                        Paragraph(ac.get('delivery', 'в наличии'), styleTableCell)
+                        Paragraph("в наличии", styleTableCell)
                     ])
                 
                 ac_table = Table(
                     ac_table_data, 
-                    colWidths=[45*mm, 50*mm, 15*mm, 15*mm, 20*mm, 15*mm, 25*mm, 20*mm],
+                    colWidths=[40*mm, 36*mm, 50*mm, 10*mm, 10*mm, 12*mm, 14*mm, 18*mm, 16*mm],
                     repeatRows=1 # Повторять заголовок на новых страницах
                 )
                 ac_table.setStyle(TableStyle([
                     ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
                     ('FONTNAME', (0,0), (-1,0), FONT_NAME_NORMAL),
                     ('FONTNAME', (0,1), (-1,-1), FONT_NAME_NORMAL),
-                    ('FONTSIZE', (0,0), (-1,-1), 7),
+                    ('FONTSIZE', (0,0), (-1,-1), 6),
                     ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
                     ('ALIGN', (0,0), (-1,-1), 'LEFT'), # По умолчанию выравнивание влево
-                    ('ALIGN', (3,1), (3,-1), 'CENTER'), # Кол-во - по центру
-                    ('ALIGN', (4,1), (6,-1), 'RIGHT'), # Цена, Скидка, Сумма - вправо
+                    ('ALIGN', (0,1), (0,-1), 'CENTER'), # Изображение - по центру
+                    ('ALIGN', (3,1), (4,-1), 'CENTER'), # Ед.изм., Кол-во - по центру
+                    ('ALIGN', (5,1), (7,-1), 'RIGHT'), # Цена, Скидка, Сумма - вправо
+                    ('ALIGN', (8,1), (8,-1), 'CENTER'), # Галочка - по центру
                     ('ALIGN', (0,0), (-1,0), 'CENTER'), # Заголовки - по центру
                     ('VALIGN', (0,0), (-1,-1), 'TOP'), # Вертикальное выравнивание вверх
                     ('WORDWRAP', (0,1), (-1,-1)), # Перенос слов во всех ячейках данных

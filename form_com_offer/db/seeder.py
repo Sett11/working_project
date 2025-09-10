@@ -140,7 +140,9 @@ async def seed_data():
                         # Новые флаги
                         is_inverter=is_inverter,
                         has_wifi=has_wifi,
-                        mount_type=mount_type
+                        mount_type=mount_type,
+                        # Путь к изображению
+                        image_path=air_con_data.get("image_path")
                     )
                     db_air_con = models.AirConditioner(**air_con_schema.model_dump())
                     db.add(db_air_con)

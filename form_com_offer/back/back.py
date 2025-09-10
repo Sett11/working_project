@@ -568,7 +568,8 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
                 'qty': 1, 'unit': 'шт.', 'delivery': 'в наличии',
                 'discount_percent': float(order_params.get('discount', 0)),
                 'specifications': specs,
-                'short_description': ""
+                'short_description': "",
+                'image_path': ac_dict.get('image_path', '')
             })
         aircon_variants.append({
             'title': 'Варианты оборудования, подходящие по параметрам',
@@ -1164,7 +1165,8 @@ async def select_compose_aircons(payload: dict, db: AsyncSession = Depends(get_s
                 "is_inverter": ac.is_inverter,
                 "has_wifi": ac.has_wifi,
                 "mount_type": ac.mount_type,
-                "description": ac.description  # Добавляем поле description
+                "description": ac.description,  # Добавляем поле description
+                "image_path": ac.image_path  # Добавляем поле image_path
             }
             for ac in selected_aircons
         ]

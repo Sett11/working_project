@@ -83,6 +83,7 @@ class AirConditioner(Base):
     is_inverter = Column(Boolean, default=False)  # Признак инверторного компрессора
     has_wifi = Column(Boolean, default=False)  # Признак наличия Wi-Fi
     mount_type = Column(String, nullable=True)  # Тип кондиционера
+    image_path = Column(String, nullable=True)  # Путь к изображению кондиционера
 
 class Component(Base):
     """
