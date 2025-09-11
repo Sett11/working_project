@@ -368,9 +368,7 @@ async def generate_commercial_offer_pdf(
                     # Объединяем список в строку, заменяя переносы строк на пробелы или точки
                     specs_text = ". ".join([str(s).replace('\n', ' ') for s in specs_list if s])
                     
-                    # Ограничиваем длину для предотвращения переполнения ячейки
-                    if len(specs_text) > 300:
-                        specs_text = specs_text[:297] + "..."
+                    # Убираем ограничение длины для полного отображения характеристик
 
                     # Получаем полное название без сокращений
                     name_text = ac.get('name', '')

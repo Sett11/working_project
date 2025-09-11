@@ -352,9 +352,7 @@ async def generate_compose_commercial_offer_pdf(
                     specs_text = ". ".join(specs_list)
                     logger.info(f"Итоговые характеристики: '{specs_text}'")
                     
-                    # Увеличиваем лимит длины для характеристик
-                    if len(specs_text) > 800:
-                        specs_text = specs_text[:797] + "..."
+                    # Убираем ограничение длины для полного отображения характеристик
 
                     # Получаем полное название без сокращений
                     name_text = ac.get('model_name', "") or ""
