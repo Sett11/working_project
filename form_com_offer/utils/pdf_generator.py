@@ -67,9 +67,12 @@ def get_aircon_image_path(image_path_from_json):
         return None
 
 
-def get_logo_path():
+def get_logo_path(filename="everis.png"):
     """
     Получает полный путь к логотипу фирмы.
+    
+    Args:
+        filename (str): Имя файла логотипа (по умолчанию "everis.png")
     
     Returns:
         str: Полный путь к логотипу или None, если файл не найден
@@ -79,8 +82,8 @@ def get_logo_path():
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
         # Строим полный путь к логотипу
-        # Результат: /path/to/form_com_offer/utils/image_for_pdf/everis.png
-        logo_path = os.path.join(base_dir, 'utils', 'image_for_pdf', 'everis.png')
+        # Результат: /path/to/form_com_offer/utils/image_for_pdf/{filename}
+        logo_path = os.path.join(base_dir, 'utils', 'image_for_pdf', filename)
         
         # Проверяем существование файла
         if os.path.exists(logo_path):
@@ -553,6 +556,22 @@ async def generate_commercial_offer_pdf(
         story.append(Paragraph("• Гарантия на оборудование - 3 года, на монтажные работы - 2 года", styleSmall))
         story.append(Paragraph("• Цены указаны с учетом НДС", styleSmall))
         story.append(Spacer(1, 10))
+
+        # --- Логотип в конце документа ---
+        story.append(Spacer(1, 20))
+        try:
+            end_logo_path = get_logo_path("everis_2.png")
+            logger.info(f"Попытка добавить логотип в конец PDF. Путь: {end_logo_path}")
+            if end_logo_path and os.path.exists(end_logo_path):
+                logger.info(f"Логотип найден, добавляем в PDF: {end_logo_path}")
+                end_logo = Image(end_logo_path, width=60*mm, height=40*mm)
+                story.append(end_logo)
+                story.append(Spacer(1, 10))
+                logger.info("Логотип успешно добавлен в конец PDF")
+            else:
+                logger.warning(f"Логотип не найден или путь пустой: {end_logo_path}")
+        except Exception as e:
+            logger.error(f"Ошибка при добавлении логотипа в конец PDF: {e}", exc_info=True)
 
         # --- Сохранение PDF ---
         doc.build(story)
