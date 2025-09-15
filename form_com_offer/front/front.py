@@ -101,7 +101,7 @@ def safe_illumination(value):
         return illumination_map.get(value, "Средняя")
     return "Средняя"
 
-# --- ОБНОВЛЕННАЯ ФУНКЦИЯ ДЛЯ РАБОТЫ С ПУТЯМИ ---
+# Функция для работы с путями
 def get_component_image_path(image_path_from_json):
     """
     Получает абсолютный путь к изображению компонента по его относительному пути из JSON.
@@ -142,11 +142,11 @@ async def generate_kp(client_name, phone, mail, address, date, area, type_room, 
                 ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, brand,
                 installation_price, *components_inputs):
     logger.info(f"Получен запрос на генерацию КП для клиента: {client_name}")
-    # --- Проверка обязательных полей ---
+    # Проверка обязательных полей
     if not client_name or not phone:
         logger.error("Имя клиента или телефон не заполнены!")
         return "Ошибка: заполните имя и телефон клиента!", None
-    # --- Приведение типов ---
+    # Приведение типов
     try:
         area = float(area)
     except Exception:
@@ -267,8 +267,7 @@ async def select_aircons(name, phone, mail, address, date, area, type_room, disc
         return f"Произошла внутренняя ошибка: {e}"
 
 
-# --- ГЛАВНЫЙ БЛОК ИНТЕРФЕЙСА С ИЗМЕНЕНИЯМИ ---
-# --- Новый блок: Стартовый экран и логика загрузки заказа ---
+# Главный блок интерфейса
 
 # Глобальная переменная для хранения выбранного заказа (id и данные)
 selected_order_id = None
@@ -314,7 +313,7 @@ async def delete_order(order_id):
         logger.error(f"Ошибка при удалении заказа: {e}")
         return {"error": str(e)}
 
-# --- PLACEHOLDER для нового заказа ---
+# Placeholder для нового заказа
 def get_placeholder_order():
     return {
         "client_data": {
@@ -460,14 +459,14 @@ def update_components_tab(order_state):
         updates.append(gr.update(value=int(found.get("length", 0)) if found else 0))
     return updates
 
-# --- Новый подход: управление экранами через screen_state и gr.Group(visible=...) ---
+# Управление экранами через screen_state и gr.Group(visible=...)
 
 components_ui_inputs = []  # <-- ВНЕ интерфейса, глобально!
 # ВАЖНО: фиксируем порядок компонентов так, как он отображается в UI,
 # чтобы при сохранении индексы inputs соответствовали именно этому порядку
 components_catalog_for_ui = []
 
-# --- Новый хелпер для подгрузки комплектующих ---
+# Хелпер для подгрузки комплектующих
 def fill_components_fields_from_order(order, components_catalog):
     """
     Возвращает список gr.update для всех полей комплектующих (чекбокс, qty, length).
@@ -1041,12 +1040,11 @@ with gr.Blocks(title="Автоматизация продаж кондицион
             # comment_box, save_comment_status, order_id_hidden, order_state, order_id_state
             comment_value = placeholder.get("comment", "Оставьте комментарий...")
 
-            # ИСПРАВЛЕНИЕ: Убеждаемся, что comment_value - это строка, а не объект
             if not isinstance(comment_value, str):
                 comment_value = str(comment_value) if comment_value is not None else "Оставьте комментарий..."
             values += [gr.update(value=comment_value), gr.update(value=""), gr.update(value=None), gr.update(value=placeholder), gr.update(value=None)]
             
-            # ИСПРАВЛЕНИЕ: Проверяем, что количество значений соответствует ожидаемому
+            # Проверяем, что количество значений соответствует ожидаемому
             expected_count = len(valid_components_ui_inputs) if 'valid_components_ui_inputs' in globals() else len(catalog_components) * 3
             actual_count = len(values) - 29  # 29 = 3 (screens) + 21 (fields) + 5 (comment fields)
             if actual_count != expected_count:

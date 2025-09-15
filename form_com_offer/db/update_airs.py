@@ -98,8 +98,6 @@ async def update_air_conditioners_catalog():
                         skipped_count += 1
                         continue
                     
-                    # --- НОВАЯ ЛОГИКА ИЗВЛЕЧЕНИЯ ДАННЫХ ИЗ ПЛОСКОЙ СТРУКТУРЫ ---
-                    
                     # Определяем наличие инвертора и Wi-Fi по полям is_inverter и has_wifi
                     # Обрабатываем случаи, когда поля содержат пустые строки или невалидные значения
                     is_inverter_raw = air_con_data.get("is_inverter", False)

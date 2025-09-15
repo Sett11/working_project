@@ -20,10 +20,6 @@ from utils.mylogger import Logger
 # log_file указывается без папки logs, чтобы использовать дефолтную директорию логов.
 logger = Logger(name=__name__, log_file="db.log")
 
-# --- Таблицы связей (Многие-ко-многим) ---
-
-# УДАЛЕНО: order_air_conditioner_association, order_component_association
-
 # --- Основные модели ---
 
 class User(Base):

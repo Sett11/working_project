@@ -8,7 +8,7 @@ services:
     command: >
       sh -c "
         sh ./init.sh &&
-        uvicorn back.back:app --host 0.0.0.0 --port 8001 --reload --log-level info --access-log
+        uvicorn back.back:app --host 0.0.0.0 --port 8001 --reload --log-level warning --no-access-log
       "
     volumes:
       - ./back:/app/back
@@ -31,8 +31,12 @@ services:
       - DATABASE_URL_SYNC=${DATABASE_URL_SYNC}
       - SECRET_KEY=${SECRET_KEY}
     restart: always
-    # Убираем healthcheck для backend, так как он может создавать проблемы
-    # Используем стандартные ресурсы
+    # Ограничения логирования для предотвращения перегрузки системы
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     build: .
@@ -52,8 +56,12 @@ services:
     depends_on:
       - backend
     restart: always
-    # Убираем healthcheck для frontend, так как он может создавать проблемы
-    # Используем стандартные ресурсы
+    # Ограничения логирования для предотвращения перегрузки системы
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   db:
     image: postgres:15-alpine
@@ -74,8 +82,12 @@ services:
       # Оставляем только базовые переменные PostgreSQL
     # Используем стандартные настройки PostgreSQL
     restart: always
-    # Используем стандартные ресурсы PostgreSQL
-    # Убираем healthcheck для БД, так как он может создавать проблемы
+    # Ограничения логирования для предотвращения перегрузки системы
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
 
 volumes:
   postgres_data:  # Volume для данных PostgreSQL

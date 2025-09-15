@@ -30,7 +30,7 @@ async def seed_data():
     """
     async with AsyncSessionLocal() as db:
         try:
-            # --- 1. Наполнение таблицы кондиционеров (ОБНОВЛЕННАЯ ЛОГИКА) ---
+            # Наполнение таблицы кондиционеров
             logger.info("Начинается наполнение таблицы кондиционеров...")
             if not os.path.exists(AIRS_CATALOG_PATH):
                 logger.warning(f"Файл {AIRS_CATALOG_PATH} не найден. Пропуск.")
@@ -54,7 +54,7 @@ async def seed_data():
                 
                 for air_con_data in air_conditioners_to_add:
                     
-                    # --- ПРОВЕРКА ОБЯЗАТЕЛЬНЫХ ПОЛЕЙ ---
+                    # Проверка обязательных полей
                     record_id = air_con_data.get("id", "Unknown")
                     model_name = air_con_data.get("model_name")
                     if not model_name or model_name.strip() == "moke":
@@ -62,7 +62,7 @@ async def seed_data():
                         skipped_count += 1
                         continue
                     
-                    # --- ПРОВЕРКА ДУБЛИКАТОВ ---
+                    # Проверка дубликатов
                     # Проверка на дубликат model_name
                     stmt = select(models.AirConditioner).where(models.AirConditioner.model_name == model_name)
                     result = await db.execute(stmt)
@@ -71,8 +71,6 @@ async def seed_data():
                         logger.warning(f"Пропуск записи с ID {record_id}: дубликат model_name {model_name}")
                         skipped_count += 1
                         continue
-                    
-                    # --- НОВАЯ ЛОГИКА ИЗВЛЕЧЕНИЯ ДАННЫХ ИЗ ПЛОСКОЙ СТРУКТУРЫ ---
                     
                     # Определяем наличие инвертора и Wi-Fi по полям is_inverter и has_wifi
                     # Обрабатываем случаи, когда поля содержат пустые строки или невалидные значения
@@ -105,7 +103,7 @@ async def seed_data():
                     # Описание из поля description
                     description = air_con_data.get("description", "")
 
-                    # --- ОБРАБОТКА ЦЕНЫ ---
+                    # Обработка цены
                     retail_price_raw = air_con_data.get("retail_price_byn")
                     retail_price_byn = None
                     if retail_price_raw is not None:
@@ -156,7 +154,7 @@ async def seed_data():
                     added_count += 1
                 logger.info(f"Добавлено {added_count} кондиционеров, пропущено {skipped_count}.")
 
-            # --- 2. Наполнение таблицы комплектующих ---
+            # Наполнение таблицы комплектующих
             logger.info("Начинается наполнение таблицы комплектующих...")
             stmt_count_comp = select(func.count()).select_from(models.Component)
             result = await db.execute(stmt_count_comp)
@@ -185,7 +183,7 @@ async def seed_data():
             else:
                 logger.info("Таблица комплектующих уже содержит данные. Наполнение не требуется.")
 
-            # --- 3. Инициализация счетчика КП ---
+            # Инициализация счетчика КП
             logger.info("Инициализация счетчика коммерческих предложений...")
             try:
                 # Проверяем, существует ли уже счетчик

@@ -12,7 +12,6 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import re
-import asyncio
 import json
 
 from utils.mylogger import Logger
