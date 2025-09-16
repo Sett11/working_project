@@ -152,7 +152,7 @@ async def select_aircons(db: AsyncSession, params: dict) -> list[models.AirCondi
         return []
 
     except Exception as e:
-        logger.error(f"Ошибка при подборе кондиционеров: {str(e)}")
+        logger.error(f"Ошибка при подборе кондиционеров: {str(e)}", exc_info=True)
         return []
 
 async def _select_aircons_core(db: AsyncSession, params: dict, min_power: float, max_power: float) -> list[models.AirConditioner]:
@@ -223,5 +223,5 @@ async def _select_aircons_core(db: AsyncSession, params: dict, min_power: float,
         return selected
 
     except Exception as e:
-        logger.error(f"Ошибка при выполнении подбора кондиционеров: {str(e)}")
+        logger.error(f"Ошибка при выполнении подбора кондиционеров: {str(e)}", exc_info=True)
         return []
