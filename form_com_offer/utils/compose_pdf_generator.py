@@ -363,8 +363,8 @@ async def generate_compose_commercial_offer_pdf(
                     image_path = get_aircon_image_path(ac.get('image_path'))
                     if image_path:
                         try:
-                            # Создаем объект изображения с фиксированным размером
-                            aircon_image = Image(image_path, width=30*mm, height=20*mm)
+                            # Создаем объект изображения с принудительным ограничением размеров
+                            aircon_image = Image(image_path, width=25*mm, height=20*mm)
                         except Exception as e:
                             logger.error(f"Ошибка загрузки изображения {image_path}: {e}")
                             aircon_image = Paragraph("Нет фото", styleTableCell)
@@ -385,7 +385,7 @@ async def generate_compose_commercial_offer_pdf(
                 
                 ac_table = Table(
                     ac_table_data, 
-                    colWidths=[40*mm, 36*mm, 50*mm, 10*mm, 10*mm, 12*mm, 14*mm, 18*mm, 16*mm],
+                    colWidths=[30*mm, 29*mm, 47*mm, 10*mm, 10*mm, 12*mm, 14*mm, 17*mm, 16*mm],
                     repeatRows=1
                 )
                 ac_table.setStyle(TableStyle([
@@ -400,12 +400,15 @@ async def generate_compose_commercial_offer_pdf(
                     ('ALIGN', (5,1), (7,-1), 'RIGHT'), # Цена, Скидка, Сумма - вправо
                     ('ALIGN', (8,1), (8,-1), 'CENTER'), # Галочка - по центру
                     ('ALIGN', (0,0), (-1,0), 'CENTER'),
+                    ('ALIGN', (6,0), (6,0), 'LEFT'), # Заголовок "Скидка %" - по левому краю
                     ('VALIGN', (0,0), (-1,-1), 'TOP'),
                     ('WORDWRAP', (0,1), (-1,-1)),
                 ]))
                 story.append(ac_table)
                 
-                
+                # Добавляем разрыв страницы между таблицами разных комнат (кроме последней)
+                if i < len(aircon_results.get("aircon_results", [])) - 1:
+                    story.append(PageBreak())
                 
                 # Суммируем стоимость монтажа для каждого кондиционера
                 installation_price_val = order_params.get('installation_price', 0)
