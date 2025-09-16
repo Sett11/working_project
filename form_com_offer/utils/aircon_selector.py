@@ -99,7 +99,7 @@ def calculate_required_power(params: dict) -> float:
 
 async def select_aircons(db: AsyncSession, params: dict) -> list[models.AirConditioner]:
     """
-    Подбирает кондиционеры из БД по заданным параметрам.
+    Подбирает кондиционеры из БД по заданным параметрам с fallback логикой.
 
     Args:
         db: Сессия SQLAlchemy.
@@ -122,6 +122,53 @@ async def select_aircons(db: AsyncSession, params: dict) -> list[models.AirCondi
         required_power_kw = calculate_required_power(params)
         logger.info(f"Требуемая мощность с запасом: {required_power_kw:.2f} кВт")
 
+        # Fallback логика: если не найдено кондиционеров, увеличиваем max_power
+        max_power_limit = 23.0
+        power_increment = 0.1  # 10% за итерацию
+        max_attempts = 10
+        
+        for attempt in range(max_attempts):
+            # Рассчитываем max_power для текущей попытки
+            max_power_multiplier = 1.1 + (attempt * power_increment)  # 1.1, 1.2, 1.3, ...
+            current_max_power = required_power_kw * max_power_multiplier
+            
+            logger.info(f"Попытка {attempt + 1}: max_power = {current_max_power:.2f} кВт (множитель: {max_power_multiplier:.1f})")
+            
+            # Проверяем лимит максимальной мощности
+            if current_max_power > max_power_limit:
+                logger.warning(f"Достигнут лимит максимальной мощности {max_power_limit} кВт. Поиск прекращён.")
+                break
+            
+            # Выполняем подбор с текущими параметрами
+            selected = await _select_aircons_core(db, params, required_power_kw, current_max_power)
+            
+            if selected:
+                logger.info(f"Найдено {len(selected)} кондиционеров на попытке {attempt + 1}")
+                return selected
+            else:
+                logger.info(f"На попытке {attempt + 1} кондиционеры не найдены. Увеличиваем max_power.")
+        
+        logger.warning("Не удалось найти кондиционеры даже с увеличенной мощностью")
+        return []
+
+    except Exception as e:
+        logger.error(f"Ошибка при подборе кондиционеров: {str(e)}")
+        return []
+
+async def _select_aircons_core(db: AsyncSession, params: dict, min_power: float, max_power: float) -> list[models.AirConditioner]:
+    """
+    Внутренняя функция для выполнения подбора кондиционеров с заданными параметрами мощности.
+    
+    Args:
+        db: Сессия SQLAlchemy
+        params: Параметры фильтрации
+        min_power: Минимальная мощность (кВт)
+        max_power: Максимальная мощность (кВт)
+        
+    Returns:
+        Список подобранных кондиционеров
+    """
+    try:
         # Формируем асинхронный запрос к БД
         stmt = select(models.AirConditioner)
 
@@ -129,8 +176,6 @@ async def select_aircons(db: AsyncSession, params: dict) -> list[models.AirCondi
         stmt = stmt.where(models.AirConditioner.retail_price_byn.isnot(None))
 
         # Фильтр по мощности
-        min_power = required_power_kw
-        max_power = required_power_kw * 1.3  # +30% запас сверху
         stmt = stmt.where(models.AirConditioner.cooling_power_kw >= min_power)
         stmt = stmt.where(models.AirConditioner.cooling_power_kw <= max_power)
 
@@ -175,9 +220,8 @@ async def select_aircons(db: AsyncSession, params: dict) -> list[models.AirCondi
         
         result = await db.execute(stmt)
         selected = result.scalars().all()
-        logger.info(f"Подбор завершён. Найдено {len(selected)} моделей.")
         return selected
 
     except Exception as e:
-        logger.error(f"Ошибка при подборе кондиционеров: {str(e)}")
+        logger.error(f"Ошибка при выполнении подбора кондиционеров: {str(e)}")
         return []
