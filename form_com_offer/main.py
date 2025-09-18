@@ -1,5 +1,5 @@
 """
-Основной файл для запуска Gradio-приложения.
+Основной файл для запуска front-приложения.
 
 Этот скрипт служит точкой входа для всего приложения.
 Он импортирует готовый интерфейс из модуля `front.front` и запускает его,
@@ -19,16 +19,16 @@ nest_asyncio.apply()
 if __name__ == "__main__":
     
     # Логируем начало процесса запуска веб-интерфейса.
-    frontend_logger.info("Запуск Gradio интерфейса...")
+    frontend_logger.info("Запуск front интерфейса...")
 
-    # Запускаем веб-сервер Gradio.
+    # Запускаем веб-сервер front.
     # server_name="0.0.0.0" делает приложение доступным для других устройств в той же сети.
     # server_port=7860 указывает порт, на котором будет работать приложение.
     try:
         interface.launch(server_name="0.0.0.0", server_port=7860)
-        frontend_logger.info("Gradio интерфейс успешно запущен.")
+        frontend_logger.info("front интерфейс успешно запущен.")
     except Exception as e:
-        frontend_logger.error(f"Произошла ошибка при запуске Gradio интерфейса: {e}", exc_info=True)
+        frontend_logger.error(f"Произошла ошибка при запуске front интерфейса: {e}", exc_info=True)
     finally:
         # Этот лог будет записан после остановки сервера (например, по Ctrl+C).
-        frontend_logger.info("Gradio интерфейс остановлен.")
+        frontend_logger.info("front интерфейс остановлен.")
