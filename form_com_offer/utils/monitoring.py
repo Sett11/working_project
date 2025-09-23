@@ -75,17 +75,18 @@ class ApplicationMonitor:
                 await self._check_graceful_degradation()
                 
                 # Пауза между проверками (увеличена для снижения нагрузки)
-                await asyncio.sleep(300)  # Проверяем каждые 5 минут (увеличено с 1 минуты)
+                await asyncio.sleep(600)  # Проверяем каждые 10 минут (увеличено с 5 минут)
                 
             except Exception as e:
                 logger.error(f"Ошибка в цикле мониторинга: {e}")
                 await asyncio.sleep(60)  # При ошибке проверяем через 1 минуту (увеличено с 30 секунд)
     
     async def _check_system_health(self):
-        """Проверка системного здоровья"""
+        """Проверка системного здоровья (оптимизировано для контейнеров)"""
         try:
-            # Используем мгновенные значения без блокирующих вызовов
-            cpu_percent = psutil.cpu_percent(interval=None)  # Мгновенное значение без ожидания
+            # В контейнерах Docker psutil.cpu_percent(interval=None) может работать некорректно
+            # Используем более безопасный подход с минимальным интервалом
+            cpu_percent = psutil.cpu_percent(interval=0.1)  # Минимальный интервал для корректной работы
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
             
@@ -198,8 +199,8 @@ class ApplicationMonitor:
     async def get_health_status(self) -> Dict[str, Any]:
         """Получение текущего статуса здоровья приложения"""
         try:
-            # Системная информация - используем неблокирующий вызов
-            cpu_percent = psutil.cpu_percent(interval=None)  # Возвращает последнее измеренное значение
+            # Системная информация - оптимизировано для контейнеров
+            cpu_percent = psutil.cpu_percent(interval=0.1)  # Минимальный интервал для корректной работы в контейнерах
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
             

@@ -83,9 +83,12 @@ wait_for_database() {
 check_flag_exists() {
     if [ -f "$FLAG_FILE" ]; then
         return 0  # Флаг-файл существует
-    elif [ -d "$FLAG_FILE" ] && [ -f "$FLAG_FILE/.seeder_completed" ]; then
+    fi
+    
+    if [ -d "$FLAG_FILE" ] && [ -f "$FLAG_FILE/.seeder_completed" ]; then
         return 0  # Директория существует и содержит маркерный файл
     fi
+    
     return 1  # Флаг не найден
 }
 
@@ -125,7 +128,7 @@ if ! check_flag_exists; then
     fi
 else
     if [ -f "$FLAG_FILE" ]; then
-    echo "✅ Seeder уже был выполнен ранее (файл-флаг найден: $FLAG_FILE)"
+        echo "✅ Seeder уже был выполнен ранее (файл-флаг найден: $FLAG_FILE)"
     else
         echo "✅ Seeder уже был выполнен ранее (маркерный файл найден: $FLAG_FILE/.seeder_completed)"
     fi

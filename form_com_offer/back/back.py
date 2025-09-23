@@ -489,6 +489,12 @@ async def select_aircons_endpoint(payload: dict, db: AsyncSession = Depends(get_
         logger.info(f"Подобрано {len(selected_aircons)} кондиционеров.")
         aircons_list = [schemas.AirConditioner.from_orm(ac).dict() for ac in selected_aircons]
         response_data = {"aircons_list": aircons_list, "total_count": len(selected_aircons)}
+        
+        # Дополнительное логирование для отладки
+        logger.info(f"Отправляем ответ: total_count={len(selected_aircons)}, aircons_list length={len(aircons_list)}")
+        if selected_aircons:
+            logger.info(f"Первые 3 кондиционера: {[f'{ac.brand} {ac.model_name}' for ac in selected_aircons[:3]]}")
+        
         logger.info("Подбор кондиционеров завершён успешно.")
         return response_data
     except Exception as e:
@@ -981,16 +987,24 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
         else:
             # Обновляем существующий заказ
             if components_update is not None:
-                # Обновляем только комплектующие
+                # Обновляем комплектующие в первом помещении
                 existing_data = json.loads(order.compose_order_data)
-                existing_data["components"] = components_update
+                
+                # Убеждаемся, что есть массив rooms
+                if "rooms" not in existing_data or not existing_data["rooms"]:
+                    existing_data["rooms"] = [{}]
+                
+                # Сохраняем комплектующие в первое помещение
+                existing_data["rooms"][0]["components_for_room"] = components_update
+                
                 if status_update:
                     existing_data["status"] = status_update
                 if comment_update is not None:
                     existing_data["comment"] = comment_update
+                    
                 order.compose_order_data = json.dumps(existing_data, ensure_ascii=False)
                 order.status = status_update or order.status
-                logger.info(f"Обновлены комплектующие составного заказа id={order.id}")
+                logger.info(f"Обновлены комплектующие для помещения в составном заказе id={order.id}")
             elif comment_update is not None:
                 # Обновляем только комментарий
                 existing_data = json.loads(order.compose_order_data)
@@ -1093,21 +1107,38 @@ async def select_compose_aircons(payload: dict, db: AsyncSession = Depends(get_s
             return {"success": False, "error": "Составной заказ не найден"}
         
         compose_order_data = json.loads(order.compose_order_data)
-        airs = compose_order_data.get("airs", [])
+        rooms = compose_order_data.get("rooms", [])
         
-        if not airs:
-            return {"success": False, "error": "В составном заказе нет кондиционеров для подбора"}
+        if not rooms:
+            return {"success": False, "error": "В составном заказе нет данных о помещениях для подбора"}
         
-        # Берем последний добавленный кондиционер
-        last_air = airs[-1]
-        logger.info(f"Подбираем кондиционеры для последнего элемента с ID {last_air.get('id')}")
+        # Берем первое помещение (пока работаем с одним помещением)
+        room_data = rooms[0]
+        logger.info(f"Подбираем кондиционеры для помещения: {room_data.get('room_type', 'Помещение')}")
         
         # Импортируем функцию подбора для одного кондиционера
         from utils.compose_aircon_selector import select_aircons_for_params
         
-        # Подбираем кондиционеры для последнего элемента
-        aircon_params = last_air.get("aircon_params", {})
-        order_params = last_air.get("order_params", {})
+        # Подбираем кондиционеры для помещения
+        aircon_params = {
+            "area": room_data.get("area", 0),
+            "brand": room_data.get("brand", "Любой"),
+            "wifi": room_data.get("wifi", False),
+            "inverter": room_data.get("inverter", False),
+            "price_limit": room_data.get("price_limit", 10000),
+            "mount_type": room_data.get("mount_type", "Любой"),
+            "ceiling_height": room_data.get("ceiling_height", 2.7),
+            "illumination": room_data.get("illumination", "Средняя"),
+            "num_people": room_data.get("num_people", 1),
+            "activity": room_data.get("activity", "Сидячая работа"),
+            "num_computers": room_data.get("num_computers", 0),
+            "num_tvs": room_data.get("num_tvs", 0),
+            "other_power": room_data.get("other_power", 0)
+        }
+        order_params = {
+            "room_type": room_data.get("room_type", "Помещение"),
+            "installation_price": room_data.get("installation_price", 0)
+        }
         
         # Преобразуем illumination из строки в число, если нужно
         if isinstance(aircon_params.get('illumination'), str):
@@ -1205,16 +1236,18 @@ async def add_aircon_to_compose_order(payload: dict, db: AsyncSession = Depends(
         
         # Обновляем данные заказа с новой структурой
         compose_order_data = json.loads(order.compose_order_data)
-        airs = compose_order_data.get("airs", [])
+        rooms = compose_order_data.get("rooms", [])
         
-        # Если есть предыдущий кондиционер, проверяем что у него есть подобранные кондиционеры
-        if airs:
-            last_air = airs[-1]
-            if "selected_aircons" in last_air and last_air.get("selected_aircons"):
-                logger.info(f"У элемента с ID {last_air.get('id')} уже есть подобранные кондиционеры")
+        # В новой логике работаем с помещениями, а не с отдельными кондиционерами
+        # Этот эндпоинт может быть не нужен в новой логике, но оставляем для совместимости
+        if rooms:
+            room = rooms[0]
+            selected_aircons = room.get("selected_aircons_for_room", [])
+            if selected_aircons:
+                logger.info(f"У помещения '{room.get('room_type', 'Помещение')}' уже есть подобранные кондиционеры")
         
-        # Генерируем автоинкрементный ID для нового кондиционера
-        new_air_id = len(airs) + 1
+        # В новой логике добавляем новое помещение вместо нового кондиционера
+        new_room_id = len(rooms) + 1
         
         # Добавляем ID к данным кондиционера
         new_aircon_order["id"] = new_air_id
@@ -1259,37 +1292,81 @@ async def generate_compose_offer(payload: dict, db: AsyncSession = Depends(get_s
         # Импортируем функцию генерации PDF
         from utils.compose_pdf_generator import generate_compose_commercial_offer_pdf
         
-        # Проверяем, что есть кондиционеры с подобранными вариантами
-        airs = compose_order_data.get("airs", [])
-        if not airs:
-            return {"success": False, "error": "В составном заказе нет кондиционеров"}
+        # Проверяем, что есть помещения с подобранными кондиционерами
+        rooms = compose_order_data.get("rooms", [])
+        if not rooms:
+            return {"success": False, "error": "В составном заказе нет данных о помещениях"}
         
-        # Формируем структуру aircon_results только для кондиционеров с подобранными вариантами
+        # Формируем структуру aircon_results из данных помещений
         aircon_results = {
             "aircon_results": []
         }
         
-        airs_with_selections = []
-        for air in airs:
-            if "selected_aircons" in air and air.get("selected_aircons"):
+        rooms_with_selections = []
+        for i, room in enumerate(rooms):
+            selected_aircons = room.get("selected_aircons_for_room", [])
+            logger.info(f"Помещение {i+1}: selected_aircons_for_room = {selected_aircons}")
+            
+            # Проверяем, что selected_aircons это список, а не строка
+            if isinstance(selected_aircons, str):
+                logger.error(f"selected_aircons_for_room содержит строку вместо списка: {selected_aircons}")
+                try:
+                    selected_aircons = json.loads(selected_aircons)
+                    logger.info(f"Успешно распарсили JSON: {len(selected_aircons)} кондиционеров")
+                except:
+                    logger.error("Не удалось распарсить selected_aircons как JSON")
+                    selected_aircons = []
+            
+            logger.info(f"Помещение {i+1}: итого кондиционеров для обработки: {len(selected_aircons)}")
+            if selected_aircons and isinstance(selected_aircons, list):
+                # Формируем aircon_params из данных помещения
+                aircon_params = {
+                    "area": room.get("area", 0),
+                    "brand": room.get("brand", "Любой"),
+                    "wifi": room.get("wifi", False),
+                    "inverter": room.get("inverter", False),
+                    "price_limit": room.get("price_limit", 10000),
+                    "mount_type": room.get("mount_type", "Любой"),
+                    "ceiling_height": room.get("ceiling_height", 2.7),
+                    "illumination": room.get("illumination", "Средняя"),
+                    "num_people": room.get("num_people", 1),
+                    "activity": room.get("activity", "Сидячая работа"),
+                    "num_computers": room.get("num_computers", 0),
+                    "num_tvs": room.get("num_tvs", 0),
+                    "other_power": room.get("other_power", 0)
+                }
+                
+                # Формируем order_params из данных помещения
+                order_params = {
+                    "room_type": room.get("room_type", "Помещение"),
+                    "installation_price": room.get("installation_price", 0)
+                }
+                
                 aircon_results["aircon_results"].append({
-                    "aircon_params": air.get("aircon_params", {}),
-                    "order_params": air.get("order_params", {}),
-                    "selected_aircons": air.get("selected_aircons", [])
+                    "aircon_params": aircon_params,
+                    "order_params": order_params,
+                    "selected_aircons": selected_aircons
                 })
-                airs_with_selections.append(air)
+                rooms_with_selections.append(room)
         
         if not aircon_results["aircon_results"]:
-            return {"success": False, "error": "Нет кондиционеров с подобранными вариантами. Сначала подберите кондиционеры для всех помещений."}
+            return {"success": False, "error": "Нет помещений с подобранными кондиционерами. Сначала подберите кондиционеры для всех помещений."}
         
-        # Получаем скидку из первого кондиционера с подобранными вариантами
-        discount_percent = airs_with_selections[0].get("order_params", {}).get("discount", 0) if airs_with_selections else 0
+        # Получаем скидку из данных клиента
+        client_data = compose_order_data.get("client_data", {})
+        discount_percent = client_data.get("discount", 0)
+        
+        # Извлекаем комплектующие из первого помещения
+        rooms = compose_order_data.get("rooms", [])
+        components = []
+        if rooms and len(rooms) > 0:
+            components = rooms[0].get("components_for_room", [])
         
         # Генерируем PDF
         pdf_path = await generate_compose_commercial_offer_pdf(
             compose_order_data=compose_order_data,
             aircon_results=aircon_results,
-            components=compose_order_data.get("components", []),
+            components=components,
             discount_percent=discount_percent,
             db_session=db
         )

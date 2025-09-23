@@ -741,7 +741,7 @@ with gr.Blocks(title="Автоматизация продаж кондицион
         orders_sorted = sorted(orders, key=status_key)
         # --- Формирование строк с типом заказа ---
         choices = [
-            f"{o['id']} | {o.get('order_type', 'Order')} | {o['client_name']} | {o.get('address', 'Адрес клиента')} | {o['created_at']} | {o['status']}"
+            f"{o['id']} | {o['client_name']} | {o.get('address', 'Адрес клиента')} | {o['created_at']} | {o['status']}"
             for o in orders_sorted
         ]
 

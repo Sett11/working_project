@@ -109,6 +109,48 @@ class OfferCounter(Base):
     current_number = Column(Integer, default=1)  # Текущий номер КП
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Время последнего обновления
 
+class Room(Base):
+    """
+    Модель помещения (комнаты) в рамках заказа.
+    Один заказ может содержать несколько помещений.
+    """
+    __tablename__ = 'rooms'
+    id = Column(Integer, primary_key=True, index=True)  # Уникальный идентификатор помещения
+    order_id = Column(Integer, ForeignKey('compose_orders.id'), nullable=False)  # Внешний ключ на составной заказ
+    
+    # Основные параметры помещения
+    area = Column(Float, nullable=False)  # Площадь помещения (м²)
+    room_type = Column(String, nullable=True)  # Тип помещения (текстовое поле)
+    
+    # Требования к кондиционеру
+    brand = Column(String, nullable=True)  # Предпочитаемый бренд
+    wifi = Column(Boolean, default=False)  # Поддержка Wi-Fi
+    inverter = Column(Boolean, default=False)  # Инверторный тип
+    price_limit = Column(Float, nullable=True)  # Верхний порог стоимости (BYN)
+    mount_type = Column(String, nullable=True)  # Тип кондиционера
+    
+    # Параметры помещения для расчета
+    ceiling_height = Column(Float, default=2.7)  # Высота потолков (м)
+    illumination = Column(String, nullable=True)  # Освещенность
+    num_people = Column(Integer, default=1)  # Количество людей
+    activity = Column(String, nullable=True)  # Активность людей
+    num_computers = Column(Integer, default=0)  # Количество компьютеров
+    num_tvs = Column(Integer, default=0)  # Количество телевизоров
+    other_power = Column(Float, default=0)  # Мощность прочей техники (Вт)
+    
+    # Дополнительная информация
+    comments = Column(Text, nullable=True)  # Комментарии к помещению
+    installation_price = Column(Float, default=666)  # Стоимость монтажа для этого помещения (BYN)
+    selected_aircons_for_room = Column(JSONB, nullable=True)  # Выбранные кондиционеры для этого помещения (JSON)
+    components_for_room = Column(JSONB, nullable=True)  # Комплектующие для этого помещения (JSON)
+    
+    # Системные поля
+    created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата создания
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Дата обновления
+    
+    # Связи
+    compose_order = relationship("ComposeOrder", back_populates="rooms")  # Связь с составным заказом
+
 class ComposeOrder(Base):
     """
     Модель составного заказа (несколько кондиционеров для одного клиента).
@@ -122,5 +164,6 @@ class ComposeOrder(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата создания заказа
     client_id = Column(Integer, ForeignKey('clients.id'))  # Внешний ключ на клиента
     client = relationship("Client", back_populates="compose_orders")  # Объект клиента
+    rooms = relationship("Room", back_populates="compose_order")  # Связь с помещениями
 
-logger.info("Все модели базы данных (Client, Order, AirConditioner, Component, OfferCounter, ComposeOrder) успешно определены.")
+logger.info("Все модели базы данных (Client, Order, AirConditioner, Component, OfferCounter, Room с полями installation_price и components_for_room, ComposeOrder) успешно определены.")

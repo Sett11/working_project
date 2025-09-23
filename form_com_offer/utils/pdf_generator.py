@@ -381,6 +381,9 @@ async def generate_commercial_offer_pdf(
                         try:
                             # Создаем объект изображения с принудительным ограничением размеров
                             aircon_image = Image(image_path, width=25*mm, height=20*mm)
+                            # Принудительно изменяем размер изображения, игнорируя пропорции
+                            aircon_image.drawWidth = 25*mm
+                            aircon_image.drawHeight = 20*mm
                         except Exception as e:
                             logger.error(f"Ошибка загрузки изображения {image_path}: {e}")
                             aircon_image = Paragraph("Нет фото", styleTableCell)

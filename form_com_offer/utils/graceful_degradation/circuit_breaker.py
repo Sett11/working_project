@@ -244,5 +244,5 @@ db_circuit_breaker = CircuitBreaker(
     failure_threshold=int(os.getenv("CB_FAILURE_THRESHOLD", "3")),
     recovery_timeout=int(os.getenv("CB_RECOVERY_TIMEOUT", "300")),
     expected_exception=(Exception,),  # Все исключения
-    monitor_interval=int(os.getenv("CB_MONITOR_INTERVAL", "60"))
+    monitor_interval=int(os.getenv("CB_MONITOR_INTERVAL", "300"))  # Исправлено: 300 секунд вместо 60
 )

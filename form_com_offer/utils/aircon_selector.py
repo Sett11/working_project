@@ -218,8 +218,15 @@ async def _select_aircons_core(db: AsyncSession, params: dict, min_power: float,
         else:
             logger.warning(f"Некорректное значение mount_type = {params['mount_type']}. Фильтр не применён")
         
+        # Сначала проверим общее количество кондиционеров в БД
+        total_count_stmt = select(models.AirConditioner)
+        total_result = await db.execute(total_count_stmt)
+        total_aircons = total_result.scalars().all()
+        logger.info(f"Всего кондиционеров в БД: {len(total_aircons)}")
+        
         result = await db.execute(stmt)
         selected = result.scalars().all()
+        logger.info(f"После применения фильтров найдено: {len(selected)} кондиционеров")
         return selected
 
     except Exception as e:

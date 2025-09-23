@@ -5,6 +5,8 @@ __pycache__/
 *.pyd
 *.py.class
 
+gradio_old
+
 /.cursor
 /old_app_logs
 /old_app_logs/*

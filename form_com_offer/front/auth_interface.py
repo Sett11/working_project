@@ -9,6 +9,7 @@
 import gradio as gr
 import httpx
 import json
+import os
 from typing import Optional
 from utils.mylogger import Logger
 
@@ -24,6 +25,62 @@ class AuthManager:
         self.token: Optional[str] = None
         self.username: Optional[str] = None
         self.user_id: Optional[int] = None
+        self.auth_file = "/app/auth_data.json"  # Файл для сохранения данных аутентификации
+        self._load_auth_data()  # Загружаем сохраненные данные при инициализации
+    
+    def _save_auth_data(self):
+        """Сохранение данных аутентификации в файл."""
+        try:
+            auth_data = {
+                "token": self.token,
+                "username": self.username,
+                "user_id": self.user_id
+            }
+            with open(self.auth_file, 'w', encoding='utf-8') as f:
+                json.dump(auth_data, f, ensure_ascii=False, indent=2)
+            logger.info("Данные аутентификации сохранены")
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении данных аутентификации: {e}")
+    
+    def _load_auth_data(self):
+        """Загрузка данных аутентификации из файла."""
+        try:
+            if os.path.exists(self.auth_file):
+                with open(self.auth_file, 'r', encoding='utf-8') as f:
+                    auth_data = json.load(f)
+                self.token = auth_data.get("token")
+                self.username = auth_data.get("username")
+                self.user_id = auth_data.get("user_id")
+                if self.token and self.username and self.user_id:
+                    logger.set_user_context(self.user_id)
+                    logger.info(f"Данные аутентификации загружены для пользователя: {self.username}")
+                    # Проверяем валидность токена
+                    if not self._validate_token():
+                        logger.warning("Загруженный токен недействителен, очищаем данные")
+                        self.clear_auth_data()
+                else:
+                    logger.info("Файл аутентификации пуст или поврежден")
+            else:
+                logger.info("Файл аутентификации не найден")
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке данных аутентификации: {e}")
+    
+    def _validate_token(self) -> bool:
+        """Проверка валидности токена через API."""
+        try:
+            if not self.token:
+                return False
+            
+            with httpx.Client() as client:
+                response = client.get(
+                    f"{BACKEND_URL}/api/auth/me",
+                    headers={"Authorization": f"Bearer {self.token}"},
+                    timeout=5.0
+                )
+                return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Ошибка при проверке токена: {e}")
+            return False
     
     def set_auth_data(self, token: str, username: str, user_id: int):
         """Установка данных аутентификации."""
@@ -32,6 +89,7 @@ class AuthManager:
         self.user_id = user_id
         logger.set_user_context(user_id)
         logger.info(f"Пользователь аутентифицирован: {username}")
+        self._save_auth_data()  # Сохраняем данные в файл
     
     def clear_auth_data(self):
         """Очистка данных аутентификации."""
@@ -40,6 +98,13 @@ class AuthManager:
         self.user_id = None
         logger.clear_user_context()
         logger.info("Пользователь вышел из системы")
+        # Удаляем файл с данными аутентификации
+        try:
+            if os.path.exists(self.auth_file):
+                os.remove(self.auth_file)
+                logger.info("Файл аутентификации удален")
+        except Exception as e:
+            logger.error(f"Ошибка при удалении файла аутентификации: {e}")
     
     def is_authenticated(self) -> bool:
         """Проверка аутентификации."""
