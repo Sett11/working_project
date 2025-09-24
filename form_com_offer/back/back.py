@@ -14,8 +14,7 @@ import re
 from db import crud, schemas
 from db.database import get_session, AsyncSessionLocal, engine
 from utils.mylogger import Logger
-from utils.aircon_selector import select_aircons
-from utils.pdf_generator import generate_commercial_offer_pdf_async
+# Удалены неиспользуемые импорты aircon_selector и pdf_generator
 from utils.graceful_degradation import graceful_fallback, graceful_manager
 from db.schemas import FullOrderCreate, UserCreate, UserLogin, TokenResponse, UserResponse
 from utils.auth import hash_password, verify_password, generate_token, get_token_expiry, verify_secret_key
@@ -485,7 +484,9 @@ async def select_aircons_endpoint(payload: dict, db: AsyncSession = Depends(get_
             aircon_params['activity'] = activity_map.get(aircon_params['activity'], 0)
         
         logger.info(f"Начат подбор кондиционеров для клиента: {client_full_name}")
-        selected_aircons = await select_aircons(db, aircon_params)
+        # Импортируем функцию локально для совместимости
+        from utils.compose_aircon_selector import select_aircons_for_params
+        selected_aircons = await select_aircons_for_params(db, aircon_params)
         logger.info(f"Подобрано {len(selected_aircons)} кондиционеров.")
         aircons_list = [schemas.AirConditioner.from_orm(ac).dict() for ac in selected_aircons]
         response_data = {"aircons_list": aircons_list, "total_count": len(selected_aircons)}
@@ -551,7 +552,9 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
             activity_map = {"Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
             aircon_params['activity'] = activity_map.get(aircon_params['activity'], 0)
         
-        selected_aircons = await select_aircons(db, aircon_params)
+        # Импортируем функцию локально для совместимости
+        from utils.compose_aircon_selector import select_aircons_for_params
+        selected_aircons = await select_aircons_for_params(db, aircon_params)
         # --- Формируем варианты для PDF ---
         aircon_variants = []
         variant_items = []
@@ -594,12 +597,13 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
         import re
         safe_name = re.sub(r'[\\/:*?"<>|]', '_', client_full_name).strip()[:20]
         offer_number = f"{today}_{safe_name}"
-        # 4. Генерируем PDF
-        pdf_path = await generate_commercial_offer_pdf_async(
-            client_data=client_data, order_params=order_params,
-            aircon_variants=aircon_variants, components=components_for_pdf,
-            discount_percent=discount, offer_number=offer_number, db_session=db
-        )
+        # 4. Генерируем PDF (ЗАКОММЕНТИРОВАНО - используется только для составных заказов)
+        # pdf_path = await generate_commercial_offer_pdf_async(
+        #     client_data=client_data, order_params=order_params,
+        #     aircon_variants=aircon_variants, components=components_for_pdf,
+        #     discount_percent=discount, offer_number=offer_number, db_session=db
+        # )
+        return {"success": False, "error": "Генерация PDF для обычных заказов отключена. Используйте составные заказы."}
         # --- Меняем статус заказа на completed, если заказ найден по id ---
         if 'order' in locals() and order is not None:
             order.status = 'completed'
@@ -1157,7 +1161,7 @@ async def select_compose_aircons(payload: dict, db: AsyncSession = Depends(get_s
         result_text += f"Площадь: {aircon_params.get('area', 0)} м²\n"
         
         # Рассчитываем требуемую мощность используя правильную функцию
-        from utils.aircon_selector import calculate_required_power
+        from utils.compose_aircon_selector import calculate_required_power
         
         # Восстанавливаем строковые значения для правильного расчета
         calculation_params = aircon_params.copy()

@@ -16,7 +16,7 @@ from utils.mylogger import Logger
 logger = Logger(name=__name__, log_file="frontend.log")
 
 # URL для backend API
-BACKEND_URL = "http://backend:8001"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8001")
 
 class AuthManager:
     """Менеджер аутентификации для Gradio интерфейса."""

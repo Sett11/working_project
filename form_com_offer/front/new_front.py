@@ -18,12 +18,10 @@ import datetime
 
 # Импортируем необходимые функции из существующего front.py
 from front.front import (
-    load_components_catalog, COMPONENTS_CATALOG, get_placeholder_order,
-    build_error_response, safe_float, safe_int, safe_bool, safe_illumination,
-    get_component_image_path, fix_date, generate_kp, select_aircons,
-    fetch_orders_list, fetch_all_orders_list, fetch_order_data, delete_order,
-    fill_fields_from_order, fill_fields_from_order_diff, update_components_tab,
-    fill_components_fields_from_order, read_notes_md
+    COMPONENTS_CATALOG, get_placeholder_order,
+    safe_float, safe_int, safe_bool,
+    get_component_image_path,
+    fetch_all_orders_list
 )
 from front.auth_interface import create_auth_interface, get_auth_manager, get_auth_status
 
@@ -31,7 +29,7 @@ from front.auth_interface import create_auth_interface, get_auth_manager, get_au
 logger = Logger(name=__name__, log_file="frontend.log")
 
 # URL для backend API
-BACKEND_URL = "http://backend:8001"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8001")
 
 # Глобальные переменные для компонентов UI
 components_ui_inputs = []
@@ -43,22 +41,6 @@ loaded_order_data = {}
 
 # === ФУНКЦИИ ДЛЯ РАБОТЫ С ЗАКАЗАМИ ===
 
-async def fetch_orders_list():
-    """Получает список заказов"""
-    try:
-        auth_manager = get_auth_manager()
-        if not auth_manager.is_authenticated():
-            logger.warning("fetch_orders_list: пользователь не аутентифицирован")
-            return []
-        
-        headers = auth_manager.get_auth_headers()
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{BACKEND_URL}/api/orders/", headers=headers)
-            resp.raise_for_status()
-            return resp.json()
-    except Exception as e:
-        logger.error(f"Ошибка при получении списка заказов: {e}")
-        return []
 
 async def fetch_all_orders_list():
     """Получает объединенный список всех заказов"""
@@ -226,22 +208,6 @@ async def load_compose_order_data(order_id):
         logger.error(f"Ошибка при загрузке составного заказа: {e}")
         return None
 
-async def fetch_order_data(order_id):
-    """Загружает данные обычного заказа"""
-    try:
-        auth_manager = get_auth_manager()
-        if not auth_manager.is_authenticated():
-            logger.warning("fetch_order_data: пользователь не аутентифицирован")
-            return None
-        
-        headers = auth_manager.get_auth_headers()
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{BACKEND_URL}/api/order/{order_id}", headers=headers)
-            resp.raise_for_status()
-            return resp.json()
-    except Exception as e:
-        logger.error(f"Ошибка при получении заказа: {e}")
-        return None
 
 # === ФУНКЦИИ ДЛЯ РАБОТЫ С КЛИЕНТАМИ ===
 

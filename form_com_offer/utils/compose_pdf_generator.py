@@ -15,7 +15,6 @@ import re
 import json
 
 from utils.mylogger import Logger
-from utils.pdf_generator import FONTS_REGISTERED, FONT_NAME_NORMAL, FONT_NAME_BOLD
 
 # Импортируем CRUD операции для работы со счетчиком КП
 from sqlalchemy import select
@@ -26,6 +25,46 @@ except ImportError:
     crud = None
 
 logger = Logger("compose_pdf_generator", "compose_pdf_generator.log")
+
+# --- Регистрация шрифтов ---
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FONT_DIR = os.path.join(BASE_DIR, 'utils', 'fonts')
+FONT_PATH = os.path.join(FONT_DIR, 'arial.ttf')
+FONT_BOLD_PATH = os.path.join(FONT_DIR, 'arialbd.ttf')
+
+# Инициализируем флаг успешной регистрации
+FONTS_REGISTERED = False
+
+try:
+    # Проверяем существование файлов шрифтов
+    if not os.path.exists(FONT_PATH):
+        logger.error(f"Файл шрифта {FONT_PATH} не найден! Скопируйте arial.ttf из C:/Windows/Fonts.")
+    elif not os.path.exists(FONT_BOLD_PATH):
+        logger.error(f"Файл жирного шрифта {FONT_BOLD_PATH} не найден! Скопируйте arialbd.ttf из C:/Windows/Fonts.")
+    else:
+        # Регистрируем шрифты
+        pdfmetrics.registerFont(TTFont('Arial', FONT_PATH))
+        pdfmetrics.registerFont(TTFont('Arial-Bold', FONT_BOLD_PATH))
+        
+        # Регистрируем семейство шрифтов - КЛЮЧЕВОЙ МОМЕНТ
+        pdfmetrics.registerFontFamily('Arial', normal='Arial', bold='Arial-Bold')
+        
+        FONTS_REGISTERED = True
+        logger.info("Шрифты Arial успешно зарегистрированы.")
+        
+except Exception as e:
+    logger.error(f"Ошибка при регистрации шрифтов: {e}")
+
+# Определяем имена шрифтов для использования в стилях
+if FONTS_REGISTERED:
+    FONT_NAME_NORMAL = 'Arial'
+    FONT_NAME_BOLD = 'Arial' # Используем семейство + bold=True
+else:
+    # Fallback на встроенные шрифты, если Arial не зарегистрирован
+    logger.warning("Используются встроенные шрифты Helvetica как fallback.")
+    FONT_NAME_NORMAL = 'Helvetica'
+    FONT_NAME_BOLD = 'Helvetica-Bold'
+# --- Конец регистрации шрифтов ---
 
 async def find_aircon_by_model_name(model_name: str, db_session):
     """
