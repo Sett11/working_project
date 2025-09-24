@@ -932,6 +932,7 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
         
         # Проверяем, есть ли обновление комплектующих
         components_update = payload.get("components")
+        room_config = payload.get("room_config", "Базовая конфигурация")  # Получаем информацию о конфигурации
         status_update = payload.get("status")
         
         # Проверяем, есть ли обновление комментария
@@ -991,15 +992,37 @@ async def save_compose_order(payload: dict, db: AsyncSession = Depends(get_sessi
         else:
             # Обновляем существующий заказ
             if components_update is not None:
-                # Обновляем комплектующие в первом помещении
+                # Обновляем комплектующие в правильном помещении согласно room_config
                 existing_data = json.loads(order.compose_order_data)
                 
                 # Убеждаемся, что есть массив rooms
                 if "rooms" not in existing_data or not existing_data["rooms"]:
                     existing_data["rooms"] = [{}]
                 
-                # Сохраняем комплектующие в первое помещение
-                existing_data["rooms"][0]["components_for_room"] = components_update
+                # Находим правильное помещение для сохранения комплектующих
+                target_room_index = 0  # По умолчанию первое помещение (базовая конфигурация)
+                
+                if room_config == "Базовая конфигурация":
+                    # Для базовой конфигурации используем rooms[0]
+                    target_room_index = 0
+                    if len(existing_data["rooms"]) == 0:
+                        existing_data["rooms"].append({})
+                else:
+                    # Ищем помещение с нужным room_type
+                    found = False
+                    for i, room in enumerate(existing_data["rooms"]):
+                        if room.get("room_type") == room_config:
+                            target_room_index = i
+                            found = True
+                            break
+                    
+                    if not found:
+                        logger.warning(f"Помещение с room_type '{room_config}' не найдено, сохраняем в первое помещение")
+                        target_room_index = 0
+                
+                # Сохраняем комплектующие в найденное помещение
+                existing_data["rooms"][target_room_index]["components_for_room"] = components_update
+                logger.info(f"Сохранены комплектующие в помещение с индексом {target_room_index} (конфигурация: {room_config})")
                 
                 if status_update:
                     existing_data["status"] = status_update
@@ -1311,6 +1334,15 @@ async def generate_compose_offer(payload: dict, db: AsyncSession = Depends(get_s
             selected_aircons = room.get("selected_aircons_for_room", [])
             logger.info(f"Помещение {i+1}: selected_aircons_for_room = {selected_aircons}")
             
+            # Пропускаем базовую конфигурацию (rooms[0] без данных)
+            if i == 0:
+                room_type = room.get("room_type", "").strip()
+                has_components = bool(room.get("components_for_room"))
+                # Если это rooms[0] без названия или с дефолтным типом и нет кондиционеров/комплектующих - пропускаем
+                if (not room_type or room_type == "квартира") and not selected_aircons and not has_components:
+                    logger.info(f"Пропускаем базовую конфигурацию (rooms[0]) без данных")
+                    continue
+            
             # Проверяем, что selected_aircons это список, а не строка
             if isinstance(selected_aircons, str):
                 logger.error(f"selected_aircons_for_room содержит строку вместо списка: {selected_aircons}")
@@ -1360,11 +1392,23 @@ async def generate_compose_offer(payload: dict, db: AsyncSession = Depends(get_s
         client_data = compose_order_data.get("client_data", {})
         discount_percent = client_data.get("discount", 0)
         
-        # Извлекаем комплектующие из первого помещения
+        # Собираем все комплектующие из всех помещений для общей сводки (исключая пустую базовую конфигурацию)
         rooms = compose_order_data.get("rooms", [])
         components = []
-        if rooms and len(rooms) > 0:
-            components = rooms[0].get("components_for_room", [])
+        for i, room in enumerate(rooms):
+            # Пропускаем базовую конфигурацию (rooms[0] без данных)
+            if i == 0:
+                room_type = room.get("room_type", "").strip()
+                selected_aircons = room.get("selected_aircons_for_room", [])
+                has_components = bool(room.get("components_for_room"))
+                # Если это rooms[0] без названия или с дефолтным типом и нет кондиционеров/комплектующих - пропускаем
+                if (not room_type or room_type == "квартира") and not selected_aircons and not has_components:
+                    logger.info(f"Пропускаем комплектующие из базовой конфигурации (rooms[0]) без данных")
+                    continue
+            
+            room_components = room.get("components_for_room", [])
+            if room_components:
+                components.extend(room_components)
         
         # Генерируем PDF
         pdf_path = await generate_compose_commercial_offer_pdf(

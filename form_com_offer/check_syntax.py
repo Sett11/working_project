@@ -13,11 +13,23 @@ def check_syntax(file_path):
         return False, f'Ошибка чтения: {e}'
 
 files_to_check = [
+    'main.py',
+    'db/database.py',
+    'db/crud.py',
+    'db/schemas.py',
     'back/back.py',
+    'back/new_back.py',
+    'db/models.py',
+    'db/seeder.py',
     'front/new_front.py', 
     'front/front.py', 
+    'front/auth_interface.py',
     'utils/compose_aircon_selector.py',
-    'utils/compose_pdf_generator.py'
+    'utils/compose_pdf_generator.py',
+    'utils/auth.py',
+    'utils/auth_middleware.py',
+    'utils/mylogger.py',
+
 ]
 
 for file_path in files_to_check:

@@ -38,9 +38,156 @@ components_catalog_for_ui = []
 # Глобальные переменные для хранения выбранного заказа
 selected_order_id = None
 loaded_order_data = {}
+current_room_config = "Базовая конфигурация"  # Текущая выбранная конфигурация помещения
 
 # === ФУНКЦИИ ДЛЯ РАБОТЫ С ЗАКАЗАМИ ===
 
+def load_room_configurations_from_order(order_data):
+    """Загружает список конфигураций из массива rooms + базовая конфигурация"""
+    try:
+        rooms = order_data.get("rooms", [])
+        configs = ["Базовая конфигурация"]
+        
+        # Собираем все уникальные room_type из всех помещений
+        unique_room_types = set()
+        for i, room in enumerate(rooms):
+            room_type = room.get("room_type", "").strip()
+            if room_type:
+                # Пропускаем rooms[0] если это базовая конфигурация без данных
+                if i == 0 and (not room_type or room_type == "квартира"):
+                    # Проверяем, является ли это реально базовой конфигурацией или пользовательским помещением
+                    # Если у помещения есть кондиционеры или комплектующие, то это реальное помещение
+                    has_aircons = bool(room.get("selected_aircons_for_room"))
+                    has_components = bool(room.get("components_for_room"))
+                    if has_aircons or has_components:
+                        unique_room_types.add(room_type)
+                else:
+                    unique_room_types.add(room_type)
+        
+        # Добавляем все уникальные типы помещений в список конфигураций
+        configs.extend(sorted(unique_room_types))
+        
+        logger.info(f"Загружено конфигураций помещений: {len(configs)} ({configs})")
+        return configs
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке конфигураций помещений: {e}")
+        return ["Базовая конфигурация"]
+
+def get_placeholder_room_data():
+    """Возвращает базовые данные для помещения (из плейсхолдера)"""
+    placeholder = get_placeholder_order()
+    return {
+        "area": placeholder["aircon_params"]["area"],
+        "room_type": "",  # Пустое название, чтобы пользователь сам ввел уникальное
+        "installation_price": placeholder["order_params"]["installation_price"],
+        "brand": placeholder["aircon_params"]["brand"],
+        "wifi": placeholder["aircon_params"]["wifi"],
+        "inverter": placeholder["aircon_params"]["inverter"],
+        "price_limit": placeholder["aircon_params"]["price_limit"],
+        "mount_type": placeholder["aircon_params"]["mount_type"],
+        "ceiling_height": placeholder["aircon_params"]["ceiling_height"],
+        "illumination": placeholder["aircon_params"]["illumination"],
+        "num_people": placeholder["aircon_params"]["num_people"],
+        "activity": "Сидячая работа",
+        "num_computers": placeholder["aircon_params"]["num_computers"],
+        "num_tvs": placeholder["aircon_params"]["num_tvs"],
+        "other_power": placeholder["aircon_params"]["other_power"],
+        "comments": "Оставьте комментарий..."
+    }
+
+async def load_room_config_data(config_name, order_id_hidden_value):
+    """Загружает данные конкретной конфигурации помещения"""
+    global current_room_config
+    try:
+        # Обновляем текущую выбранную конфигурацию
+        current_room_config = config_name
+        
+        if config_name == "Базовая конфигурация":
+            # Возвращаем дефолтные значения из плейсхолдера
+            base_data = get_placeholder_room_data()
+            logger.info("Загружена базовая конфигурация помещения")
+            return [
+                gr.update(value=base_data["area"]),                    # room_area
+                gr.update(value=base_data["room_type"]),               # room_type
+                gr.update(value=base_data["installation_price"]),     # installation_price
+                gr.update(value=base_data["brand"]),                   # brand
+                gr.update(value=base_data["wifi"]),                    # wifi_support
+                gr.update(value=base_data["inverter"]),                # inverter_type
+                gr.update(value=base_data["price_limit"]),             # max_price
+                gr.update(value=base_data["mount_type"]),              # mount_type
+                gr.update(value=base_data["ceiling_height"]),          # ceiling_height
+                gr.update(value=base_data["illumination"]),            # illumination
+                gr.update(value=base_data["num_people"]),              # num_people
+                gr.update(value=base_data["activity"]),                # activity
+                gr.update(value=base_data["num_computers"]),           # num_computers
+                gr.update(value=base_data["num_tvs"]),                 # num_tvs
+                gr.update(value=base_data["other_power"]),             # other_power
+                gr.update(value=base_data["comments"]),                # comments
+                gr.update(choices=[], value=[]),                       # aircons_checkboxes
+                f"✅ Загружена базовая конфигурация помещения"
+            ]
+        
+        # Ищем room с таким room_type в заказе
+        if not order_id_hidden_value:
+            return [gr.update() for _ in range(17)] + ["❌ Ошибка: не указан ID заказа"]
+        
+        order_data = await load_compose_order_data(int(order_id_hidden_value))
+        if not order_data:
+            return [gr.update() for _ in range(17)] + ["❌ Ошибка: не удалось загрузить данные заказа"]
+        
+        rooms = order_data.get("rooms", [])
+        for room in rooms:
+            if room.get("room_type") == config_name:
+                logger.info(f"Загружена конфигурация помещения: {config_name}")
+                selected_aircons = room.get("selected_aircons_for_room", [])
+                return [
+                    gr.update(value=room.get("area", 50)),                    # room_area
+                    gr.update(value=room.get("room_type", "")),               # room_type
+                    gr.update(value=room.get("installation_price", 666)),     # installation_price
+                    gr.update(value=room.get("brand", "Любой")),              # brand
+                    gr.update(value=room.get("wifi", False)),                 # wifi_support
+                    gr.update(value=room.get("inverter", False)),             # inverter_type
+                    gr.update(value=room.get("price_limit", 10000)),          # max_price
+                    gr.update(value=room.get("mount_type", "Любой")),         # mount_type
+                    gr.update(value=room.get("ceiling_height", 2.7)),         # ceiling_height
+                    gr.update(value=room.get("illumination", "Средняя")),     # illumination
+                    gr.update(value=room.get("num_people", 1)),               # num_people
+                    gr.update(value=room.get("activity", "Сидячая работа")),  # activity
+                    gr.update(value=room.get("num_computers", 0)),            # num_computers
+                    gr.update(value=room.get("num_tvs", 0)),                  # num_tvs
+                    gr.update(value=room.get("other_power", 0)),              # other_power
+                    gr.update(value=room.get("comments", "")),                # comments
+                    gr.update(choices=selected_aircons, value=selected_aircons),  # aircons_checkboxes
+                    f"✅ Загружена конфигурация: {config_name}"
+                ]
+        
+        # Если room с таким типом не найден, возвращаем базовую конфигурацию
+        logger.warning(f"Помещение '{config_name}' не найдено, загружаем базовую конфигурацию")
+        base_data = get_placeholder_room_data()
+        return [
+            gr.update(value=base_data["area"]),                    # room_area
+            gr.update(value=config_name),                          # room_type (устанавливаем выбранное название)
+            gr.update(value=base_data["installation_price"]),     # installation_price
+            gr.update(value=base_data["brand"]),                   # brand
+            gr.update(value=base_data["wifi"]),                    # wifi_support
+            gr.update(value=base_data["inverter"]),                # inverter_type
+            gr.update(value=base_data["price_limit"]),             # max_price
+            gr.update(value=base_data["mount_type"]),              # mount_type
+            gr.update(value=base_data["ceiling_height"]),          # ceiling_height
+            gr.update(value=base_data["illumination"]),            # illumination
+            gr.update(value=base_data["num_people"]),              # num_people
+            gr.update(value=base_data["activity"]),                # activity
+            gr.update(value=base_data["num_computers"]),           # num_computers
+            gr.update(value=base_data["num_tvs"]),                 # num_tvs
+            gr.update(value=base_data["other_power"]),             # other_power
+            gr.update(value=base_data["comments"]),                # comments
+            gr.update(choices=[], value=[]),                       # aircons_checkboxes
+            f"⚠️ Помещение '{config_name}' не найдено, загружена базовая конфигурация"
+        ]
+        
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке конфигурации помещения: {e}")
+        return [gr.update() for _ in range(17)] + [f"❌ Ошибка: {e}"]
 
 async def fetch_all_orders_list():
     """Получает объединенный список всех заказов"""
@@ -93,7 +240,7 @@ async def load_selected_order_from_radio(selected_order):
         if not selected_order:
             # Возвращаем пустые обновления для всех полей
             empty_updates = [gr.update(visible=True, value="Пожалуйста, выберите заказ для загрузки"), gr.update(), gr.update()]
-            empty_updates.extend([gr.update() for _ in range(24)])  # 24 поля формы (6 клиент + 16 помещение + 1 aircons_checkboxes + 1 order_id_hidden)
+            empty_updates.extend([gr.update() for _ in range(25)])  # 25 полей формы (6 клиент + 1 room_config_dropdown + 16 помещение + 1 aircons_checkboxes + 1 order_id_hidden)
             return tuple(empty_updates)
         
         # Извлекаем ID заказа из строки (тип заказа убран из отображения)
@@ -107,7 +254,7 @@ async def load_selected_order_from_radio(selected_order):
         
         if not order_data:
             error_updates = [gr.update(visible=True, value="Ошибка при загрузке данных заказа"), gr.update(), gr.update()]
-            error_updates.extend([gr.update() for _ in range(24)])
+            error_updates.extend([gr.update() for _ in range(25)])
             return tuple(error_updates)
         
         # Извлекаем данные из заказа (новая структура с комнатами)
@@ -135,12 +282,15 @@ async def load_selected_order_from_radio(selected_order):
         discount = safe_int(discount)
         logger.info(f"Итоговая скидка после safe_int: {discount}")
         
-        # Получаем данные первой комнаты
-        rooms = order_data.get("rooms", [])
-        room_data = rooms[0] if rooms else {}
+        # Загружаем конфигурации помещений из заказа
+        room_configs = load_room_configurations_from_order(order_data)
         
-        # Извлекаем выбранные кондиционеры из комнаты
-        selected_aircons_for_room = room_data.get("selected_aircons_for_room", [])
+        # Инициализируем текущую конфигурацию как базовую при загрузке заказа
+        global current_room_config
+        current_room_config = "Базовая конфигурация"
+        
+        # Для полей секции "Данные для помещения" используем базовую конфигурацию
+        base_room_data = get_placeholder_room_data()
         
         # Переходим к основному интерфейсу с загруженными данными
         return (
@@ -156,30 +306,29 @@ async def load_selected_order_from_radio(selected_order):
             gr.update(value=visit_date),     # visit_date
             gr.update(value=discount),       # discount
             
-            # Поля данных помещения
-            gr.update(value=room_data.get("area", 50)),                    # room_area
-            gr.update(value=room_data.get("room_type", "")),               # room_type
-            gr.update(value=room_data.get("installation_price", 666)),     # installation_price
-            gr.update(value=room_data.get("brand", "Любой")),              # brand
-            gr.update(value=room_data.get("wifi", False)),                 # wifi_support
-            gr.update(value=room_data.get("inverter", False)),             # inverter_type
-            gr.update(value=room_data.get("price_limit", 10000)),          # max_price
-            gr.update(value=room_data.get("mount_type", "Любой")),         # mount_type
-            gr.update(value=room_data.get("ceiling_height", 2.7)),         # ceiling_height
-            gr.update(value=room_data.get("illumination", "Средняя")),     # illumination
-            gr.update(value=room_data.get("num_people", 1)),               # num_people
-            gr.update(value=room_data.get("activity", "Сидячая работа")),  # activity
-            gr.update(value=room_data.get("num_computers", 0)),            # num_computers
-            gr.update(value=room_data.get("num_tvs", 0)),                  # num_tvs
-            gr.update(value=room_data.get("other_power", 0)),              # other_power
-            gr.update(value=room_data.get("comments", "")),                # comments
+            # Селектор конфигурации помещения (загружаем все room_type из rooms)
+            gr.update(choices=room_configs, value="Базовая конфигурация"),  # room_config_dropdown
             
-            # Подобранные кондиционеры (загружаем выбранные из комнаты)
-            # Если есть сохраненные кондиционеры, используем их как choices и value
-            gr.update(
-                choices=selected_aircons_for_room if selected_aircons_for_room else [], 
-                value=selected_aircons_for_room if selected_aircons_for_room else []
-            ),        # aircons_checkboxes
+            # Поля данных помещения (загружаем базовую конфигурацию)
+            gr.update(value=base_room_data["area"]),                    # room_area
+            gr.update(value=base_room_data["room_type"]),               # room_type
+            gr.update(value=base_room_data["installation_price"]),     # installation_price
+            gr.update(value=base_room_data["brand"]),                   # brand
+            gr.update(value=base_room_data["wifi"]),                    # wifi_support
+            gr.update(value=base_room_data["inverter"]),                # inverter_type
+            gr.update(value=base_room_data["price_limit"]),             # max_price
+            gr.update(value=base_room_data["mount_type"]),              # mount_type
+            gr.update(value=base_room_data["ceiling_height"]),          # ceiling_height
+            gr.update(value=base_room_data["illumination"]),            # illumination
+            gr.update(value=base_room_data["num_people"]),              # num_people
+            gr.update(value=base_room_data["activity"]),                # activity
+            gr.update(value=base_room_data["num_computers"]),           # num_computers
+            gr.update(value=base_room_data["num_tvs"]),                 # num_tvs
+            gr.update(value=base_room_data["other_power"]),             # other_power
+            gr.update(value=base_room_data["comments"]),                # comments
+            
+            # Подобранные кондиционеры (пустые для базовой конфигурации)
+            gr.update(choices=[], value=[]),  # aircons_checkboxes
             
             # Скрытое поле ID заказа
             gr.update(value=order_id)  # order_id_hidden
@@ -188,7 +337,7 @@ async def load_selected_order_from_radio(selected_order):
     except Exception as e:
         logger.error(f"Ошибка при загрузке выбранного заказа: {e}")
         error_updates = [gr.update(visible=True, value=f"Ошибка: {e}"), gr.update(), gr.update()]
-        error_updates.extend([gr.update() for _ in range(23)])
+        error_updates.extend([gr.update() for _ in range(25)])
         return tuple(error_updates)
 
 async def load_compose_order_data(order_id):
@@ -327,7 +476,8 @@ async def save_client_data_handler(order_id_hidden_value, client_name, client_ph
 
 async def save_room_data_handler(order_id_hidden_value, room_area, room_type, installation_price, brand, wifi_support, inverter_type, max_price, 
                                 mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, comments):
-    """Сохраняет данные для помещения включая комментарии (будущая модель room)"""
+    """Сохраняет данные для помещения: создает новый room или обновляет существующий"""
+    global current_room_config
     try:
         if not order_id_hidden_value:
             return "Ошибка: Сначала сохраните данные клиента!", None
@@ -373,15 +523,60 @@ async def save_room_data_handler(order_id_hidden_value, room_area, room_type, in
             if "error" in current_order_data:
                 return f"Ошибка: {current_order_data['error']}", None
         
-        # Добавляем данные комнаты к составному заказу
+        # Добавляем/обновляем данные комнаты в составном заказе
         updated_order_data = current_order_data.copy()
         
         # Если еще нет массива комнат, создаем его
         if "rooms" not in updated_order_data:
             updated_order_data["rooms"] = []
         
-        # Добавляем новую комнату (пока что одну, потом сделаем множественные)
-        updated_order_data["rooms"] = [room_data]  # Заменяем существующую комнату
+        rooms = updated_order_data["rooms"]
+        room_type_to_save = room_data.get("room_type", "").strip()
+        
+        if current_room_config == "Базовая конфигурация":
+            # Сохранение из базовой конфигурации - ВСЕГДА создаем новое помещение
+            # Проверяем, есть ли уже помещение с таким названием
+            existing_room_index = None
+            for i, room in enumerate(rooms):
+                if room.get("room_type") == room_type_to_save:
+                    existing_room_index = i
+                    break
+            
+            if existing_room_index is not None:
+                # Помещение с таким названием уже существует - обновляем его
+                rooms[existing_room_index] = room_data
+                logger.info(f"Обновлено существующее помещение '{room_type_to_save}' (индекс {existing_room_index})")
+            else:
+                # Помещения с таким названием нет - добавляем новое
+                rooms.append(room_data)
+                logger.info(f"Добавлено новое помещение '{room_type_to_save}' в массив rooms")
+        else:
+            # Сохранение из уже загруженной конфигурации - обновляем существующее помещение
+            room_found = False
+            for i, room in enumerate(rooms):
+                if room.get("room_type") == current_room_config:
+                    # Если пользователь изменил название помещения, нужно проверить уникальность
+                    if room_type_to_save != current_room_config:
+                        # Проверяем, нет ли уже помещения с новым названием
+                        name_conflict = False
+                        for j, other_room in enumerate(rooms):
+                            if j != i and other_room.get("room_type") == room_type_to_save:
+                                name_conflict = True
+                                break
+                        
+                        if name_conflict:
+                            return f"Ошибка: Помещение с названием '{room_type_to_save}' уже существует!", None
+                    
+                    rooms[i] = room_data
+                    room_found = True
+                    logger.info(f"Обновлено помещение '{current_room_config}' → '{room_type_to_save}' (индекс {i})")
+                    break
+            
+            if not room_found:
+                logger.error(f"Не найдено помещение '{current_room_config}' для обновления!")
+                return f"Ошибка: Не найдено помещение '{current_room_config}' для обновления!", None
+        
+        updated_order_data["rooms"] = rooms
         
         # Сохраняем обновленный заказ
         payload = {
@@ -405,6 +600,48 @@ async def save_room_data_handler(order_id_hidden_value, room_area, room_type, in
         error_message = f"Ошибка при сохранении данных помещения: {e}"
         logger.error(error_message, exc_info=True)
         return error_message, order_id_hidden_value
+
+async def save_room_data_with_dropdown_update(order_id_hidden_value, room_area, room_type, installation_price, brand, wifi_support, inverter_type, max_price, 
+                                            mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, comments):
+    """Сохраняет данные помещения и обновляет dropdown конфигураций"""
+    global current_room_config
+    try:
+        room_type_to_save = room_type.strip() if room_type else ""
+        
+        # Сохраняем данные помещения
+        save_result, order_id = await save_room_data_handler(
+            order_id_hidden_value, room_area, room_type, installation_price, brand, wifi_support, inverter_type, max_price, 
+            mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, comments
+        )
+        
+        if order_id and "успешно сохранены" in save_result:
+            # КРИТИЧЕСКИ ВАЖНО: Обновляем текущую конфигурацию на только что сохраненную
+            if room_type_to_save:
+                current_room_config = room_type_to_save
+                logger.info(f"🔄 Текущая конфигурация изменена на: {current_room_config}")
+            
+            # Загружаем обновленные данные заказа для dropdown
+            order_data = await load_compose_order_data(int(order_id))
+            if order_data:
+                updated_configs = load_room_configurations_from_order(order_data)
+                
+                # Формируем статус с информацией о смене конфигурации
+                config_status = f"✅ Конфигурация переключена на: {current_room_config}"
+                
+                return (
+                    save_result, 
+                    order_id, 
+                    gr.update(choices=updated_configs, value=current_room_config),  # dropdown
+                    config_status  # статус конфигурации
+                )
+        
+        # В случае ошибки возвращаем текущее состояние
+        return save_result, order_id, gr.update(), "❌ Ошибка при обновлении конфигурации"
+        
+    except Exception as e:
+        error_message = f"Ошибка при сохранении данных помещения с обновлением dropdown: {e}"
+        logger.error(error_message, exc_info=True)
+        return error_message, order_id_hidden_value, gr.update(), f"❌ Ошибка: {e}"
 
 
 # === ФУНКЦИИ ДЛЯ ГЕНЕРАЦИИ КП ===
@@ -485,7 +722,8 @@ async def delete_compose_order_handler(order_id_hidden_value):
 # === ФУНКЦИИ ДЛЯ РАБОТЫ С КОНДИЦИОНЕРАМИ ===
 
 async def select_aircons_for_checkboxes(order_id_hidden_value):
-    """Подбирает кондиционеры на основе данных комнаты и возвращает их в виде чекбоксов"""
+    """Подбирает кондиционеры на основе данных текущей выбранной конфигурации помещения"""
+    global current_room_config
     try:
         # Проверяем авторизацию
         auth_manager = get_auth_manager()
@@ -506,12 +744,34 @@ async def select_aircons_for_checkboxes(order_id_hidden_value):
             if "error" in order_data:
                 return gr.update(choices=[], value=[]), f"Ошибка: {order_data['error']}"
         
-        # Извлекаем данные первой комнаты для подбора кондиционеров
+        # Извлекаем данные текущей выбранной конфигурации для подбора кондиционеров
         rooms = order_data.get("rooms", [])
         if not rooms:
-            return gr.update(choices=[], value=[]), "Ошибка: Нет данных комнаты для подбора кондиционеров"
+            return gr.update(choices=[], value=[]), "❌ Нет сохраненных данных помещений. Пожалуйста, сначала сохраните данные помещения!"
         
-        room_data = rooms[0]  # Берем первую комнату
+        # Находим правильное помещение для подбора кондиционеров
+        room_data = None
+        
+        if current_room_config == "Базовая конфигурация":
+            # Для базовой конфигурации используем rooms[0] или дефолтные значения
+            if len(rooms) > 0:
+                room_data = rooms[0]
+            else:
+                # Если нет сохраненных данных, используем дефолтные значения из плейсхолдера
+                placeholder_data = get_placeholder_room_data()
+                room_data = placeholder_data
+                logger.info("Используем дефолтные данные для подбора кондиционеров (базовая конфигурация)")
+        else:
+            # Ищем помещение с нужным room_type
+            for room in rooms:
+                if room.get("room_type") == current_room_config:
+                    room_data = room
+                    break
+            
+            if not room_data:
+                return gr.update(choices=[], value=[]), f"❌ Данные для конфигурации '{current_room_config}' не найдены. Пожалуйста, сначала сохраните данные помещения!"
+        
+        logger.info(f"Подбор кондиционеров для конфигурации: {current_room_config}")
         
         # Формируем payload для подбора кондиционеров на основе данных комнаты
         aircon_params = {
@@ -582,7 +842,8 @@ async def select_aircons_for_checkboxes(order_id_hidden_value):
         return gr.update(choices=[], value=[]), error_message
 
 async def save_selected_aircons_handler(order_id_hidden_value, selected_aircons):
-    """Сохраняет выбранные кондиционеры в поле selected_aircons_for_room модели Room"""
+    """Сохраняет выбранные кондиционеры в поле selected_aircons_for_room в JSON данных текущей конфигурации"""
+    global current_room_config
     try:
         # Проверяем авторизацию
         auth_manager = get_auth_manager()
@@ -614,17 +875,39 @@ async def save_selected_aircons_handler(order_id_hidden_value, selected_aircons)
         if not rooms:
             return "Ошибка: Нет данных комнаты для сохранения кондиционеров"
         
-        # Обновляем первую комнату (пока работаем с одной комнатой)
-        room_data = rooms[0].copy()
+        # Находим нужную комнату для сохранения кондиционеров
+        room_data = None
+        room_index = 0
+        
+        if current_room_config == "Базовая конфигурация":
+            # Для базовой конфигурации используем rooms[0]
+            if len(rooms) > 0:
+                room_data = rooms[0].copy()
+                room_index = 0
+        else:
+            # Ищем комнату с нужным room_type
+            for i, room in enumerate(rooms):
+                if room.get("room_type") == current_room_config:
+                    room_data = room.copy()
+                    room_index = i
+                    break
+        
+        if not room_data:
+            return f"Ошибка: Не найдена комната для конфигурации '{current_room_config}'"
+        
         room_data["selected_aircons_for_room"] = selected_aircons
         
         # Получаем существующие данные клиента из заказа
         existing_client_data = order_data.get("client_data", {})
         
+        # Обновляем комнату в массиве
+        updated_rooms = rooms.copy()
+        updated_rooms[room_index] = room_data
+        
         # Формируем данные для сохранения
         compose_order_data = {
             "client_data": existing_client_data,  # Используем существующие данные клиента
-            "rooms": [room_data]  # Обновленная комната с выбранными кондиционерами
+            "rooms": updated_rooms  # Обновленный массив комнат
         }
         
         # Сохраняем обновленные данные
@@ -653,7 +936,8 @@ async def save_selected_aircons_handler(order_id_hidden_value, selected_aircons)
 # === ФУНКЦИИ ДЛЯ РАБОТЫ С КОМПЛЕКТУЮЩИМИ ===
 
 async def load_components_for_room(order_id_hidden_value):
-    """Загружает сохраненные комплектующие для помещения при открытии интерфейса"""
+    """Загружает сохраненные комплектующие для помещения из текущей выбранной конфигурации"""
+    global current_room_config
     try:
         if not order_id_hidden_value:
             logger.warning("Не указан ID заказа для загрузки комплектующих")
@@ -686,11 +970,22 @@ async def load_components_for_room(order_id_hidden_value):
             
             order_data = resp.json()
             
-            # Извлекаем комплектующие из первого помещения
+            # Извлекаем комплектующие из текущей выбранной конфигурации
             rooms = order_data.get("rooms", [])
             saved_components = []
-            if rooms and len(rooms) > 0:
-                saved_components = rooms[0].get("components_for_room", [])
+            
+            if current_room_config == "Базовая конфигурация":
+                # Для базовой конфигурации используем rooms[0]
+                if rooms and len(rooms) > 0:
+                    saved_components = rooms[0].get("components_for_room", [])
+                    logger.info(f"Загружаем комплектующие из базовой конфигурации (rooms[0])")
+            else:
+                # Ищем комнату с нужным room_type
+                for room in rooms:
+                    if room.get("room_type") == current_room_config:
+                        saved_components = room.get("components_for_room", [])
+                        logger.info(f"Загружаем комплектующие из конфигурации: {current_room_config}")
+                        break
             
             logger.info(f"Загружено {len(saved_components)} сохраненных комплектующих для заказа {order_id}")
             
@@ -731,7 +1026,8 @@ async def load_components_for_room(order_id_hidden_value):
         return [gr.update(visible=False), gr.update(visible=True)] + empty_values
 
 async def save_components_handler(order_id_hidden_value, *components_inputs):
-    """Сохраняет выбранные комплектующие для заказа"""
+    """Сохраняет выбранные комплектующие для текущей конфигурации помещения"""
+    global current_room_config
     try:
         if not order_id_hidden_value:
             return "Ошибка: Не указан ID заказа", None
@@ -803,6 +1099,7 @@ async def save_components_handler(order_id_hidden_value, *components_inputs):
                     payload = {
                         "id": order_id,
                         "components": selected_components,
+                        "room_config": current_room_config,  # Добавляем информацию о текущей конфигурации
                         "status": "completely filled"
                     }
                     resp = await client.post(f"{BACKEND_URL}/api/save_compose_order/", json=payload, headers=headers)
@@ -940,9 +1237,74 @@ def create_new_front_interface():
                     <p style="margin: 5px 0 0 0; color: #666; font-size: 0.9em;">Характеристики помещения и требования к кондиционированию</p>
                 </div>
                 """)
+                
+                # Селектор конфигурации помещения
+                with gr.Row():
+                    room_config_dropdown = gr.Dropdown(
+                        choices=["Базовая конфигурация"], 
+                        label="🔧 Конфигурация помещения", 
+                        value="Базовая конфигурация",
+                        info="Выберите существующее помещение или создайте новое",
+                        scale=3
+                    )
+                    load_config_btn = gr.Button(
+                        "🚀 Загрузить конфигурацию", 
+                        variant="primary", 
+                        size="lg",
+                        scale=1,
+                        elem_classes="config-load-btn"
+                    )
+                
+                # Статус загрузки конфигурации
+                config_load_status = gr.Textbox(label="Статус загрузки конфигурации", interactive=False, show_copy_button=False, max_lines=1, lines=1)
+                
+                # Важное примечание для пользователя
+                gr.HTML("""
+                <div style="background: #e3f2fd; border: 1px solid #90caf9; border-radius: 8px; padding: 12px; margin: 10px 0;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;">💡</span>
+                        <span style="color: #1565c0; font-weight: 500;">
+                            Перед добавлением нового помещения к заказу обязательно загрузите базовую конфигурацию!
+                        </span>
+                    </div>
+                </div>
+                """)
+                
+                # Кастомные стили для кнопки загрузки конфигурации
+                gr.HTML("""
+                <style>
+                .config-load-btn {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+                    border: none !important;
+                    border-radius: 12px !important;
+                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3) !important;
+                    transition: all 0.3s ease !important;
+                    font-weight: 600 !important;
+                    text-transform: uppercase !important;
+                    letter-spacing: 0.5px !important;
+                }
+                .config-load-btn:hover {
+                    transform: translateY(-2px) !important;
+                    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4) !important;
+                    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+                }
+                .config-load-btn:active {
+                    transform: translateY(0px) !important;
+                    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3) !important;
+                }
+                </style>
+                """)
+                
                 with gr.Row():
                     room_area = gr.Slider(10, 200, step=5, label="Площадь помещения (м²)", value=get_placeholder_order()["aircon_params"]["area"])
-                    room_type = gr.Textbox(label="Тип помещения", placeholder="Например: квартира, офис, дом...", value="квартира", show_copy_button=False, max_lines=1)
+                    room_type = gr.Textbox(
+                        label="Название помещения", 
+                        placeholder="Например: кухня, спальня, гостиная...", 
+                        value="", 
+                        show_copy_button=False, 
+                        max_lines=1,
+                        info="Должно быть уникальным в рамках одного заказа"
+                    )
                     installation_price = gr.Slider(0, 5000, step=50, label="Стоимость монтажа (BYN)", value=get_placeholder_order()["order_params"]["installation_price"])
                 
                 with gr.Row():
@@ -987,6 +1349,18 @@ def create_new_front_interface():
                 # Кнопка подбора кондиционеров
                 with gr.Row():
                     select_aircons_btn = gr.Button("🔍 Подобрать кондиционеры", variant="secondary", size="lg")
+                
+                # Примечание для пользователя
+                gr.HTML("""
+                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 12px; margin: 10px 0;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;">⚠️</span>
+                        <span style="color: #856404; font-weight: 500;">
+                            Пожалуйста, сохраните данные помещения перед подбором кондиционеров!
+                        </span>
+                    </div>
+                </div>
+                """)
                 
                 # Статус подбора кондиционеров (отдельное поле)
                 aircons_selection_status = gr.Textbox(label="Статус подбора кондиционеров", interactive=False, show_copy_button=False, max_lines=1, lines=1)
@@ -1158,6 +1532,8 @@ def create_new_front_interface():
             outputs=[load_error, load_order_screen, main_interface, 
                     # Поля данных клиента
                     client_name, client_phone, client_mail, client_address, visit_date, discount,
+                    # Селектор конфигурации помещения
+                    room_config_dropdown,
                     # Поля данных помещения
                     room_area, room_type, installation_price, brand, wifi_support, inverter_type, max_price,
                     mount_type, ceiling_height, illumination, num_people, activity, 
@@ -1177,6 +1553,15 @@ def create_new_front_interface():
         back_to_main_btn.click(
             fn=lambda: [gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)],
             outputs=[order_selection_screen, load_order_screen, main_interface]
+        )
+        
+        # Загрузка выбранной конфигурации помещения
+        load_config_btn.click(
+            fn=load_room_config_data,
+            inputs=[room_config_dropdown, order_id_hidden],
+            outputs=[room_area, room_type, installation_price, brand, wifi_support, inverter_type, max_price,
+                    mount_type, ceiling_height, illumination, num_people, activity, 
+                    num_computers, num_tvs, other_power, comments, aircons_checkboxes, config_load_status]
         )
         
         # Показать/скрыть комплектующие с загрузкой сохраненных значений
@@ -1221,10 +1606,10 @@ def create_new_front_interface():
         
         # Сохранение данных для помещения (включая комментарии)
         save_room_btn.click(
-            fn=save_room_data_handler,
+            fn=save_room_data_with_dropdown_update,
             inputs=[order_id_hidden, room_area, room_type, installation_price, brand, wifi_support, inverter_type, max_price, 
                    mount_type, ceiling_height, illumination, num_people, activity, num_computers, num_tvs, other_power, comments],
-            outputs=[room_save_status, order_id_hidden]
+            outputs=[room_save_status, order_id_hidden, room_config_dropdown, config_load_status]
         )
         
         

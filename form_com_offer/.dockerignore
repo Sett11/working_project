@@ -13,7 +13,7 @@ __pycache__/
 .env
 .venv/
 venv/
-
+check_syntax.py
 
 # НЕ исключаем pip.conf - он нужен для установки зависимостей
 !pip.conf
