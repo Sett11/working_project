@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Depends, HTTPException, Path, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import datetime
@@ -43,7 +44,7 @@ async def startup_event():
     
     # Запускаем автоматический мониторинг
     try:
-        from utils.monitoring import monitor
+        from utils.monitoring.monitoring import monitor
         await monitor.start_monitoring()
         logger.info("✅ Автоматический мониторинг приложения запущен")
     except Exception as e:
@@ -260,10 +261,41 @@ async def get_current_user_info(request: Request, db: AsyncSession = Depends(get
 @app.get("/api/monitoring/status")
 @graceful_fallback("monitoring_status", cache_key="monitoring_status", cache_ttl=60)
 async def get_monitoring_status():
-    """Расширенный эндпоинт для мониторинга состояния приложения с интеграцией Graceful Degradation"""
+    """HTML страница мониторинга системы"""
+    try:
+        import os
+        from fastapi.responses import HTMLResponse
+        
+        # Путь к HTML файлу
+        html_path = os.path.join(os.path.dirname(__file__), "..", "utils", "monitoring", "monitoring.html")
+        
+        # Проверяем существование файла
+        if not os.path.exists(html_path):
+            return HTMLResponse(
+                content="<h1>Ошибка: Файл мониторинга не найден</h1>",
+                status_code=404
+            )
+        
+        # Читаем HTML файл
+        with open(html_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        return HTMLResponse(content=html_content)
+        
+    except Exception as e:
+        logger.error(f"Ошибка загрузки страницы мониторинга: {e}")
+        return HTMLResponse(
+            content=f"<h1>Ошибка загрузки страницы мониторинга: {str(e)}</h1>",
+            status_code=500
+        )
+
+@app.get("/api/monitoring/status/data")
+@graceful_fallback("monitoring_data", cache_key="monitoring_data", cache_ttl=60)
+async def get_monitoring_data():
+    """JSON API для получения данных мониторинга"""
     try:
         # Используем автоматический монитор
-        from utils.monitoring import monitor
+        from utils.monitoring.monitoring import monitor
         health_status = await monitor.get_health_status()
         
         # Добавляем информацию о состоянии БД с graceful degradation
@@ -279,12 +311,14 @@ async def get_monitoring_status():
         
         return health_status
     except Exception as e:
-        logger.error(f"Monitoring status check failed: {e}")
+        logger.error(f"Monitoring data check failed: {e}")
         return {
             "timestamp": time.time(),
             "overall_status": "error",
             "error": str(e)
         }
+
+
 
 @app.get("/api/graceful-degradation/status")
 async def get_graceful_degradation_status():
@@ -406,7 +440,7 @@ async def cleanup_connection_pool():
 async def start_monitoring():
     """Эндпоинт для запуска автоматического мониторинга"""
     try:
-        from utils.monitoring import monitor
+        from utils.monitoring.monitoring import monitor
         await monitor.start_monitoring()
         return {"status": "success", "message": "Автоматический мониторинг запущен"}
     except Exception as e:
@@ -417,7 +451,7 @@ async def start_monitoring():
 async def stop_monitoring():
     """Эндпоинт для остановки автоматического мониторинга"""
     try:
-        from utils.monitoring import monitor
+        from utils.monitoring.monitoring import monitor
         await monitor.stop_monitoring()
         return {"status": "success", "message": "Автоматический мониторинг остановлен"}
     except Exception as e:
@@ -428,7 +462,7 @@ async def stop_monitoring():
 async def get_monitoring_control():
     """Эндпоинт для получения статуса автоматического мониторинга"""
     try:
-        from utils.monitoring import monitor
+        from utils.monitoring.monitoring import monitor
         return {
             "monitoring_active": monitor.monitoring_active,
             "alert_cooldown": monitor.alert_cooldown,
