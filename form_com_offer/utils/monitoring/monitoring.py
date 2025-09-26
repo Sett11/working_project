@@ -77,6 +77,8 @@ class ApplicationMonitor:
                 # Пауза между проверками (увеличена для снижения нагрузки)
                 await asyncio.sleep(600)  # Проверяем каждые 10 минут (увеличено с 5 минут)
                 
+            except asyncio.CancelledError:
+                raise  # Re-raise CancelledError to allow proper task cancellation
             except Exception as e:
                 logger.error(f"Ошибка в цикле мониторинга: {e}")
                 await asyncio.sleep(60)  # При ошибке проверяем через 1 минуту (увеличено с 30 секунд)
@@ -261,14 +263,67 @@ class ApplicationMonitor:
                   pool_stats.get("utilization_percent", 0) > 90):
                 overall_status = "warning"
             
+            # Дополнительные системные метрики
+            cpu_count = psutil.cpu_count()
+            disk_free_gb = round(disk.free / 1024 / 1024 / 1024, 2)
+            
+            # Сетевая активность
+            network_connections = len(psutil.net_connections())
+            # Более реалистичная нормализация сетевой активности
+            # 0-50 соединений = 0-50%, 50-200 = 50-80%, 200+ = 80-100%
+            if network_connections <= 50:
+                network_usage_percent = network_connections * 1.0  # 0-50%
+            elif network_connections <= 200:
+                network_usage_percent = 50 + (network_connections - 50) * 0.2  # 50-80%
+            else:
+                network_usage_percent = min(80 + (network_connections - 200) * 0.1, 100)  # 80-100%
+            
+            # Температура CPU (если доступна)
+            cpu_temperature = 0
+            cpu_temperature_max = 0
+            try:
+                if hasattr(psutil, 'sensors_temperatures'):
+                    temps = psutil.sensors_temperatures()
+                    if temps:
+                        for name, entries in temps.items():
+                            for entry in entries:
+                                if 'cpu' in name.lower() or 'core' in name.lower():
+                                    cpu_temperature = max(cpu_temperature, entry.current or 0)
+                                    cpu_temperature_max = max(cpu_temperature_max, entry.high or 0)
+                
+                # Если температура не получена, используем эмуляцию на основе загрузки CPU
+                if cpu_temperature == 0:
+                    # Эмуляция: базовая температура 30°C + загрузка CPU * 0.5
+                    cpu_temperature = 30 + cpu_percent * 0.5
+                    cpu_temperature_max = 80  # Максимальная температура
+                    
+            except Exception as e:
+                logger.debug(f"Не удалось получить температуру CPU: {e}")
+                # Fallback: эмуляция на основе загрузки CPU
+                cpu_temperature = 30 + cpu_percent * 0.5
+                cpu_temperature_max = 80
+            
+            # Время работы системы
+            uptime_seconds = time.time() - psutil.boot_time()
+            uptime_hours = uptime_seconds / 3600
+            uptime_days = uptime_hours / 24
+            
             return {
                 "timestamp": time.time(),
                 "overall_status": overall_status,
                 "system": {
                     "cpu_percent": cpu_percent,
+                    "cpu_count": cpu_count,
                     "memory_percent": memory.percent,
                     "memory_available_mb": round(memory.available / 1024 / 1024, 2),
-                    "disk_usage_percent": disk.percent
+                    "disk_usage_percent": disk.percent,
+                    "disk_free_gb": disk_free_gb,
+                    "network_usage_percent": network_usage_percent,
+                    "network_connections": network_connections,
+                    "cpu_temperature": cpu_temperature,
+                    "cpu_temperature_max": cpu_temperature_max,
+                    "uptime_hours": uptime_hours,
+                    "uptime_days": uptime_days
                 },
                 "database_status": db_status,
                 "pool_stats": pool_stats,

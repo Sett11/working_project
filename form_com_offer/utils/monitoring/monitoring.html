@@ -184,6 +184,26 @@ body {
     color: #3498db;
 }
 
+.card-description {
+    margin-top: 8px;
+    font-size: 0.9rem;
+    color: #7f8c8d;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.metric-tooltip {
+    cursor: help;
+    color: #95a5a6;
+    font-size: 0.8rem;
+    margin-left: 5px;
+}
+
+.metric-tooltip:hover {
+    color: #3498db;
+}
+
 /* Системные метрики */
 .metrics-grid {
     display: grid;
@@ -225,6 +245,18 @@ body {
 
 .disk-icon {
     background: linear-gradient(135deg, #f39c12, #e67e22);
+}
+
+.network-icon {
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+}
+
+.temp-icon {
+    background: linear-gradient(135deg, #e67e22, #d35400);
+}
+
+.uptime-icon {
+    background: linear-gradient(135deg, #1abc9c, #16a085);
 }
 
 .metric-content {
@@ -505,6 +537,10 @@ body {
             <section class="card system-card">
                 <div class="card-header">
                     <h2><i class="fas fa-server"></i> Системные ресурсы</h2>
+                    <div class="card-description">
+                        <i class="fas fa-info-circle"></i>
+                        Мониторинг загрузки основных компонентов сервера
+                    </div>
                 </div>
                 <div class="card-content">
                     <div class="metrics-grid">
@@ -513,11 +549,17 @@ body {
                                 <i class="fas fa-microchip"></i>
                             </div>
                             <div class="metric-content">
-                                <div class="metric-label">Загрузка процессора</div>
+                                <div class="metric-label">
+                                    Загрузка процессора
+                                    <span class="metric-tooltip" title="Процент использования CPU. Высокая загрузка может замедлить работу приложения">
+                                        <i class="fas fa-question-circle"></i>
+                                    </span>
+                                </div>
                                 <div class="metric-value" id="cpu-percent">--%</div>
                                 <div class="metric-bar">
                                     <div class="metric-fill" id="cpu-bar"></div>
                                 </div>
+                                <div class="metric-detail" id="cpu-detail">-- ядер доступно</div>
                             </div>
                         </div>
 
@@ -526,7 +568,12 @@ body {
                                 <i class="fas fa-memory"></i>
                             </div>
                             <div class="metric-content">
-                                <div class="metric-label">Использование памяти</div>
+                                <div class="metric-label">
+                                    Использование памяти
+                                    <span class="metric-tooltip" title="Процент использования RAM. Критично при превышении 90%">
+                                        <i class="fas fa-question-circle"></i>
+                                    </span>
+                                </div>
                                 <div class="metric-value" id="memory-percent">--%</div>
                                 <div class="metric-bar">
                                     <div class="metric-fill" id="memory-bar"></div>
@@ -540,11 +587,77 @@ body {
                                 <i class="fas fa-hdd"></i>
                             </div>
                             <div class="metric-content">
-                                <div class="metric-label">Использование диска</div>
+                                <div class="metric-label">
+                                    Использование диска
+                                    <span class="metric-tooltip" title="Процент заполнения диска. Нехватка места может остановить приложение">
+                                        <i class="fas fa-question-circle"></i>
+                                    </span>
+                                </div>
                                 <div class="metric-value" id="disk-percent">--%</div>
                                 <div class="metric-bar">
                                     <div class="metric-fill" id="disk-bar"></div>
                                 </div>
+                                <div class="metric-detail" id="disk-detail">-- ГБ свободно</div>
+                            </div>
+                        </div>
+
+                        <!-- Сеть -->
+                        <div class="metric-item">
+                            <div class="metric-icon network-icon">
+                                <i class="fas fa-network-wired"></i>
+                            </div>
+                            <div class="metric-content">
+                                <div class="metric-label">
+                                    Сетевая активность
+                                    <span class="metric-tooltip" title="Активность сетевых соединений. Высокая активность может указывать на проблемы">
+                                        <i class="fas fa-question-circle"></i>
+                                    </span>
+                                </div>
+                                <div class="metric-value" id="network-percent">--%</div>
+                                <div class="metric-bar">
+                                    <div class="metric-fill" id="network-bar"></div>
+                                </div>
+                                <div class="metric-detail" id="network-detail">-- соединений</div>
+                            </div>
+                        </div>
+
+                        <!-- Температура -->
+                        <div class="metric-item">
+                            <div class="metric-icon temp-icon">
+                                <i class="fas fa-thermometer-half"></i>
+                            </div>
+                            <div class="metric-content">
+                                <div class="metric-label">
+                                    Температура CPU
+                                    <span class="metric-tooltip" title="Температура процессора. Перегрев может вызвать сбои">
+                                        <i class="fas fa-question-circle"></i>
+                                    </span>
+                                </div>
+                                <div class="metric-value" id="temp-percent">--°C</div>
+                                <div class="metric-bar">
+                                    <div class="metric-fill" id="temp-bar"></div>
+                                </div>
+                                <div class="metric-detail" id="temp-detail">--°C максимальная</div>
+                            </div>
+                        </div>
+
+                        <!-- Время работы -->
+                        <div class="metric-item">
+                            <div class="metric-icon uptime-icon">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="metric-content">
+                                <div class="metric-label">
+                                    Время работы
+                                    <span class="metric-tooltip" title="Время непрерывной работы сервера. Длительная работа без перезагрузки - хороший знак">
+                                        <i class="fas fa-question-circle"></i>
+                                    </span>
+                                </div>
+                                <div class="metric-value" id="uptime-percent">--д</div>
+                                <div class="metric-bar">
+                                    <div class="metric-fill" id="uptime-bar"></div>
+                                </div>
+                                <div class="metric-detail" id="uptime-detail">-- часов</div>
                             </div>
                         </div>
                     </div>
@@ -555,6 +668,10 @@ body {
             <section class="card database-card">
                 <div class="card-header">
                     <h2><i class="fas fa-database"></i> База данных</h2>
+                    <div class="card-description">
+                        <i class="fas fa-info-circle"></i>
+                        Состояние подключения к базе данных PostgreSQL
+                    </div>
                 </div>
                 <div class="card-content">
                     <div class="status-row">
@@ -568,6 +685,10 @@ body {
             <section class="card pool-card">
                 <div class="card-header">
                     <h2><i class="fas fa-network-wired"></i> Пул соединений</h2>
+                    <div class="card-description">
+                        <i class="fas fa-info-circle"></i>
+                        Управление соединениями с базой данных для оптимизации производительности
+                    </div>
                 </div>
                 <div class="card-content">
                     <div class="pool-stats">
@@ -595,6 +716,10 @@ body {
             <section class="card graceful-card">
                 <div class="card-header">
                     <h2><i class="fas fa-shield-alt"></i> Graceful Degradation</h2>
+                    <div class="card-description">
+                        <i class="fas fa-info-circle"></i>
+                        Система автоматического восстановления при сбоях для обеспечения стабильности
+                    </div>
                 </div>
                 <div class="card-content">
                     <div class="graceful-info" id="graceful-info">
@@ -729,8 +854,13 @@ class SystemMonitor {
     }
 
     updateSystemMetrics(system) {
+        // Отладочная информация
+        console.log('System data received:', system);
+        
         // CPU
         this.updateMetric('cpu', system.cpu_percent, 'cpu-percent', 'cpu-bar');
+        document.getElementById('cpu-detail').textContent = 
+            `${system.cpu_count || '--'} ядер доступно`;
         
         // Память
         this.updateMetric('memory', system.memory_percent, 'memory-percent', 'memory-bar');
@@ -739,24 +869,75 @@ class SystemMonitor {
         
         // Диск
         this.updateMetric('disk', system.disk_usage_percent, 'disk-percent', 'disk-bar');
+        document.getElementById('disk-detail').textContent = 
+            `${Math.round(system.disk_free_gb || 0)} ГБ свободно`;
+        
+        // Сеть
+        const networkPercent = system.network_usage_percent || 0;
+        console.log('Network data:', { networkPercent, connections: system.network_connections });
+        this.updateMetric('network', networkPercent, 'network-percent', 'network-bar');
+        document.getElementById('network-detail').textContent = 
+            `${system.network_connections || '--'} соединений`;
+        
+        // Температура
+        const tempCelsius = system.cpu_temperature || 0;
+        console.log('Temperature data:', { tempCelsius, maxTemp: system.cpu_temperature_max });
+        this.updateMetric('temp', tempCelsius, 'temp-percent', 'temp-bar', '°C');
+        document.getElementById('temp-detail').textContent = 
+            `${Math.round(system.cpu_temperature_max || 0)}°C максимальная`;
+        
+        // Время работы
+        const uptimeDays = system.uptime_days || 0;
+        this.updateMetric('uptime', uptimeDays, 'uptime-percent', 'uptime-bar', 'д');
+        document.getElementById('uptime-detail').textContent = 
+            `${Math.round(system.uptime_hours || 0)} часов`;
     }
 
-    updateMetric(type, value, valueId, barId) {
+    updateMetric(type, value, valueId, barId, unit = '%') {
         // Обновляем значение
-        document.getElementById(valueId).textContent = `${Math.round(value)}%`;
+        document.getElementById(valueId).textContent = `${Math.round(value)}${unit}`;
         
         // Обновляем прогресс-бар
         const bar = document.getElementById(barId);
-        bar.style.width = `${Math.min(value, 100)}%`;
+        
+        // Для температуры и времени работы используем другую логику
+        let barWidth = value;
+        if (type === 'temp') {
+            // Температура: 0-100°C -> 0-100%
+            barWidth = Math.min(value, 100);
+        } else if (type === 'uptime') {
+            // Время работы: 0-30 дней -> 0-100%
+            barWidth = Math.min((value / 30) * 100, 100);
+        } else {
+            // Обычные проценты
+            barWidth = Math.min(value, 100);
+        }
+        
+        bar.style.width = `${barWidth}%`;
         
         // Определяем класс в зависимости от значения
         bar.className = 'metric-fill';
-        if (value > 90) {
-            bar.classList.add('critical');
-        } else if (value > 70) {
-            bar.classList.add('warning');
-        } else {
+        if (type === 'temp') {
+            // Температура: >80°C критично, >60°C предупреждение
+            if (value > 80) {
+                bar.classList.add('critical');
+            } else if (value > 60) {
+                bar.classList.add('warning');
+            } else {
+                bar.classList.add('healthy');
+            }
+        } else if (type === 'uptime') {
+            // Время работы: всегда зеленое (чем больше, тем лучше)
             bar.classList.add('healthy');
+        } else {
+            // Обычные метрики
+            if (value > 90) {
+                bar.classList.add('critical');
+            } else if (value > 70) {
+                bar.classList.add('warning');
+            } else {
+                bar.classList.add('healthy');
+            }
         }
     }
 
@@ -764,6 +945,12 @@ class SystemMonitor {
         const statusElement = document.getElementById('db-status');
         statusElement.textContent = this.getDatabaseStatusText(status);
         statusElement.className = 'status-value';
+        
+        // Защита от null/undefined
+        if (typeof status !== 'string') {
+            statusElement.classList.add('critical');
+            return;
+        }
         
         if (status === 'healthy') {
             statusElement.classList.add('healthy');
@@ -775,6 +962,11 @@ class SystemMonitor {
     }
 
     getDatabaseStatusText(status) {
+        // Защита от null/undefined
+        if (typeof status !== 'string') {
+            return 'Неизвестное состояние';
+        }
+        
         if (status === 'healthy') {
             return 'Подключение активно';
         } else if (status.includes('timeout')) {
@@ -884,7 +1076,7 @@ class SystemMonitor {
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
-    new SystemMonitor();
+    window.systemMonitor = new SystemMonitor();
 });
 
 // Обработка видимости страницы для оптимизации автообновления
