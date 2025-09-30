@@ -1139,7 +1139,71 @@ async def save_components_handler(order_id_hidden_value, *components_inputs):
 def create_new_front_interface():
     """Создает новый интерфейс фронтенда"""
     
-    with gr.Blocks(title="Автоматизация продаж кондиционеров", theme=gr.themes.Ocean()) as interface:
+    with gr.Blocks(
+        title="Автоматизация продаж кондиционеров", 
+        theme=gr.themes.Ocean(),
+        head="""
+        <style>
+        /* Принудительное скрытие стрелочек во всех input элементах */
+        * input::-webkit-outer-spin-button,
+        * input::-webkit-inner-spin-button {
+            -webkit-appearance: none !important;
+            margin: 0 !important;
+            display: none !important;
+        }
+        
+        * input[type=text]::-webkit-outer-spin-button,
+        * input[type=text]::-webkit-inner-spin-button {
+            -webkit-appearance: none !important;
+            margin: 0 !important;
+            display: none !important;
+        }
+        
+        * input {
+            -moz-appearance: textfield !important;
+        }
+        </style>
+        """,
+             css="""
+             /* Агрессивное скрытие стрелочек для всех input полей */
+             .gradio-container input::-webkit-outer-spin-button,
+             .gradio-container input::-webkit-inner-spin-button,
+             .gradio-container input[type="text"]::-webkit-outer-spin-button,
+             .gradio-container input[type="text"]::-webkit-inner-spin-button,
+             .gradio-container input[type="number"]::-webkit-outer-spin-button,
+             .gradio-container input[type="number"]::-webkit-inner-spin-button,
+             .gradio-container textarea::-webkit-outer-spin-button,
+             .gradio-container textarea::-webkit-inner-spin-button {
+                 -webkit-appearance: none !important;
+                 margin: 0 !important;
+                 display: none !important;
+             }
+             
+             .gradio-container input,
+             .gradio-container input[type="text"],
+             .gradio-container input[type="number"],
+             .gradio-container textarea {
+                 -moz-appearance: textfield !important;
+                 -webkit-appearance: none !important;
+             }
+             
+             /* Дополнительное скрытие для всех input элементов */
+             input::-webkit-outer-spin-button,
+             input::-webkit-inner-spin-button,
+             input[type="text"]::-webkit-outer-spin-button,
+             input[type="text"]::-webkit-inner-spin-button {
+                 -webkit-appearance: none !important;
+                 margin: 0 !important;
+                 display: none !important;
+             }
+             
+             input,
+             input[type="text"] {
+                 -moz-appearance: textfield !important;
+                 -webkit-appearance: none !important;
+             }
+             """
+    ) as interface:
         
         # Состояния приложения
         order_state = gr.State(get_placeholder_order())
@@ -1148,7 +1212,7 @@ def create_new_front_interface():
         
         # === ЭКРАН АВТОРИЗАЦИИ ===
         with gr.Group(visible=True) as auth_screen:
-            auth_interface = create_auth_interface()
+            auth_interface, auth_status_hidden = create_auth_interface()
             
             # Кнопка для перехода к основному приложению
             with gr.Row():
@@ -1157,7 +1221,7 @@ def create_new_front_interface():
                     interactive=False,
                     visible=False
                 )
-                check_auth_btn = gr.Button("Проверить статус", variant="secondary")
+                # Кнопка "Проверить статус" удалена - переход происходит автоматически
         
         # === ЭКРАН ВЫБОРА ДЕЙСТВИЯ ===
         with gr.Group(visible=False) as order_selection_screen:
@@ -1483,14 +1547,46 @@ def create_new_front_interface():
                     )  # auth_status
                 ]
         
-        check_auth_btn.click(
-            fn=check_authentication,
-            outputs=[auth_screen, order_selection_screen, auth_status]
-        )
+        def handle_auth_success(auth_status_value):
+            """Обрабатывает успешную аутентификацию и переключает экраны"""
+            # Проверяем, если статус содержит "AUTH_SUCCESS"
+            if auth_status_value == "AUTH_SUCCESS":
+                auth_manager = get_auth_manager()
+                return [
+                    gr.update(visible=False),  # auth_screen
+                    gr.update(visible=True),   # order_selection_screen
+                    gr.update(
+                        visible=True, 
+                        value=f"✅ Авторизован как: {auth_manager.username}"
+                    )  # auth_status
+                ]
+            else:
+                return [
+                    gr.update(visible=True),   # auth_screen
+                    gr.update(visible=False),  # order_selection_screen
+                    gr.update(
+                        visible=True, 
+                        value="❌ Ошибка авторизации"
+                    )  # auth_status
+                ]
+        
+        # Обработчик кнопки "Проверить статус" удален - переход происходит автоматически
         
         # Автоматическая проверка аутентификации при загрузке интерфейса
         interface.load(
             fn=check_authentication,
+            outputs=[auth_screen, order_selection_screen, auth_status]
+        )
+        
+        # Автоматическая проверка аутентификации при загрузке страницы
+        # Переход происходит автоматически через check_authentication()
+        
+        # Обработчик для автоматического перехода после успешной аутентификации
+        
+        # Автоматический переход при изменении статуса аутентификации
+        auth_status_hidden.change(
+            fn=handle_auth_success,
+            inputs=[auth_status_hidden],
             outputs=[auth_screen, order_selection_screen, auth_status]
         )
         

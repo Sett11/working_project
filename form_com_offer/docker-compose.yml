@@ -99,7 +99,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/  # Используем Docker volume вместо bind mount
       - ./db/init:/docker-entrypoint-initdb.d  # Скрипты инициализации
-      - ./db/db_utils:/db_utils  # Утилиты для управления БД
       - ./db/postgresql.conf:/etc/postgresql/postgresql.conf  # Оптимизированная конфигурация
       - backups:/backups  # Именованный том для резервных копий
     ports:
