@@ -55,10 +55,25 @@ class CircuitBreaker:
         # Мониторинг
         self._monitor_task = None
         self._monitoring_active = False
-        self._state_lock = asyncio.Lock()
+        self._state_lock = None  # Ленивая инициализация Lock (создаётся при первом обращении)
         
         logger.info(f"Circuit Breaker инициализирован: threshold={failure_threshold}, "
                    f"timeout={recovery_timeout}s, monitor_interval={monitor_interval}s")
+    
+    @property
+    def state_lock(self):
+        """
+        Ленивое создание asyncio.Lock при первом обращении.
+        Это предотвращает RuntimeError при импорте модуля (когда ещё нет running event loop).
+        """
+        if self._state_lock is None:
+            try:
+                self._state_lock = asyncio.Lock()
+            except RuntimeError:
+                # Нет running event loop - Lock будет создан позже
+                logger.debug("Не удалось создать asyncio.Lock (нет running loop), отложена инициализация")
+                return None
+        return self._state_lock
     
     def _safe_schedule_coroutine(self, coro):
         """
@@ -132,24 +147,27 @@ class CircuitBreaker:
     
     async def _transition_to_half_open(self):
         """Переход в состояние HALF_OPEN"""
-        self.state = CircuitState.HALF_OPEN
-        self.failure_count = 0
-        logger.warning("🔄 Circuit Breaker перешел в состояние HALF_OPEN - "
-                      "разрешаем тестовые запросы к БД")
+        async with self.state_lock:
+            self.state = CircuitState.HALF_OPEN
+            self.failure_count = 0
+            logger.warning("🔄 Circuit Breaker перешел в состояние HALF_OPEN - "
+                          "разрешаем тестовые запросы к БД")
     
     async def _transition_to_open(self):
         """Переход в состояние OPEN (блокировка)"""
-        self.state = CircuitState.OPEN
-        self.last_failure_time = time.time()
-        logger.error(f"🚨 Circuit Breaker ОТКРЫТ - блокируем запросы к БД "
-                    f"на {self.recovery_timeout} секунд")
+        async with self.state_lock:
+            self.state = CircuitState.OPEN
+            self.last_failure_time = time.time()
+            logger.error(f"🚨 Circuit Breaker ОТКРЫТ - блокируем запросы к БД "
+                        f"на {self.recovery_timeout} секунд")
     
     async def _transition_to_closed(self):
         """Переход в состояние CLOSED (нормальная работа)"""
-        self.state = CircuitState.CLOSED
-        self.failure_count = 0
-        self.last_success_time = time.time()
-        logger.info("✅ Circuit Breaker ЗАКРЫТ - нормальная работа БД восстановлена")
+        async with self.state_lock:
+            self.state = CircuitState.CLOSED
+            self.failure_count = 0
+            self.last_success_time = time.time()
+            logger.info("✅ Circuit Breaker ЗАКРЫТ - нормальная работа БД восстановлена")
     
     def _on_success(self):
         """Обработка успешного запроса"""
@@ -163,7 +181,7 @@ class CircuitBreaker:
 
     async def _safe_transition_to_closed(self):
         """Thread-safe переход в CLOSED состояние"""
-        async with self._state_lock:
+        async with self.state_lock:
             if self.state == CircuitState.HALF_OPEN:
                 await self._transition_to_closed()
     
@@ -239,10 +257,31 @@ class CircuitBreaker:
             "monitoring_active": self._monitoring_active
         }
 
+def _safe_int(env_name: str, default: int) -> int:
+    """
+    Безопасное преобразование переменной окружения в int.
+    
+    Args:
+        env_name: Имя переменной окружения
+        default: Значение по умолчанию
+        
+    Returns:
+        Целое число из переменной окружения или default при ошибке
+    """
+    try:
+        value = os.getenv(env_name)
+        if value is None:
+            return default
+        return int(value)
+    except (ValueError, TypeError) as e:
+        logger.warning(f"Не удалось преобразовать {env_name}='{os.getenv(env_name)}' в int: {e}. "
+                      f"Используется значение по умолчанию: {default}")
+        return default
+
 # Глобальный экземпляр Circuit Breaker для БД
 db_circuit_breaker = CircuitBreaker(
-    failure_threshold=int(os.getenv("CB_FAILURE_THRESHOLD", "3")),
-    recovery_timeout=int(os.getenv("CB_RECOVERY_TIMEOUT", "300")),
+    failure_threshold=_safe_int("CB_FAILURE_THRESHOLD", 3),
+    recovery_timeout=_safe_int("CB_RECOVERY_TIMEOUT", 300),
     expected_exception=(Exception,),  # Все исключения
-    monitor_interval=int(os.getenv("CB_MONITOR_INTERVAL", "300"))  # Исправлено: 300 секунд вместо 60
+    monitor_interval=_safe_int("CB_MONITOR_INTERVAL", 300)  # 300 секунд (5 минут)
 )

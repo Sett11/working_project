@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Мониторинг системы</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet" crossorigin="anonymous">
     <style>
 /* Основные стили */
 * {
@@ -505,6 +505,72 @@ body {
         text-align: center;
     }
 }
+
+/* Toast уведомления */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.error-toast {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: white;
+    padding: 16px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 8px 24px rgba(231, 76, 60, 0.3);
+    font-weight: 500;
+    font-size: 0.95rem;
+    min-width: 280px;
+    max-width: 400px;
+    opacity: 0;
+    transform: translateX(400px);
+    transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    pointer-events: auto;
+    cursor: pointer;
+    border-left: 4px solid #fff;
+}
+
+.error-toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.error-toast.fade-out {
+    animation: toast-fade-out 0.4s ease-out forwards;
+}
+
+@keyframes toast-fade-out {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(400px);
+    }
+}
+
+/* Адаптивность для toast на мобильных устройствах */
+@media (max-width: 768px) {
+    #toast-container {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        align-items: center;
+    }
+    
+    .error-toast {
+        min-width: auto;
+        max-width: 100%;
+        width: 100%;
+    }
+}
     </style>
 </head>
 <body>
@@ -756,6 +822,9 @@ class SystemMonitor {
     constructor() {
         this.autoRefreshInterval = null;
         this.isLoading = false;
+        // Debug flag для управления логированием в консоль
+        // Можно включить через localStorage: localStorage.setItem('debug', 'true')
+        this.debug = localStorage.getItem('debug') === 'true' || false;
         this.init();
     }
 
@@ -854,63 +923,76 @@ class SystemMonitor {
     }
 
     updateSystemMetrics(system) {
-        // Отладочная информация
-        console.log('System data received:', system);
+        // Отладочная информация (только если включен debug режим)
+        if (this.debug) {
+            console.log('System data received:', system);
+        }
         
         // CPU
         this.updateMetric('cpu', system.cpu_percent, 'cpu-percent', 'cpu-bar');
         document.getElementById('cpu-detail').textContent = 
-            `${system.cpu_count || '--'} ядер доступно`;
+            `${system.cpu_count ?? '--'} ядер доступно`;
         
-        // Память
+        // Память - защита от NaN
         this.updateMetric('memory', system.memory_percent, 'memory-percent', 'memory-bar');
+        const memoryAvailable = Number(system.memory_available_mb) || 0;
         document.getElementById('memory-detail').textContent = 
-            `${Math.round(system.memory_available_mb)} МБ доступно`;
+            `${Math.round(memoryAvailable)} МБ доступно`;
         
-        // Диск
+        // Диск - защита от NaN
         this.updateMetric('disk', system.disk_usage_percent, 'disk-percent', 'disk-bar');
+        const diskFree = Number(system.disk_free_gb) || 0;
         document.getElementById('disk-detail').textContent = 
-            `${Math.round(system.disk_free_gb || 0)} ГБ свободно`;
+            `${Math.round(diskFree)} ГБ свободно`;
         
         // Сеть
         const networkPercent = system.network_usage_percent || 0;
-        console.log('Network data:', { networkPercent, connections: system.network_connections });
+        if (this.debug) {
+            console.log('Network data:', { networkPercent, connections: system.network_connections });
+        }
         this.updateMetric('network', networkPercent, 'network-percent', 'network-bar');
         document.getElementById('network-detail').textContent = 
-            `${system.network_connections || '--'} соединений`;
+            `${system.network_connections ?? '--'} соединений`;
         
-        // Температура
+        // Температура - защита от NaN
         const tempCelsius = system.cpu_temperature || 0;
-        console.log('Temperature data:', { tempCelsius, maxTemp: system.cpu_temperature_max });
+        if (this.debug) {
+            console.log('Temperature data:', { tempCelsius, maxTemp: system.cpu_temperature_max });
+        }
         this.updateMetric('temp', tempCelsius, 'temp-percent', 'temp-bar', '°C');
+        const tempMax = Number(system.cpu_temperature_max) || 0;
         document.getElementById('temp-detail').textContent = 
-            `${Math.round(system.cpu_temperature_max || 0)}°C максимальная`;
+            `${Math.round(tempMax)}°C максимальная`;
         
-        // Время работы
+        // Время работы - защита от NaN
         const uptimeDays = system.uptime_days || 0;
         this.updateMetric('uptime', uptimeDays, 'uptime-percent', 'uptime-bar', 'д');
+        const uptimeHours = Number(system.uptime_hours) || 0;
         document.getElementById('uptime-detail').textContent = 
-            `${Math.round(system.uptime_hours || 0)} часов`;
+            `${Math.round(uptimeHours)} часов`;
     }
 
     updateMetric(type, value, valueId, barId, unit = '%') {
+        // Защита от NaN - приводим к числу с fallback на 0
+        const safeValue = Number(value) || 0;
+        
         // Обновляем значение
-        document.getElementById(valueId).textContent = `${Math.round(value)}${unit}`;
+        document.getElementById(valueId).textContent = `${Math.round(safeValue)}${unit}`;
         
         // Обновляем прогресс-бар
         const bar = document.getElementById(barId);
         
         // Для температуры и времени работы используем другую логику
-        let barWidth = value;
+        let barWidth = safeValue;
         if (type === 'temp') {
             // Температура: 0-100°C -> 0-100%
-            barWidth = Math.min(value, 100);
+            barWidth = Math.min(safeValue, 100);
         } else if (type === 'uptime') {
             // Время работы: 0-30 дней -> 0-100%
-            barWidth = Math.min((value / 30) * 100, 100);
+            barWidth = Math.min((safeValue / 30) * 100, 100);
         } else {
             // Обычные проценты
-            barWidth = Math.min(value, 100);
+            barWidth = Math.min(safeValue, 100);
         }
         
         bar.style.width = `${barWidth}%`;
@@ -919,9 +1001,9 @@ class SystemMonitor {
         bar.className = 'metric-fill';
         if (type === 'temp') {
             // Температура: >80°C критично, >60°C предупреждение
-            if (value > 80) {
+            if (safeValue > 80) {
                 bar.classList.add('critical');
-            } else if (value > 60) {
+            } else if (safeValue > 60) {
                 bar.classList.add('warning');
             } else {
                 bar.classList.add('healthy');
@@ -931,9 +1013,9 @@ class SystemMonitor {
             bar.classList.add('healthy');
         } else {
             // Обычные метрики
-            if (value > 90) {
+            if (safeValue > 90) {
                 bar.classList.add('critical');
-            } else if (value > 70) {
+            } else if (safeValue > 70) {
                 bar.classList.add('warning');
             } else {
                 bar.classList.add('healthy');
@@ -1069,8 +1151,52 @@ class SystemMonitor {
     }
 
     showError(message) {
-        // Простое уведомление об ошибке
-        alert(`Ошибка: ${message}`);
+        // Создаём или получаем контейнер для toast-уведомлений
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.setAttribute('aria-live', 'polite');
+            toastContainer.setAttribute('aria-atomic', 'true');
+            document.body.appendChild(toastContainer);
+        }
+
+        // Проверяем дубликаты - не показываем одинаковые сообщения
+        const existingToasts = toastContainer.querySelectorAll('.error-toast');
+        for (const toast of existingToasts) {
+            if (toast.textContent === message) {
+                return; // Такое сообщение уже отображается
+            }
+        }
+
+        // Создаём toast элемент
+        const toast = document.createElement('div');
+        toast.className = 'error-toast';
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.textContent = message;
+
+        // Добавляем в контейнер
+        toastContainer.appendChild(toast);
+
+        // Trigger reflow для запуска анимации
+        void toast.offsetWidth;
+
+        // Добавляем класс для slide-in анимации
+        toast.classList.add('show');
+
+        // Автоматически удаляем toast через 5 секунд
+        setTimeout(() => {
+            toast.classList.remove('show');
+            toast.classList.add('fade-out');
+            
+            // Удаляем элемент после завершения анимации
+            toast.addEventListener('animationend', () => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            });
+        }, 5000); // 5 секунд показа
     }
 }
 

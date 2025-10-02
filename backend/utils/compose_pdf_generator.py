@@ -421,7 +421,7 @@ async def generate_compose_commercial_offer_pdf(
                 room_area = rooms[i].get("area", aircon_params.get("area", 0))
             else:
                 room_type = f"Помещение #{i+1}"
-            room_area = aircon_params.get("area", 0)
+                room_area = aircon_params.get("area", 0)
             
             # Заголовок для комнаты
             room_title = f"{room_type} ({room_area} м²)"
@@ -553,6 +553,7 @@ async def generate_compose_commercial_offer_pdf(
                     story.append(Spacer(1, 15))
                 
                 # Суммируем стоимость монтажа из данных помещения
+                installation_price_val = None  # Инициализируем переменную
                 if i < len(rooms):
                     installation_price_val = rooms[i].get('installation_price', 0)
                 if installation_price_val is not None and installation_price_val != '':

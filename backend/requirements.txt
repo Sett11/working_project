@@ -32,3 +32,4 @@ psutil
 aiohttp
 bcrypt
 python-jose[cryptography]
+portalocker

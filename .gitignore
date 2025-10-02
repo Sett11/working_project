@@ -11,6 +11,13 @@ __pycache__/
 
 # Environments
 .env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
 .venv
 env/
 venv/
@@ -96,6 +103,7 @@ images_airs
 
 # TTF fonts (keep arial fonts in backend/utils/fonts/)
 *.TTF
+*.ttf
 
 # ═══════════════════════════════════════════════════════════════
 # DOCUMENTS (BE CAREFUL - SOME MAY BE NEEDED)
@@ -113,11 +121,10 @@ images_airs
 *.xlsx
 *.xls
 *.csv
-*.png
-/backend/docs/airs.json
-/backend/docs/components_catalog.json
 /backend/docs/images_airs/*.png
 /backend/docs/images_comp/*.png
+/backend/docs/airs.json
+/backend/docs/components_catalog.json
 /backend/commercial_offer_pdf/*.pdf
 /backend/utils/fonts/*.ttf
 /backend/utils/image_for_pdf/*.png
@@ -127,6 +134,8 @@ images_airs
 /backend/logs/*.log.*
 /backend/logs/*.log.*.*
 /backend/logs/*.log.*.*.*
+airs.json
+images_comp
 components_catalog.json
 form_com_offer_backup
 MIGRATION_PLAN.txt
@@ -135,25 +144,6 @@ README.md
 README_DEPLOYMENT.md
 README_POWERSHELL.md
 WARP.md
-.cursor
-.vscode
-.idea
-.DS_Store
-.env
-.venv
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env.development
-.env.test
-.env.production
-.env.development.local
-.env.test.local
-.env.production.local
-.env.development
-.env.test
-.env.production
 
 # ═══════════════════════════════════════════════════════════════
 # IMPORTANT: KEEP THESE FILES

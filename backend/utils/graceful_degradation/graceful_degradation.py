@@ -31,16 +31,18 @@ def graceful_fallback(endpoint_name: str, cache_key: Optional[str] = None, cache
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             try:
-                # Проверяем Circuit Breaker
-                if db_circuit_breaker.get_status()["state"] == "open":
+                # Проверяем Circuit Breaker (безопасный доступ к статусу)
+                status = db_circuit_breaker.get_status() or {}
+                state = status.get("state")
+                if state == "open":
                     logger.warning(f"Circuit Breaker открыт для {endpoint_name}")
                     return fallback_manager.get_graceful_response(endpoint_name)
                 
                 # Выполняем основную функцию
                 result = await func(*args, **kwargs)
                 
-                # Кэшируем успешный результат
-                if cache_key and result:
+                # Кэшируем успешный результат (включая falsy значения: 0, [], {}, False)
+                if cache_key and result is not None:
                     fallback_manager.set_cached_data(cache_key, result, cache_ttl)
                 
                 return result
@@ -52,10 +54,10 @@ def graceful_fallback(endpoint_name: str, cache_key: Optional[str] = None, cache
             except Exception as e:
                 logger.error(f"Ошибка в {endpoint_name}: {e}")
                 
-                # Пытаемся вернуть кэшированные данные
+                # Пытаемся вернуть кэшированные данные (включая falsy значения: 0, [], {}, False)
                 if cache_key:
                     cached_data = fallback_manager.get_cached_data(cache_key)
-                    if cached_data:
+                    if cached_data is not None:
                         logger.info(f"Возвращаем кэшированные данные для {endpoint_name}")
                         return fallback_manager.get_graceful_response(
                             endpoint_name, cached_data
@@ -191,19 +193,32 @@ class GracefulDegradationManager:
         await asyncio.sleep(final_delay)
         
         try:
-            # Проверяем состояние Circuit Breaker
+            # Проверяем состояние Circuit Breaker (безопасный доступ к статусу)
             cb_status = db_circuit_breaker.get_status()
-            if cb_status["state"] == "closed":
+            
+            # Проверяем, что статус получен и является словарем
+            if not cb_status or not isinstance(cb_status, dict):
+                logger.warning("Circuit Breaker вернул некорректный статус при попытке восстановления")
+                return False
+            
+            state = cb_status.get("state")
+            
+            # Проверяем состояние "closed"
+            if state == "closed":
                 self.exit_degradation_mode()
                 return True
             
             # Если Circuit Breaker в HALF_OPEN, используем сокращенную задержку
-            if cb_status["state"] == "half_open":
+            if state == "half_open":
                 logger.info("Circuit Breaker в HALF_OPEN состоянии - ожидаем дополнительное время...")
                 # Используем половину от текущей задержки, но не более 5 секунд
                 half_open_delay = min(final_delay * 0.5, 5.0)
                 await asyncio.sleep(half_open_delay)
                 return False
+            
+            # Неизвестное или отсутствующее состояние
+            if state is None:
+                logger.warning("Circuit Breaker не вернул состояние 'state'")
             
             return False
             

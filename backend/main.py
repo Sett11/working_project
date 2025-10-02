@@ -19,9 +19,15 @@ SERVER_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
 SERVER_PORT = int(os.getenv("BACKEND_PORT", "8000"))
 
 if __name__ == "__main__":
-    logger.info("Запуск FastAPI backend сервера...")
+    # Логируем попытку запуска с параметрами
+    logger.info(
+        f"Запуск FastAPI backend сервера на {SERVER_HOST}:{SERVER_PORT}...",
+        extra={"user_id": "root_app"}
+    )
     
     try:
+        # uvicorn.run() - блокирующий вызов, который держит процесс
+        # до получения сигнала прерывания (Ctrl+C) или критической ошибки
         uvicorn.run(
             "api.main:app",
             host=SERVER_HOST,
@@ -29,8 +35,23 @@ if __name__ == "__main__":
             reload=True,
             log_level="info"
         )
-        logger.info("Backend сервер успешно запущен.")
+    except KeyboardInterrupt:
+        # Корректное завершение по Ctrl+C
+        logger.info(
+            "Backend сервер получил сигнал остановки (KeyboardInterrupt).",
+            extra={"user_id": "root_app"}
+        )
     except Exception as e:
-        logger.error(f"Ошибка при запуске backend сервера: {e}", exc_info=True)
+        # Ошибки при запуске или во время работы
+        logger.error(
+            f"Критическая ошибка backend сервера: {e}",
+            exc_info=True,
+            extra={"user_id": "root_app"}
+        )
+        raise  # Пробрасываем исключение для видимости проблемы
     finally:
-        logger.info("Backend сервер остановлен.")
+        # Выполняется при любом завершении
+        logger.info(
+            "Backend сервер остановлен.",
+            extra={"user_id": "root_app"}
+        )

@@ -10,7 +10,8 @@
 import bcrypt
 import secrets
 import string
-from datetime import datetime, timedelta
+import hmac
+from datetime import datetime, timedelta, timezone
 import os
 from typing import Optional
 from utils.mylogger import Logger
@@ -78,43 +79,73 @@ def get_token_expiry(hours: int = 2) -> datetime:
         hours (int): Количество часов жизни токена
         
     Returns:
-        datetime: Время истечения токена
+        datetime: Время истечения токена (UTC-aware)
+        
+    Note:
+        Возвращает timezone-aware datetime в UTC для корректного сравнения
     """
-    return datetime.now() + timedelta(hours=hours)
+    logger.info(f"Создание времени истечения токена: {hours} часов")
+    return datetime.now(timezone.utc) + timedelta(hours=hours)
 
 
 def verify_secret_key(provided_key: str) -> bool:
     """
-    Проверка секретного ключа.
+    Проверка секретного ключа с защитой от timing-атак.
     
     Args:
         provided_key (str): Предоставленный секретный ключ
         
     Returns:
         bool: True если ключ верный
+        
+    Note:
+        Использует hmac.compare_digest для защиты от timing-атак.
+        Логирование нейтрализовано для предотвращения утечки информации.
     """
-    logger.info("Проверка секретного ключа")
+    logger.info("Выполнена проверка секретного ключа")
     secret_key = os.getenv('SECRET_KEY')
     if not secret_key:
         logger.error("SECRET_KEY не найден в переменных окружения")
         return False
     
-    is_valid = provided_key == secret_key
-    logger.info(f"Проверка секретного ключа: {'успешно' if is_valid else 'неудачно'}")
+    # Используем hmac.compare_digest для защиты от timing-атак
+    # Эта функция выполняет сравнение за константное время
+    is_valid = hmac.compare_digest(secret_key, provided_key)
+    
+    # Нейтральное логирование без раскрытия результата проверки
+    logger.debug("Проверка секретного ключа завершена")
     return is_valid
 
 
 def is_token_expired(expires_at: datetime) -> bool:
     """
-    Проверка истечения токена.
+    Проверка истечения токена с поддержкой timezone-aware datetime.
     
     Args:
         expires_at (datetime): Время истечения токена
         
     Returns:
         bool: True если токен истек
+        
+    Note:
+        Функция использует UTC-aware datetime для корректного сравнения.
+        Если expires_at является naive datetime, он автоматически конвертируется в UTC.
+        Это обеспечивает консистентность при сравнении дат.
     """
-    return datetime.now() > expires_at
+    # Получаем текущее время в UTC (timezone-aware)
+    now_utc = datetime.now(timezone.utc)
+    
+    # Проверяем, является ли expires_at timezone-aware
+    if expires_at.tzinfo is None:
+        # Если expires_at naive, конвертируем его в UTC
+        logger.warning(f"expires_at является naive datetime, автоматически конвертируем в UTC")
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    
+    # Логируем проверку срока действия токена
+    is_expired = now_utc > expires_at
+    logger.debug(f"Проверка истечения токена: текущее время={now_utc}, истекает={expires_at}, истек={is_expired}")
+    
+    return is_expired
 
 
 def extract_token_from_header(authorization: Optional[str]) -> Optional[str]:

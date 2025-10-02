@@ -31,7 +31,8 @@ services:
     ports:
       - "${BACKEND_PORT}:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - DATABASE_URL_SYNC=${DATABASE_URL_SYNC}
@@ -81,7 +82,7 @@ services:
     depends_on:
       - backend
     environment:
-      - VITE_API_BASE_URL=http://backend:8000
+      - VITE_API_BASE_URL=http://localhost:${BACKEND_PORT}
       - VITE_APP_NAME=AirCon Sales System
     restart: unless-stopped
     networks:
@@ -118,7 +119,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8
     restart: unless-stopped
     networks:
       - aircon_network

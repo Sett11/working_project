@@ -7,8 +7,18 @@ import json
 import time
 import os
 import asyncio
+import threading
+import tempfile
+from collections import OrderedDict
 from typing import Dict, Any, List, Optional
 from utils.mylogger import Logger
+
+# Импорт portalocker для кросс-платформенной файловой блокировки
+try:
+    import portalocker
+    HAS_PORTALOCKER = True
+except ImportError:
+    HAS_PORTALOCKER = False
 
 logger = Logger("fallback", "fallback.log")
 
@@ -24,18 +34,26 @@ class FallbackManager:
     """
     
     def __init__(self):
-        self._cache = {}
+        # Thread-safe кэш с использованием OrderedDict для O(1) LRU
+        self._cache = OrderedDict()
+        self._cache_lock = threading.Lock()  # Блокировка для thread-safe операций с кэшем
         self._cache_ttl = 600  # 10 минут TTL для кэша (увеличено с 5 минут для снижения нагрузки)
         self._max_cache_size = 1000  # Максимальное количество элементов в кэше
+        
         self._fallback_data = {}
         self._last_db_access = None
         self._fallback_storage_path = "logs/fallback_storage.json"
+        self._file_lock_path = "logs/fallback_storage.lock"  # Путь к файлу блокировки
         self._cleanup_task = None
         self._is_running = False
         self._loop = None  # Сохраняем текущий event loop
         
         # Инициализируем fallback данные
         self._init_fallback_data()
+        
+        if not HAS_PORTALOCKER:
+            logger.warning("⚠️ portalocker не установлен. Файловая блокировка будет базовой. "
+                         "Установите: pip install portalocker")
         
         logger.info("Fallback Manager инициализирован (планировщик не запущен)")
     
@@ -193,52 +211,63 @@ class FallbackManager:
         logger.info(f"TTL кэша установлен: {ttl_seconds} секунд")
     
     def set_max_cache_size(self, max_size: int):
-        """Установка максимального размера кэша"""
-        self._max_cache_size = max_size
-        logger.info(f"Максимальный размер кэша установлен: {max_size} элементов")
-        
-        # Если текущий размер превышает новый лимит, удаляем лишние элементы
-        if len(self._cache) > max_size:
-            # Сортируем по времени и удаляем самые старые
-            sorted_items = sorted(self._cache.items(), key=lambda x: x[1]["timestamp"])
+        """Установка максимального размера кэша (thread-safe)"""
+        with self._cache_lock:
+            self._max_cache_size = max_size
+            logger.info(f"Максимальный размер кэша установлен: {max_size} элементов")
+            
+            # Если текущий размер превышает новый лимит, удаляем лишние элементы
             items_to_remove = len(self._cache) - max_size
-            
-            for i in range(items_to_remove):
-                del self._cache[sorted_items[i][0]]
-            
-            logger.info(f"Кэш превышал лимит, удалено {items_to_remove} старых элементов")
+            if items_to_remove > 0:
+                # OrderedDict: удаляем самые старые элементы (с начала)
+                for _ in range(items_to_remove):
+                    self._cache.popitem(last=False)
+                
+                logger.info(f"Кэш превышал лимит, удалено {items_to_remove} старых элементов")
     
     def get_cached_data(self, key: str) -> Optional[Any]:
-        """Получение данных из кэша"""
-        if key not in self._cache:
-            return None
-        
-        cached_item = self._cache[key]
-        if time.time() - cached_item["timestamp"] > self._cache_ttl:
-            # Кэш устарел
-            del self._cache[key]
-            return None
-        
-        logger.info(f"Получены данные из кэша: {key}")
-        return cached_item["data"]
+        """Получение данных из кэша (thread-safe с LRU)"""
+        with self._cache_lock:
+            if key not in self._cache:
+                return None
+            
+            cached_item = self._cache[key]
+            # Проверяем TTL для конкретного элемента
+            ttl = cached_item.get("ttl", self._cache_ttl)
+            if time.time() - cached_item["timestamp"] > ttl:
+                # Кэш устарел - удаляем
+                del self._cache[key]
+                logger.info(f"Кэш устарел и удален: {key}")
+                return None
+            
+            # Обновляем порядок использования (перемещаем в конец = recently used)
+            self._cache.move_to_end(key)
+            
+            logger.info(f"Получены данные из кэша: {key}")
+            return cached_item["data"]
     
     def set_cached_data(self, key: str, data: Any, ttl_seconds: Optional[int] = None):
-        """Сохранение данных в кэш с ограничением размера"""
+        """Сохранение данных в кэш с ограничением размера (thread-safe с O(1) LRU eviction)"""
         ttl = ttl_seconds or self._cache_ttl
         
-        # Проверяем размер кэша и удаляем старые элементы если нужно
-        if len(self._cache) >= self._max_cache_size:
-            # Удаляем самый старый элемент (LRU - Least Recently Used)
-            oldest_key = min(self._cache.keys(), key=lambda k: self._cache[k]["timestamp"])
-            del self._cache[oldest_key]
-            logger.info(f"Кэш переполнен, удален старый элемент: {oldest_key}")
-        
-        self._cache[key] = {
-            "data": data,
-            "timestamp": time.time(),
-            "ttl": ttl
-        }
-        logger.info(f"Данные сохранены в кэш: {key} (TTL: {ttl}s, размер кэша: {len(self._cache)}/{self._max_cache_size})")
+        with self._cache_lock:
+            # Проверяем размер кэша и удаляем самый старый элемент если нужно
+            if len(self._cache) >= self._max_cache_size:
+                # O(1) операция: удаляем самый старый элемент (первый в OrderedDict)
+                evicted_key, _ = self._cache.popitem(last=False)
+                logger.info(f"Кэш переполнен, удален старый элемент: {evicted_key}")
+            
+            # Добавляем или обновляем элемент
+            self._cache[key] = {
+                "data": data,
+                "timestamp": time.time(),
+                "ttl": ttl
+            }
+            
+            # Перемещаем элемент в конец (most recently used)
+            self._cache.move_to_end(key)
+            
+            logger.info(f"Данные сохранены в кэш: {key} (TTL: {ttl}s, размер кэша: {len(self._cache)}/{self._max_cache_size})")
     
     def set_fallback_data(self, key: str, data: Any, ttl_seconds: int = 300):
         """Установка заглушки в кэш"""
@@ -264,53 +293,142 @@ class FallbackManager:
         return fallback_item["data"]
     
     def save_critical_data(self, key: str, data: Any):
-        """Сохранение критических данных в файл"""
+        """Сохранение критических данных в файл (атомарная операция с файловой блокировкой)"""
+        lock_file = None
+        temp_file = None
+        
         try:
             # Создаем директорию если не существует
             os.makedirs(os.path.dirname(self._fallback_storage_path), exist_ok=True)
             
-            # Загружаем существующие данные
-            existing_data = {}
-            if os.path.exists(self._fallback_storage_path):
+            # Открываем файл блокировки для exclusive доступа
+            lock_file = open(self._file_lock_path, 'w')
+            
+            try:
+                if HAS_PORTALOCKER:
+                    # Используем portalocker для кросс-платформенной блокировки
+                    portalocker.lock(lock_file, portalocker.LOCK_EX)
+                    logger.debug(f"Получена эксклюзивная блокировка файла: {self._file_lock_path}")
+                else:
+                    # Базовая блокировка без portalocker (менее надежная)
+                    logger.debug(f"Используется базовая блокировка (portalocker не установлен)")
+                
+                # Загружаем существующие данные внутри блокировки
+                existing_data = {}
+                if os.path.exists(self._fallback_storage_path):
+                    try:
+                        with open(self._fallback_storage_path, 'r', encoding='utf-8') as f:
+                            existing_data = json.load(f)
+                    except Exception as e:
+                        logger.warning(f"Ошибка чтения fallback storage: {e}, создаем новый файл")
+                
+                # Добавляем новые данные
+                existing_data[key] = {
+                    "data": data,
+                    "timestamp": time.time()
+                }
+                
+                # Атомарная запись: сначала во временный файл
+                temp_fd, temp_path = tempfile.mkstemp(
+                    dir=os.path.dirname(self._fallback_storage_path),
+                    prefix='.fallback_tmp_',
+                    suffix='.json'
+                )
+                temp_file = temp_path
+                
                 try:
-                    with open(self._fallback_storage_path, 'r', encoding='utf-8') as f:
-                        existing_data = json.load(f)
+                    with os.fdopen(temp_fd, 'w', encoding='utf-8') as f:
+                        json.dump(existing_data, f, ensure_ascii=False, indent=2)
+                    
+                    # Атомарная замена: os.replace гарантирует атомарность на всех платформах
+                    os.replace(temp_path, self._fallback_storage_path)
+                    temp_file = None  # Успешно перемещен, не нужно удалять
+                    
+                    logger.info(f"Критические данные атомарно сохранены: {key}")
+                    
                 except Exception as e:
-                    logger.warning(f"Ошибка чтения fallback storage: {e}")
-            
-            # Добавляем новые данные
-            existing_data[key] = {
-                "data": data,
-                "timestamp": time.time()
-            }
-            
-            # Сохраняем обратно
-            with open(self._fallback_storage_path, 'w', encoding='utf-8') as f:
-                json.dump(existing_data, f, ensure_ascii=False, indent=2)
-            
-            logger.info(f"Критические данные сохранены: {key}")
-            
+                    logger.error(f"Ошибка записи во временный файл: {e}")
+                    raise
+                    
+            finally:
+                # Освобождаем блокировку
+                if HAS_PORTALOCKER:
+                    try:
+                        portalocker.unlock(lock_file)
+                        logger.debug(f"Блокировка файла освобождена: {self._file_lock_path}")
+                    except Exception as e:
+                        logger.warning(f"Ошибка при освобождении блокировки: {e}")
+                
         except Exception as e:
             logger.error(f"Ошибка сохранения критических данных: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            
+        finally:
+            # Закрываем файл блокировки
+            if lock_file:
+                try:
+                    lock_file.close()
+                except Exception as e:
+                    logger.warning(f"Ошибка закрытия файла блокировки: {e}")
+            
+            # Удаляем временный файл если он остался
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.unlink(temp_file)
+                    logger.debug(f"Временный файл удален: {temp_file}")
+                except Exception as e:
+                    logger.warning(f"Ошибка удаления временного файла {temp_file}: {e}")
     
     def load_critical_data(self, key: str) -> Optional[Any]:
-        """Загрузка критических данных из файла"""
+        """Загрузка критических данных из файла (с shared блокировкой для чтения)"""
+        lock_file = None
+        
         try:
             if not os.path.exists(self._fallback_storage_path):
                 return None
             
-            with open(self._fallback_storage_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            # Открываем файл блокировки для shared доступа (чтение)
+            lock_file = open(self._file_lock_path, 'w')
             
-            if key in data:
-                logger.info(f"Критические данные загружены: {key}")
-                return data[key]["data"]
-            
-            return None
+            try:
+                if HAS_PORTALOCKER:
+                    # Используем shared lock для чтения (несколько читателей могут работать одновременно)
+                    portalocker.lock(lock_file, portalocker.LOCK_SH)
+                    logger.debug(f"Получена shared блокировка для чтения: {self._file_lock_path}")
+                
+                # Читаем данные внутри блокировки
+                with open(self._fallback_storage_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                if key in data:
+                    logger.info(f"Критические данные загружены: {key}")
+                    return data[key]["data"]
+                
+                return None
+                
+            finally:
+                # Освобождаем блокировку
+                if HAS_PORTALOCKER:
+                    try:
+                        portalocker.unlock(lock_file)
+                        logger.debug(f"Shared блокировка освобождена: {self._file_lock_path}")
+                    except Exception as e:
+                        logger.warning(f"Ошибка при освобождении shared блокировки: {e}")
             
         except Exception as e:
             logger.error(f"Ошибка загрузки критических данных: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return None
+            
+        finally:
+            # Закрываем файл блокировки
+            if lock_file:
+                try:
+                    lock_file.close()
+                except Exception as e:
+                    logger.warning(f"Ошибка закрытия файла блокировки: {e}")
     
     def get_graceful_response(self, endpoint: str, original_data: Any = None) -> Dict[str, Any]:
         """Создание graceful response для API эндпоинтов"""
@@ -354,16 +472,17 @@ class FallbackManager:
         })
     
     def cleanup_expired_data(self):
-        """Очистка устаревших данных"""
+        """Очистка устаревших данных (thread-safe)"""
         current_time = time.time()
         
-        # Очистка кэша - безопасная итерация по копии
-        expired_cache_keys = [
-            key for key, item in list(self._cache.items())
-            if current_time - item["timestamp"] > item["ttl"]
-        ]
-        for key in expired_cache_keys:
-            del self._cache[key]
+        # Очистка кэша с блокировкой
+        with self._cache_lock:
+            expired_cache_keys = [
+                key for key, item in list(self._cache.items())
+                if current_time - item["timestamp"] > item.get("ttl", self._cache_ttl)
+            ]
+            for key in expired_cache_keys:
+                del self._cache[key]
         
         # Очистка fallback данных - безопасная итерация по копии
         expired_fallback_keys = [

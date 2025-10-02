@@ -42,12 +42,14 @@ async def get_current_user(request: Request) -> Optional[dict]:
         try:
             # Ищем пользователя по токену
             user = await crud.get_user_by_token(db, token)
-            if user:
+            # Проверяем, что пользователь существует И активен
+            if user and user.is_active:
                 return {
                     "id": user.id,
                     "username": user.username,
                     "is_active": user.is_active
                 }
+            # Если пользователь неактивен или не найден - возвращаем None
             return None
         except Exception as e:
             logger.error(f"Ошибка при получении пользователя: {e}")
@@ -65,9 +67,9 @@ async def auth_middleware(request: Request, call_next):
     Returns:
         Response: Ответ от следующего обработчика
     """
-    # Исключаем эндпоинты аутентификации из проверки
-    auth_paths = ['/api/auth/register', '/api/auth/login', '/docs', '/openapi.json', '/health']
-    if any(request.url.path.startswith(path) for path in auth_paths):
+    # Исключаем эндпоинты аутентификации из проверки (точное совпадение)
+    auth_paths = {'/api/auth/register', '/api/auth/login', '/docs', '/openapi.json', '/health'}
+    if request.url.path in auth_paths:
         # Сохраняем текущий контекст и устанавливаем user_id=system для неавторизованных запросов
         context_token = set_user_id("system")
         try:
@@ -77,9 +79,9 @@ async def auth_middleware(request: Request, call_next):
             # Восстанавливаем предыдущий контекст
             reset_user_id(context_token)
     
-    # Делаем публичными эндпоинты мониторинга
-    monitoring_prefixes = ['/api/monitoring', '/api/graceful-degradation']
-    if any(request.url.path.startswith(prefix) for prefix in monitoring_prefixes):
+    # Делаем публичными эндпоинты мониторинга (проверка префикса с границей)
+    monitoring_prefixes = ['/api/monitoring/', '/api/graceful-degradation/']
+    if any(request.url.path.startswith(prefix) or request.url.path == prefix.rstrip('/') for prefix in monitoring_prefixes):
         context_token = set_user_id("system")
         try:
             response = await call_next(request)
@@ -104,16 +106,20 @@ async def auth_middleware(request: Request, call_next):
             reset_user_id(context_token)
     
     # Устанавливаем user_id в контекст логгера
-    set_user_id(user["username"])
+    context_token = set_user_id(user["username"])
     
-    # Добавляем user_id в состояние запроса
-    request.state.user_id = user["id"]
-    request.state.username = user["username"]
-    
-    logger.info(f"Авторизованный доступ: user_id={user['id']}, username={user['username']}, path={request.url.path}")
-    
-    response = await call_next(request)
-    return response
+    try:
+        # Добавляем user_id в состояние запроса
+        request.state.user_id = user["id"]
+        request.state.username = user["username"]
+        
+        logger.info(f"Авторизованный доступ: user_id={user['id']}, username={user['username']}, path={request.url.path}")
+        
+        response = await call_next(request)
+        return response
+    finally:
+        # Всегда очищаем контекст пользователя после обработки запроса
+        reset_user_id(context_token)
 
 
 def get_user_id_from_request(request: Request) -> Optional[int]:

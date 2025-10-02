@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Depends, HTTPException, Path, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import datetime
@@ -26,9 +27,9 @@ from db.schemas import FullOrderCreate, UserCreate, UserLogin, TokenResponse, Us
 from utils.auth import hash_password, verify_password, generate_token, get_token_expiry, verify_secret_key
 from utils.auth_middleware import auth_middleware, get_user_id_from_request, get_username_from_request
 import json
-from sqlalchemy import select
 import time
 import asyncio
+import os
 
 logger = Logger(name=__name__, log_file="backend.log")
 app = FastAPI(title="Air-Con Commercial Offer API", version="0.1.0")
@@ -36,11 +37,46 @@ app = FastAPI(title="Air-Con Commercial Offer API", version="0.1.0")
 # Добавляем middleware для аутентификации
 app.middleware("http")(auth_middleware)
 
+# Вспомогательная функция для проверки прав администратора
+async def verify_admin(request: Request, db: AsyncSession) -> int:
+    """
+    Проверка аутентификации и прав администратора.
+    
+    Args:
+        request: FastAPI Request объект
+        db: Сессия базы данных
+        
+    Returns:
+        int: ID пользователя-администратора
+        
+    Raises:
+        HTTPException: 401 если не аутентифицирован, 403 если не администратор
+    """
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        logger.warning(f"Попытка доступа к админ-эндпоинту без аутентификации")
+        raise HTTPException(status_code=401, detail="Требуется аутентификация")
+    
+    user = await crud.get_user_by_id(db, user_id)
+    if not user:
+        logger.warning(f"Пользователь user_id={user_id} не найден при проверке прав администратора")
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+    
+    if not user.is_admin:
+        logger.warning(f"Пользователь user_id={user_id} ({user.username}) попытался получить доступ к админ-эндпоинту без прав")
+        raise HTTPException(status_code=403, detail="Требуются права администратора")
+    
+    logger.info(f"Администратор user_id={user_id} ({user.username}) получил доступ к админ-эндпоинту")
+    return user_id
+
 # Глобальный обработчик исключений
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     logger.error(f"Необработанное исключение: {exc}", exc_info=True)
-    return {"error": "Внутренняя ошибка сервера", "detail": str(exc)}
+    return JSONResponse(
+        content={"error": "Внутренняя ошибка сервера", "detail": str(exc)},
+        status_code=500
+    )
 
 # === СОБЫТИЯ ЖИЗНЕННОГО ЦИКЛА ===
 
@@ -137,7 +173,10 @@ async def health_check():
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        return {"status": "unhealthy", "database": "disconnected", "error": str(e)}
+        return JSONResponse(
+            content={"status": "unhealthy", "database": "disconnected", "error": str(e)},
+            status_code=503
+        )
 
 # === АУТЕНТИФИКАЦИЯ ===
 
@@ -319,22 +358,34 @@ async def attempt_graceful_recovery():
         return {"success": False, "error": str(e), "timestamp": time.time()}
 
 @app.post("/api/recreate_pool")
-async def recreate_connection_pool():
-    """Эндпоинт для пересоздания пула соединений"""
+async def recreate_connection_pool(request: Request, db: AsyncSession = Depends(get_session)):
+    """Эндпоинт для пересоздания пула соединений (только для администраторов)"""
+    # Проверяем права администратора
+    user_id = await verify_admin(request, db)
+    
     try:
         from db.database import _recreate_connection_pool
+        logger.info(f"Администратор user_id={user_id} инициировал пересоздание пула соединений")
         await _recreate_connection_pool()
+        logger.info(f"Пул соединений успешно пересоздан администратором user_id={user_id}")
         return {"status": "success", "message": "Пул соединений пересоздан"}
     except Exception as e:
-        logger.error(f"Ошибка при пересоздании пула: {e}")
+        logger.error(f"Ошибка при пересоздании пула администратором user_id={user_id}: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.post("/api/cleanup_pool")
-async def cleanup_connection_pool():
-    """Эндпоинт для graceful очистки пула соединений"""
+async def cleanup_connection_pool(request: Request, db: AsyncSession = Depends(get_session)):
+    """Эндпоинт для graceful очистки пула соединений (только для администраторов)"""
+    # Проверяем права администратора
+    user_id = await verify_admin(request, db)
+    
     try:
         from db.database import engine
         pool = engine.pool
+        
+        # Получаем настраиваемый таймаут из переменной окружения (по умолчанию 10 секунд)
+        drain_timeout = int(os.getenv("POOL_DRAIN_TIMEOUT", "5"))
+        check_interval = 0.5  # Проверяем каждые 0.5 секунды
         
         # Получаем статистику до очистки
         before_stats = {
@@ -345,13 +396,23 @@ async def cleanup_connection_pool():
             "invalid": pool.invalid()
         }
         
-        logger.info(f"Начинаем graceful очистку пула. Текущее состояние: {before_stats}")
+        logger.info(f"Администратор user_id={user_id} начинает graceful очистку пула. Текущее состояние: {before_stats}")
         
         # Graceful shutdown: закрываем пул для новых соединений
         await engine.dispose()
         
-        # Ждем завершения активных соединений
-        await asyncio.sleep(2)
+        # Активное ожидание завершения соединений
+        elapsed_time = 0
+        while elapsed_time < drain_timeout:
+            checked_out = pool.checkedout()
+            
+            if checked_out == 0:
+                logger.info(f"Все соединения закрыты за {elapsed_time:.1f} сек")
+                break
+            
+            logger.info(f"Ожидание закрытия соединений: {checked_out} активных, прошло {elapsed_time:.1f}/{drain_timeout} сек")
+            await asyncio.sleep(check_interval)
+            elapsed_time += check_interval
         
         # Получаем статистику после очистки
         after_stats = {
@@ -362,17 +423,36 @@ async def cleanup_connection_pool():
             "invalid": pool.invalid()
         }
         
-        logger.info(f"Graceful очистка пула завершена. Состояние после: {after_stats}")
+        # Проверяем, истек ли таймаут
+        if after_stats["checked_out"] > 0:
+            logger.warning(
+                f"Graceful очистка пула завершена с таймаутом. "
+                f"Осталось активных соединений: {after_stats['checked_out']}. "
+                f"Администратор user_id={user_id}"
+            )
+            return {
+                "status": "warning",
+                "message": f"Таймаут истек, осталось {after_stats['checked_out']} активных соединений",
+                "before_stats": before_stats,
+                "after_stats": after_stats,
+                "elapsed_time": elapsed_time,
+                "timeout": drain_timeout,
+                "timestamp": time.time()
+            }
+        
+        logger.info(f"Graceful очистка пула успешно завершена администратором user_id={user_id}. Состояние после: {after_stats}")
         
         return {
             "status": "success", 
             "message": "Пул соединений очищен gracefully",
             "before_stats": before_stats,
             "after_stats": after_stats,
+            "elapsed_time": elapsed_time,
+            "timeout": drain_timeout,
             "timestamp": time.time()
         }
     except Exception as e:
-        logger.error(f"Ошибка при graceful очистке пула: {e}")
+        logger.error(f"Ошибка при graceful очистке пула администратором user_id={user_id}: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.post("/api/monitoring/start")
@@ -592,20 +672,40 @@ async def save_compose_order_endpoint(request: Request, payload: dict, db: Async
             # Обновляем существующий заказ
             existing_order = await crud.get_compose_order_by_id(db, order_id)
             if not existing_order or existing_order.user_id != user_id:
+                logger.warning(f"Заказ id={order_id} не найден или не принадлежит user_id={user_id}")
                 return {"success": False, "error": f"Заказ с id={order_id} не найден или не принадлежит пользователю"}
             
             # Объединяем данные
-            existing_data = existing_order.compose_order_data.copy()
+            existing_data = existing_order.compose_order_data.copy() if isinstance(existing_order.compose_order_data, dict) else {}
             existing_data.update(compose_order_data)
             
+            # Обновляем заказ
             existing_order.compose_order_data = existing_data
             existing_order.status = status
             
+            # Коммитим изменения перед возвратом
             await db.commit()
-            return {"success": True, "order_id": order.id, "updated": True}
+            await db.refresh(existing_order)
+            
+            logger.info(f"Обновлен составной заказ id={existing_order.id} для user_id={user_id}")
+            return {"success": True, "order_id": existing_order.id, "updated": True}
+        else:
+            # Создаем новый заказ, если order_id не предоставлен
+            logger.info(f"Создание нового составного заказа для user_id={user_id}")
+            
+            new_order = await crud.create_compose_order_simple(
+                db=db,
+                user_id=user_id,
+                compose_order_data=compose_order_data,
+                status=status
+            )
+            
+            logger.info(f"Создан новый составной заказ id={new_order.id} для user_id={user_id}")
+            return {"success": True, "order_id": new_order.id, "created": True}
             
     except Exception as e:
-        logger.error(f"Ошибка при сохранении составного заказа: {e}", exc_info=True)
+        logger.error(f"Ошибка при сохранении составного заказа для user_id={user_id}: {e}", exc_info=True)
+        await db.rollback()
         return {"success": False, "error": str(e)}
 
 @app.post("/api/generate_compose_offer/")

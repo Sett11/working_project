@@ -9,16 +9,17 @@ WORKDIR /app
 
 # 4. Копируем файл с зависимостями и устанавливаем их
 # Этот шаг выполняется отдельно, чтобы использовать кэширование Docker
-COPY requirements.txt .
-COPY pip.conf /etc/pip.conf
-RUN pip install --no-cache-dir --index-url https://pypi.org/simple/ --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt
+COPY backend/requirements.txt .
+COPY backend/pip.conf /etc/pip.conf
+# Используем настройки из /etc/pip.conf (index-url и trusted-host уже там)
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. Копируем db модуль из корня проекта (один уровень выше)
-# ВАЖНО: Этот Dockerfile находится в backend/, а db/ находится в корне
-COPY ../db /app/db
+# 5. Копируем db модуль из корня проекта
+# Build context установлен на корень проекта (../) в docker-compose.yml
+COPY db /app/db
 
 # 6. Копируем все файлы backend в рабочую директорию
-COPY . /app/backend
+COPY backend /app/backend
 
 # 7. Устанавливаем PYTHONPATH для корректной работы импортов
 ENV PYTHONPATH=/app

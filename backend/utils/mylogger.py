@@ -55,6 +55,13 @@ class Logger(logging.Logger):
         :param log_file: Имя файла для сохранения логов (без папки logs, она добавляется автоматически).
         :param level: Уровень логгирования (по умолчанию INFO).
         """
+        # Валидация параметра log_file перед использованием
+        if not isinstance(log_file, str) or not log_file.strip():
+            raise ValueError(
+                f"Параметр log_file должен быть непустой строкой, получено: {type(log_file).__name__} = {repr(log_file)}"
+            )
+        
+        # Инициализация родительского класса после валидации
         super().__init__(name, level)
 
         # Форматтер для логов: время, имя логгера, уровень, сообщение

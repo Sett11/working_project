@@ -15,6 +15,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.exc import InterfaceError, OperationalError, DBAPIError
+from sqlalchemy import text
 import asyncpg
 import asyncio
 import os
@@ -50,6 +51,15 @@ if not DATABASE_URL:
 
 logger.info(f"Используется URL базы данных: {DATABASE_URL.split('@')[-1]}") # Логируем без учетных данных
 
+# Проверяем, что используется асинхронный драйвер
+detected_scheme = DATABASE_URL.split("://")[0] if "://" in DATABASE_URL else "unknown"
+if not DATABASE_URL.startswith(("postgresql+asyncpg://", "postgres+asyncpg://")):
+    logger.warning(
+        f"⚠️ DATABASE_URL может использовать не асинхронный драйвер. "
+        f"Обнаружена схема: '{detected_scheme}'. "
+        f"Рекомендуется использовать 'postgresql+asyncpg://' или 'postgres+asyncpg://' для async engine."
+    )
+
 try:
     # Создаём асинхронный движок SQLAlchemy для работы с asyncpg
     # Настраиваем пул соединений для предотвращения утечек
@@ -63,8 +73,6 @@ try:
         pool_pre_ping=True,  # Проверка соединений перед использованием
         pool_recycle=3600,  # Пересоздание соединений каждый час
         pool_timeout=30,  # Таймаут ожидания свободного соединения
-        # Настройки для asyncpg
-        poolclass=None,  # Используем дефолтный пул для async
     )
 
     # Создаём асинхронную фабрику сессий
@@ -150,7 +158,11 @@ async def get_session():
                             retry_count += 1
                             if retry_count < max_retries:
                                 try:
-                                    await _recreate_connection_pool_with_retry()
+                                    # Используем helper для пересоздания пула с retry логикой
+                                    global engine, AsyncSessionLocal
+                                    new_engine, new_session_factory = await _recreate_connection_pool_with_retry()
+                                    engine = new_engine
+                                    AsyncSessionLocal = new_session_factory
                                     logger.info("✅ Пул соединений успешно пересоздан")
                                     await asyncio.sleep(2.0)  # Увеличено с 0.5 до 2.0 секунд для снижения нагрузки
                                     continue
@@ -188,7 +200,11 @@ async def get_session():
             # Пытаемся восстановить соединение только если Circuit Breaker не открыт
             if db_circuit_breaker.get_status()["state"] != "open":
                 try:
-                    await _recreate_connection_pool_with_retry()
+                    # Используем helper для пересоздания пула с retry логикой
+                    global engine, AsyncSessionLocal
+                    new_engine, new_session_factory = await _recreate_connection_pool_with_retry()
+                    engine = new_engine
+                    AsyncSessionLocal = new_session_factory
                     logger.info("✅ Пул соединений пересоздан после ошибки")
                     await asyncio.sleep(2.0)  # Увеличено с 0.5 до 2.0 секунд для снижения нагрузки
                 except Exception as recreate_error:
@@ -209,7 +225,6 @@ async def _test_db_connection(session: AsyncSession):
         Exception: Если соединение недоступно
     """
     try:
-        from sqlalchemy import text
         await session.execute(text("SELECT 1"))
         logger.debug("✅ Соединение с БД успешно протестировано")
     except Exception as e:
@@ -220,6 +235,12 @@ async def _recreate_connection_pool_with_retry():
     """
     Пересоздает пул соединений с ограниченной политикой повторных попыток.
     Использует экспоненциальную задержку между попытками.
+    
+    Returns:
+        tuple: (new_engine, new_session_factory) - новый engine и фабрика сессий
+        
+    Raises:
+        Exception: Если все попытки пересоздания исчерпаны
     """
     max_pool_recreation_attempts = 3
     attempt = 0
@@ -229,9 +250,9 @@ async def _recreate_connection_pool_with_retry():
         logger.warning(f"🔄 Попытка пересоздания пула соединений {attempt}/{max_pool_recreation_attempts}")
         
         try:
-            await _recreate_connection_pool()
+            new_engine, new_session_factory = await _recreate_connection_pool()
             logger.info(f"✅ Пул соединений успешно пересоздан с попытки {attempt}")
-            return  # Успешное пересоздание, выходим из цикла
+            return new_engine, new_session_factory  # Возвращаем новые объекты
         except Exception as e:
             logger.error(f"❌ Попытка {attempt} пересоздания пула не удалась: {e}")
             
@@ -247,6 +268,12 @@ async def _recreate_connection_pool_with_retry():
 async def _recreate_connection_pool():
     """
     Пересоздает пул соединений при критических ошибках.
+    
+    Returns:
+        tuple: (new_engine, new_session_factory) - новый engine и фабрика сессий
+        
+    Raises:
+        Exception: При критических ошибках пересоздания пула
     """
     global engine, AsyncSessionLocal
     try:
@@ -264,7 +291,7 @@ async def _recreate_connection_pool():
         await asyncio.sleep(1)
         
         # Создаём новый асинхронный движок SQLAlchemy с улучшенными настройками
-        engine = create_async_engine(
+        new_engine = create_async_engine(
             DATABASE_URL, 
             echo=False, 
             future=True,
@@ -275,12 +302,11 @@ async def _recreate_connection_pool():
             pool_recycle=1800,  # Уменьшаем время рецикла до 30 минут
             pool_timeout=30,
             pool_reset_on_return='commit',  # Сбрасываем состояние при возврате
-            poolclass=None,
         )
 
         # Создаём новую асинхронную фабрику сессий
-        AsyncSessionLocal = async_sessionmaker(
-            engine, 
+        new_session_factory = async_sessionmaker(
+            new_engine, 
             expire_on_commit=False, 
             class_=AsyncSession,
             autoflush=False,
@@ -289,13 +315,15 @@ async def _recreate_connection_pool():
         
         # Проверяем работоспособность нового пула
         try:
-            async with AsyncSessionLocal() as test_session:
-                from sqlalchemy import text
+            async with new_session_factory() as test_session:
                 await test_session.execute(text("SELECT 1"))
             logger.info("✅ Пул соединений успешно пересоздан и протестирован")
         except Exception as test_error:
             logger.error(f"❌ Ошибка тестирования нового пула: {test_error}")
             raise
+        
+        # Возвращаем новые объекты вместо мутации глобальных переменных
+        return new_engine, new_session_factory
         
     except Exception as e:
         logger.error(f"❌ Критическая ошибка при пересоздании пула соединений: {e}")

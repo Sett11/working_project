@@ -2,9 +2,11 @@
 Модуль Pydantic-схем для сериализации и валидации данных между API и БД.
 """
 from pydantic import BaseModel, ConfigDict
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import date, datetime
+from decimal import Decimal
 from utils.mylogger import Logger
+from .models import OrderStatus
 
 logger = Logger(name=__name__, log_file="db.log")
 
@@ -15,7 +17,7 @@ class OrmBase(BaseModel):
 class ComponentBase(BaseModel):
     name: str
     category: str
-    price: Optional[float] = None
+    price: Optional[Union[float, Decimal]] = None  # Поддержка Decimal и float для совместимости
     size: Optional[str] = None
     material: Optional[str] = None  # Сделано опциональным
     characteristics: Optional[str] = None
@@ -39,7 +41,7 @@ class AirConditionerBase(BaseModel):
     series: Optional[str] = None
     cooling_power_kw: Optional[float] = None
     energy_efficiency_class: Optional[str] = None
-    retail_price_byn: Optional[float] = None
+    retail_price_byn: Optional[Union[float, Decimal]] = None  # Поддержка Decimal и float для совместимости
     description: Optional[str] = None
     is_inverter: Optional[bool] = False
     has_wifi: Optional[bool] = False
@@ -69,6 +71,7 @@ class UserResponse(UserBase, OrmBase):
     created_at: datetime
     last_login: Optional[datetime] = None
     is_active: bool
+    is_admin: Optional[bool] = False
 
 class TokenResponse(BaseModel):
     token: str
@@ -88,7 +91,7 @@ class Client(ClientBase, OrmBase):
     id: int
 
 class OrderBase(BaseModel):
-    status: Optional[str] = "draft"
+    status: Optional[Union[OrderStatus, str]] = "draft"  # Поддержка Enum и строк для обратной совместимости
     pdf_path: Optional[str] = None
     order_data: dict
     order_type: Optional[str] = "Order"
@@ -113,7 +116,7 @@ class FullOrderCreate(BaseModel):
     order_params: dict
     aircon_params: dict
     components: list
-    status: Optional[str] = "draft"
+    status: Optional[Union[OrderStatus, str]] = "draft"  # Поддержка Enum и строк для обратной совместимости
 
 class OfferCounterBase(BaseModel):
     current_number: int
@@ -127,12 +130,13 @@ class OfferCounter(OfferCounterBase, OrmBase):
 
 # --- Новая схема для составных заказов ---
 class ComposeOrderBase(BaseModel):
-    status: Optional[str] = "draft"
+    status: Optional[Union[OrderStatus, str]] = "draft"  # Поддержка Enum и строк для обратной совместимости
     pdf_path: Optional[str] = None
     compose_order_data: dict  # Данные составного заказа
     order_type: Optional[str] = "Compose"
 
 class ComposeOrderCreate(ComposeOrderBase):
+    user_id: int
     client_id: int
     created_at: date
 
@@ -145,6 +149,6 @@ class ComposeOrderPayload(BaseModel):
     client_data: ClientCreate
     airs: list  # Список кондиционеров с автоинкрементными ID
     components: list  # Комплектующие для всего заказа
-    status: Optional[str] = "draft"
+    status: Optional[Union[OrderStatus, str]] = "draft"  # Поддержка Enum и строк для обратной совместимости
 
 logger.info("Pydantic-схемы успешно определены.")

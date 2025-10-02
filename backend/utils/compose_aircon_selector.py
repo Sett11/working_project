@@ -32,9 +32,9 @@ def calculate_required_power(params: dict) -> float:
     """
     try:
         # Словари для преобразования строковых значений в индексы
-        illumination_map = {"слабая": 0, "средняя": 1, "сильная": 2, "Слабая": 0, "Средняя": 1, "Сильная": 2}
-        activity_map = {"сидячая работа": 0, "легкая работа": 1, "средняя работа": 2, "тяжелая работа": 3, "спорт": 4, 
-                       "Сидячая работа": 0, "Легкая работа": 1, "Средняя работа": 2, "Тяжелая работа": 3, "Спорт": 4}
+        # Используются только lowercase варианты, так как поиск выполняется через .strip().lower()
+        illumination_map = {"слабая": 0, "средняя": 1, "сильная": 2}
+        activity_map = {"сидячая работа": 0, "легкая работа": 1, "средняя работа": 2, "тяжелая работа": 3, "спорт": 4}
         # Извлекаем параметры с значениями по умолчанию
         area = float(params.get("area", 0))
         ceiling_height = float(params.get("ceiling_height", 2.7))
@@ -92,8 +92,20 @@ def calculate_required_power(params: dict) -> float:
         
     except Exception as e:
         logger.error(f"Ошибка расчёта мощности: {str(e)}")
-        # Резервный расчёт по упрощённой методике
-        return float(params.get("area", 0)) / 10
+        # Резервный расчёт по упрощённой методике с валидацией
+        default_area = 10.0  # Безопасное значение по умолчанию (м²)
+        try:
+            area_value = float(params.get("area", 0))
+            if area_value <= 0:
+                logger.warning(f"Резервный расчёт: площадь некорректна или отсутствует (area={params.get('area')}). Используется значение по умолчанию {default_area} м²")
+                area_value = default_area
+        except (ValueError, TypeError):
+            logger.warning(f"Резервный расчёт: невозможно преобразовать площадь в число (area={params.get('area')}). Используется значение по умолчанию {default_area} м²")
+            area_value = default_area
+        
+        fallback_power = float(area_value / 10)
+        logger.info(f"Резервный расчёт: мощность = {fallback_power:.2f} кВт (на основе площади {area_value} м²)")
+        return fallback_power
 
 async def select_aircons_for_compose_order(db: AsyncSession, compose_order_data: dict) -> dict:
     """

@@ -9,16 +9,48 @@
 - Ассоциативные таблицы для связей многие-ко-многим
 """
 from sqlalchemy import (Column, Integer, String, Float, ForeignKey, DateTime,
-                        Text, Table, Boolean)
+                        Text, Table, Boolean, Numeric, Enum as SQLEnum)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
 from utils.mylogger import Logger
+import enum
 
 # Инициализация логгера для моделей базы данных.
 # log_file указывается без папки logs, чтобы использовать дефолтную директорию логов.
 logger = Logger(name=__name__, log_file="db.log")
+
+# --- Enum для статусов ---
+
+class OrderStatus(enum.Enum):
+    """
+    Перечисление возможных статусов заказа.
+    """
+    DRAFT = 'draft'  # Черновик
+    READY = 'ready'  # Готов
+    
+    @classmethod
+    def from_string(cls, value: str) -> 'OrderStatus':
+        """
+        Преобразует строку в OrderStatus.
+        
+        Args:
+            value: Строковое значение статуса ('draft' или 'ready')
+            
+        Returns:
+            OrderStatus: Соответствующий Enum
+            
+        Raises:
+            ValueError: Если передано невалидное значение
+        """
+        if isinstance(value, cls):
+            return value
+        try:
+            return cls(value)
+        except ValueError:
+            logger.warning(f"Невалидное значение статуса '{value}', используется DRAFT по умолчанию")
+            return cls.DRAFT
 
 # --- Основные модели ---
 
@@ -33,7 +65,8 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата создания
     last_login = Column(DateTime(timezone=True), nullable=True)  # Последний вход
     is_active = Column(Boolean, default=True)  # Активность пользователя
-    current_token = Column(String, nullable=True)  # Текущий токен сессии
+    is_admin = Column(Boolean, default=False)  # Права администратора
+    current_token = Column(String(256), unique=True, nullable=True)  # Текущий токен сессии (макс. 256 символов, уникальный)
     token_expires_at = Column(DateTime(timezone=True), nullable=True)  # Время истечения токена
 
 class Client(Base):
@@ -42,7 +75,7 @@ class Client(Base):
     """
     __tablename__ = 'clients'
     id = Column(Integer, primary_key=True, index=True)  # Уникальный идентификатор клиента
-    full_name = Column(String, index=True)  # ФИО клиента
+    full_name = Column(String, nullable=False, index=True)  # ФИО клиента (обязательное поле)
     phone = Column(String, unique=True, index=True)  # Телефон клиента
     email = Column(String, nullable=True)  # Email клиента
     address = Column(String, nullable=True)  # Адрес клиента
@@ -55,13 +88,13 @@ class Order(Base):
     """
     __tablename__ = 'orders'
     id = Column(Integer, primary_key=True, index=True)  # Уникальный идентификатор заказа
-    status = Column(String, default='draft')  # Статус заказа: 'draft' или 'ready'
+    status = Column(SQLEnum(OrderStatus), default=OrderStatus.DRAFT)  # Статус заказа: 'draft' или 'ready' (ограничено Enum)
     pdf_path = Column(String, nullable=True)  # Путь к PDF-файлу (если есть)
     order_data = Column(Text, nullable=False)  # Все данные заказа в формате JSON (строка)
     order_type = Column(String, default='Order')  # Тип заказа: 'Order' или 'Compose'
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата создания заказа
-    client_id = Column(Integer, ForeignKey('clients.id'))  # Внешний ключ на клиента
-    client = relationship("Client", back_populates="orders")  # Объект клиента
+    client_id = Column(Integer, ForeignKey('clients.id', ondelete='CASCADE'))  # Внешний ключ на клиента (CASCADE удаление)
+    client = relationship("Client", back_populates="orders", passive_deletes=True)  # Объект клиента
 
 class AirConditioner(Base):
     """
@@ -74,7 +107,7 @@ class AirConditioner(Base):
     series = Column(String, nullable=True)  # Серия
     cooling_power_kw = Column(Float, nullable=True)  # Мощность охлаждения (кВт)
     energy_efficiency_class = Column(String, nullable=True)  # Класс энергоэффективности
-    retail_price_byn = Column(Float, nullable=True)  # Розничная цена (BYN)
+    retail_price_byn = Column(Numeric(12, 2), nullable=True)  # Розничная цена (BYN) - точное десятичное число
     description = Column(Text, nullable=True)  # Описание
     is_inverter = Column(Boolean, default=False)  # Признак инверторного компрессора
     has_wifi = Column(Boolean, default=False)  # Признак наличия Wi-Fi
@@ -89,7 +122,7 @@ class Component(Base):
     id = Column(Integer, primary_key=True, index=True)  # Уникальный идентификатор комплектующего
     name = Column(String, index=True)  # Название комплектующего
     category = Column(String, index=True)  # Категория
-    price = Column(Float, nullable=True)  # Цена
+    price = Column(Numeric(12, 2), nullable=True)  # Цена - точное десятичное число (до 12 цифр, 2 после запятой)
     size = Column(String, nullable=True)  # Размер
     material = Column(String, nullable=True)  # Материал
     characteristics = Column(String, nullable=True)  # Характеристики
@@ -115,12 +148,13 @@ class ComposeOrder(Base):
     """
     __tablename__ = 'compose_orders'
     id = Column(Integer, primary_key=True, index=True)  # Уникальный идентификатор составного заказа
-    status = Column(String, default='draft')  # Статус заказа: 'draft' или 'ready'
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)  # Внешний ключ на пользователя
+    status = Column(SQLEnum(OrderStatus), default=OrderStatus.DRAFT)  # Статус заказа: 'draft' или 'ready' (ограничено Enum)
     pdf_path = Column(String, nullable=True)  # Путь к PDF-файлу (если есть)
     compose_order_data = Column(Text, nullable=False)  # Все данные составного заказа в формате JSON (строка)
     order_type = Column(String, default='Compose')  # Тип заказа: 'Order' или 'Compose'
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата создания заказа
-    client_id = Column(Integer, ForeignKey('clients.id'))  # Внешний ключ на клиента
-    client = relationship("Client", back_populates="compose_orders")  # Объект клиента
+    client_id = Column(Integer, ForeignKey('clients.id', ondelete='CASCADE'))  # Внешний ключ на клиента (CASCADE удаление)
+    client = relationship("Client", back_populates="compose_orders", passive_deletes=True)  # Объект клиента
 
 logger.info("Все модели базы данных (Client, Order, AirConditioner, Component, OfferCounter, ComposeOrder) успешно определены.")

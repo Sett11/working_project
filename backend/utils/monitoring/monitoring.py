@@ -3,8 +3,9 @@
 """
 import asyncio
 import time
+import re
 import psutil
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from utils.mylogger import Logger
 
 logger = Logger(name="monitoring", log_file="monitoring.log")
@@ -94,13 +95,16 @@ class ApplicationMonitor:
             
             # Проверяем критические пороги
             if cpu_percent > 80:
-                await self._send_alert("system", f"Высокая загрузка CPU: {cpu_percent}%")
+                await self._send_alert("system", f"Высокая загрузка CPU: {cpu_percent}%", 
+                                      alert_template="high_cpu")
             
             if memory.percent > 85:
-                await self._send_alert("system", f"Высокое потребление памяти: {memory.percent}%")
+                await self._send_alert("system", f"Высокое потребление памяти: {memory.percent}%", 
+                                      alert_template="high_memory")
             
             if disk.percent > 90:
-                await self._send_alert("system", f"Критическое заполнение диска: {disk.percent}%")
+                await self._send_alert("system", f"Критическое заполнение диска: {disk.percent}%", 
+                                      alert_template="high_disk")
                 
         except Exception as e:
             logger.error(f"Ошибка проверки системного здоровья: {e}")
@@ -117,9 +121,11 @@ class ApplicationMonitor:
             await asyncio.wait_for(session.execute(text("SELECT 1")), timeout=5.0)
                 
         except asyncio.TimeoutError:
-            await self._send_alert("database", "Таймаут подключения к БД (5 секунд)")
+            await self._send_alert("database", "Таймаут подключения к БД (5 секунд)", 
+                                  alert_template="db_timeout")
         except Exception as e:
-            await self._send_alert("database", f"Ошибка подключения к БД: {e}")
+            await self._send_alert("database", f"Ошибка подключения к БД: {e}", 
+                                  alert_template="db_connection_error")
         finally:
             # Гарантированно закрываем сессию
             if session:
@@ -141,13 +147,16 @@ class ApplicationMonitor:
             
             # Проверяем критические условия
             if utilization > 90:
-                await self._send_alert("pool", f"Высокая утилизация пула: {utilization:.1f}%")
+                await self._send_alert("pool", f"Высокая утилизация пула: {utilization:.1f}%", 
+                                      alert_template="high_pool_utilization")
             
             if overflow > 5:
-                await self._send_alert("pool", f"Переполнение пула: {overflow} соединений")
+                await self._send_alert("pool", f"Переполнение пула: {overflow} соединений", 
+                                      alert_template="pool_overflow")
             
             if checked_out == pool_size:
-                await self._send_alert("pool", "Все соединения в пуле заняты!")
+                await self._send_alert("pool", "Все соединения в пуле заняты!", 
+                                      alert_template="pool_exhausted")
                 
         except Exception as e:
             logger.error(f"Ошибка проверки пула соединений: {e}")
@@ -169,32 +178,66 @@ class ApplicationMonitor:
                 # Алерт если degradation длится более 10 минут
                 if degradation_duration > 600:  # 10 минут
                     await self._send_alert("graceful_degradation", 
-                        f"Длительный режим graceful degradation: {degradation_duration:.0f} секунд")
+                        f"Длительный режим graceful degradation: {degradation_duration:.0f} секунд",
+                        alert_template="long_degradation")
                 
                 # Алерт если исчерпаны попытки восстановления
                 if recovery_attempts >= max_attempts:
                     await self._send_alert("graceful_degradation", 
-                        f"Исчерпаны попытки восстановления: {recovery_attempts}/{max_attempts}")
+                        f"Исчерпаны попытки восстановления: {recovery_attempts}/{max_attempts}",
+                        alert_template="recovery_exhausted")
                 
                 # Алерт если degradation длится более 30 минут
                 if degradation_duration > 1800:  # 30 минут
                     await self._send_alert("graceful_degradation", 
-                        f"Критически длительный режим graceful degradation: {degradation_duration:.0f} секунд")
+                        f"Критически длительный режим graceful degradation: {degradation_duration:.0f} секунд",
+                        alert_template="critical_degradation")
                         
         except Exception as e:
             logger.error(f"Ошибка проверки graceful degradation: {e}")
     
-    async def _send_alert(self, alert_type: str, message: str):
-        """Отправка алерта с защитой от спама"""
+    def _normalize_alert_key(self, message: str) -> str:
+        """
+        Нормализация сообщения алерта для создания статического ключа.
+        Удаляет динамические части: числа, проценты, временные метки.
+        
+        Примеры:
+        - "Высокая загрузка CPU: 85.3%" -> "Высокая загрузка CPU: %"
+        - "Переполнение пула: 7 соединений" -> "Переполнение пула: соединений"
+        - "Длительный режим graceful degradation: 650 секунд" -> "Длительный режим graceful degradation: секунд"
+        """
+        # Удаляем числа (целые и дробные) и проценты
+        normalized = re.sub(r'\d+\.?\d*%?', '', message)
+        # Удаляем множественные пробелы
+        normalized = re.sub(r'\s+', ' ', normalized)
+        # Убираем лишние пробелы в начале/конце
+        normalized = normalized.strip()
+        return normalized
+    
+    async def _send_alert(self, alert_type: str, message: str, alert_template: Optional[str] = None):
+        """
+        Отправка алерта с защитой от спама.
+        
+        Args:
+            alert_type: Тип алерта (system, database, pool, graceful_degradation)
+            message: Полное динамическое сообщение для логирования
+            alert_template: Опциональный статический шаблон для ключа cooldown.
+                          Если не указан, будет создан автоматически путем нормализации message.
+        """
         current_time = time.time()
-        alert_key = f"{alert_type}_{message}"
+        
+        # Используем явный шаблон или нормализуем сообщение для создания статического ключа
+        template = alert_template if alert_template else self._normalize_alert_key(message)
+        alert_key = f"{alert_type}_{template}"
         
         # Проверяем, не отправляли ли мы недавно такой же алерт
         if alert_key in self.last_alert_time:
             if current_time - self.last_alert_time[alert_key] < self.alert_cooldown:
+                # Логируем факт пропуска алерта (debug level)
+                logger.debug(f"Алерт пропущен (cooldown): [{alert_type.upper()}] {message}")
                 return
         
-        # Логируем алерт
+        # Логируем алерт с полным динамическим сообщением
         logger.warning(f"🚨 АЛЕРТ [{alert_type.upper()}]: {message}")
         self.last_alert_time[alert_key] = current_time
     

@@ -34,8 +34,14 @@ app.middleware("http")(auth_middleware)
 # Глобальный обработчик исключений
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
+    from fastapi.responses import JSONResponse
+    # Логируем полную информацию об ошибке для отладки
     logger.error(f"Необработанное исключение: {exc}", exc_info=True)
-    return {"error": "Внутренняя ошибка сервера", "detail": str(exc)}
+    # Возвращаем безопасный ответ клиенту без раскрытия внутренних деталей
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error"}
+    )
 
 # ... (эндпоинты startup, shutdown, read_root, get_all_air_conditioners, select_aircons_endpoint без изменений) ...
 @app.on_event("startup")
@@ -626,31 +632,8 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
                 comp_new.setdefault('unit', 'шт.')
                 comp_new.setdefault('discount_percent', discount)
                 components_for_pdf.append(comp_new)
-        today = datetime.date.today().strftime('%d_%m_%Y')
-        # 2. Имя клиента для offer_number: только запрещённые для имени файла символы заменяем на '_', буквы и пробелы оставляем
-        import re
-        safe_name = re.sub(r'[\\/:*?"<>|]', '_', client_full_name).strip()[:20]
-        offer_number = f"{today}_{safe_name}"
-        # 4. Генерируем PDF (ЗАКОММЕНТИРОВАНО - используется только для составных заказов)
-        # pdf_path = await generate_commercial_offer_pdf_async(
-        #     client_data=client_data, order_params=order_params,
-        #     aircon_variants=aircon_variants, components=components_for_pdf,
-        #     discount_percent=discount, offer_number=offer_number, db_session=db
-        # )
-        return {"success": False, "error": "Генерация PDF для обычных заказов отключена. Используйте составные заказы."}
-        # --- Меняем статус заказа на completed, если заказ найден по id ---
-        if 'order' in locals() and order is not None:
-            order.status = 'completed'
-            order.pdf_path = pdf_path
-            await db.commit()
-        response_data = {
-            "aircon_variants": aircon_variants,
-            "total_count": len(selected_aircons),
-            "client_name": client.full_name,
-            "components": components_for_pdf,
-            "pdf_path": pdf_path
-        }
-        return response_data
+        # Генерация PDF для обычных заказов отключена - все заказы теперь составные
+        return {"success": False, "error": "Генерация PDF для обычных заказов отключена. Используйте составные заказы (/api/generate_compose_offer/)."}
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
@@ -1245,6 +1228,13 @@ async def select_compose_aircons(payload: dict, db: AsyncSession = Depends(get_s
                 result_text += f"   Wi-Fi\n"
             result_text += f"   Тип кондиционера: {ac.mount_type}\n\n"
         
+        # Получаем последний кондиционер из массива airs для сохранения результатов подбора
+        airs = compose_order_data.get("airs", [])
+        if not airs:
+            return {"success": False, "error": "В составном заказе нет кондиционеров для подбора"}
+        
+        last_air = airs[-1]
+        
         # Сохраняем подобранные кондиционеры в постоянное поле
         last_air["selected_aircons"] = [
             {
@@ -1309,6 +1299,16 @@ async def add_aircon_to_compose_order(payload: dict, db: AsyncSession = Depends(
         
         # В новой логике добавляем новое помещение вместо нового кондиционера
         new_room_id = len(rooms) + 1
+        
+        # Вычисляем ID для нового кондиционера
+        existing_airs = compose_order_data.get("airs", [])
+        if existing_airs:
+            # Находим максимальный ID среди существующих кондиционеров
+            max_id = max(air.get("id", 0) for air in existing_airs)
+            new_air_id = max_id + 1
+        else:
+            # Если кондиционеров ещё нет, начинаем с 1
+            new_air_id = 1
         
         # Добавляем ID к данным кондиционера
         new_aircon_order["id"] = new_air_id
