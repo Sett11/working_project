@@ -5,7 +5,7 @@
 import datetime
 import os
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import mm, cm
@@ -150,13 +150,14 @@ def get_aircon_image_path(image_path_from_json):
         return None
     
     try:
-        # Получаем базовую директорию проекта (папка form_com_offer)
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # Получаем корневую директорию проекта (на уровень выше backend/)
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        project_root = os.path.dirname(backend_dir)
         
         # Строим полный путь к изображению
         # Пример image_path_from_json: "images_airs/img_1.png"
-        # Результат: /path/to/form_com_offer/docs/images_airs/img_1.png
-        full_path = os.path.join(base_dir, 'docs', image_path_from_json)
+        # Результат: /path/to/project_root/db/docs/images_airs/img_1.png
+        full_path = os.path.join(project_root, 'db', 'docs', image_path_from_json)
         
         # Проверяем существование файла
         if os.path.exists(full_path):
@@ -547,9 +548,9 @@ async def generate_compose_commercial_offer_pdf(
                 ]))
                 story.append(ac_table)
                 
-                # Добавляем разрыв страницы между таблицами разных комнат (кроме последней)
+                # Добавляем отступ между таблицами разных комнат (кроме последней)
                 if i < len(aircon_results.get("aircon_results", [])) - 1:
-                    story.append(PageBreak())
+                    story.append(Spacer(1, 15))
                 
                 # Суммируем стоимость монтажа из данных помещения
                 if i < len(rooms):
@@ -637,92 +638,93 @@ async def generate_compose_commercial_offer_pdf(
             story.append(Spacer(1, 15))
 
         # --- ИТОГОВАЯ СВОДКА ПО ВСЕМ ПОМЕЩЕНИЯМ ---
-        story.append(Paragraph("ИТОГОВАЯ СВОДКА", styleBold))
-        story.append(Spacer(1, 8))
-        
-        # Собираем все комплектующие из всех помещений для итоговой таблицы
-        all_components_summary = {}
-        total_components = 0
-        
-        logger.info(f"Формируем итоговую сводку по {len(rooms)} помещениям")
-        for i, room in enumerate(rooms):
-            room_components = room.get('components_for_room', [])
-            logger.info(f"Помещение {i+1}: {len(room_components)} комплектующих")
-            for comp in room_components:
-                if comp.get("selected"):
-                    comp_name = comp.get('name', '')
-                    price = float(comp.get('price', 0))
-                    unit = comp.get('unit', 'шт.')
-                    
-                    if unit == 'м.':
-                        qty_or_length = int(comp.get('length', 0))
-                    else:
-                        qty_or_length = int(comp.get('qty', 0))
-                    
-                    total_without_discount = price * qty_or_length
-                    total_components += total_without_discount
-                    logger.info(f"Итоговая сводка: {comp_name} - {price} x {qty_or_length} = {total_without_discount}")
-                    
-                    # Суммируем одинаковые комплектующие
-                    if comp_name in all_components_summary:
-                        all_components_summary[comp_name]['qty'] += qty_or_length
-                        all_components_summary[comp_name]['total'] += total_without_discount
-                    else:
-                        all_components_summary[comp_name] = {
-                            'unit': unit,
-                            'price': price,
-                            'qty': qty_or_length,
-                            'total': total_without_discount
-                        }
-        
-        # Создаем итоговую таблицу комплектующих
-        if all_components_summary:
-            summary_table_data = [[
-                Paragraph("Наименование", styleTableHeader),
-                Paragraph("Ед. изм.", styleTableHeader),
-                Paragraph("Общее кол-во", styleTableHeader),
-                Paragraph("Цена за ед., BYN", styleTableHeader),
-                Paragraph("Общая сумма, BYN", styleTableHeader)
-            ]]
-            
-            for comp_name, comp_data in all_components_summary.items():
-                summary_table_data.append([
-                    Paragraph(comp_name, styleTableCell),
-                    Paragraph(comp_data['unit'], styleTableCell),
-                    Paragraph(str(comp_data['qty']), styleTableCell),
-                    Paragraph(f"{comp_data['price']:.2f}", styleTableCell),
-                    Paragraph(f"{comp_data['total']:.2f}", styleTableCell)
-                ])
-            
-            # Итоговая строка
-            summary_table_data.append([
-                Paragraph("ИТОГО КОМПЛЕКТУЮЩИЕ", styleTableHeader),
-                    '', '', '',
-                    Paragraph(f"{total_components:.2f}", styleTableHeader)
-                ])
-                
-            summary_table = Table(
-                summary_table_data, 
-                    colWidths=[60*mm, 20*mm, 15*mm, 25*mm, 25*mm],
-                    repeatRows=1
-                )
-            summary_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-                ('FONTNAME', (0,0), (-1,0), FONT_NAME_BOLD),
-                    ('FONTNAME', (0,1), (-1,-1), FONT_NAME_NORMAL),
-                    ('FONTSIZE', (0,0), (-1,-1), 7),
-                    ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-                    ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-                    ('ALIGN', (2,1), (2,-1), 'CENTER'),
-                    ('ALIGN', (3,1), (4,-1), 'RIGHT'),
-                    ('ALIGN', (0,0), (-1,0), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                    ('SPAN', (0,-1), (3,-1)),
-                ('BACKGROUND', (0,-1), (-1,-1), colors.lightgrey),
-                ('FONTNAME', (0,-1), (-1,-1), FONT_NAME_BOLD),
-                ]))
-            story.append(summary_table)
-            story.append(Spacer(1, 15))
+        # ЗАКОММЕНТИРОВАНО: Итоговая таблица комплектующих по всем помещениям
+        # story.append(Paragraph("ИТОГОВАЯ СВОДКА", styleBold))
+        # story.append(Spacer(1, 8))
+        # 
+        # # Собираем все комплектующие из всех помещений для итоговой таблицы
+        # all_components_summary = {}
+        # total_components = 0
+        # 
+        # logger.info(f"Формируем итоговую сводку по {len(rooms)} помещениям")
+        # for i, room in enumerate(rooms):
+        #     room_components = room.get('components_for_room', [])
+        #     logger.info(f"Помещение {i+1}: {len(room_components)} комплектующих")
+        #     for comp in room_components:
+        #         if comp.get("selected"):
+        #             comp_name = comp.get('name', '')
+        #             price = float(comp.get('price', 0))
+        #             unit = comp.get('unit', 'шт.')
+        #             
+        #             if unit == 'м.':
+        #                 qty_or_length = int(comp.get('length', 0))
+        #             else:
+        #                 qty_or_length = int(comp.get('qty', 0))
+        #             
+        #             total_without_discount = price * qty_or_length
+        #             total_components += total_without_discount
+        #             logger.info(f"Итоговая сводка: {comp_name} - {price} x {qty_or_length} = {total_without_discount}")
+        #             
+        #             # Суммируем одинаковые комплектующие
+        #             if comp_name in all_components_summary:
+        #                 all_components_summary[comp_name]['qty'] += qty_or_length
+        #                 all_components_summary[comp_name]['total'] += total_without_discount
+        #             else:
+        #                 all_components_summary[comp_name] = {
+        #                     'unit': unit,
+        #                     'price': price,
+        #                     'qty': qty_or_length,
+        #                     'total': total_without_discount
+        #                 }
+        # 
+        # # Создаем итоговую таблицу комплектующих
+        # if all_components_summary:
+        #     summary_table_data = [[
+        #         Paragraph("Наименование", styleTableHeader),
+        #         Paragraph("Ед. изм.", styleTableHeader),
+        #         Paragraph("Общее кол-во", styleTableHeader),
+        #         Paragraph("Цена за ед., BYN", styleTableHeader),
+        #         Paragraph("Общая сумма, BYN", styleTableHeader)
+        #     ]]
+        #     
+        #     for comp_name, comp_data in all_components_summary.items():
+        #         summary_table_data.append([
+        #             Paragraph(comp_name, styleTableCell),
+        #             Paragraph(comp_data['unit'], styleTableCell),
+        #             Paragraph(str(comp_data['qty']), styleTableCell),
+        #             Paragraph(f"{comp_data['price']:.2f}", styleTableCell),
+        #             Paragraph(f"{comp_data['total']:.2f}", styleTableCell)
+        #         ])
+        #     
+        #     # Итоговая строка
+        #     summary_table_data.append([
+        #         Paragraph("ИТОГО КОМПЛЕКТУЮЩИЕ", styleTableHeader),
+        #             '', '', '',
+        #             Paragraph(f"{total_components:.2f}", styleTableHeader)
+        #         ])
+        #         
+        #     summary_table = Table(
+        #         summary_table_data, 
+        #             colWidths=[60*mm, 20*mm, 15*mm, 25*mm, 25*mm],
+        #             repeatRows=1
+        #         )
+        #     summary_table.setStyle(TableStyle([
+        #             ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+        #         ('FONTNAME', (0,0), (-1,0), FONT_NAME_BOLD),
+        #             ('FONTNAME', (0,1), (-1,-1), FONT_NAME_NORMAL),
+        #             ('FONTSIZE', (0,0), (-1,-1), 7),
+        #             ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        #             ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        #             ('ALIGN', (2,1), (2,-1), 'CENTER'),
+        #             ('ALIGN', (3,1), (4,-1), 'RIGHT'),
+        #             ('ALIGN', (0,0), (-1,0), 'CENTER'),
+        #             ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        #             ('SPAN', (0,-1), (3,-1)),
+        #         ('BACKGROUND', (0,-1), (-1,-1), colors.lightgrey),
+        #         ('FONTNAME', (0,-1), (-1,-1), FONT_NAME_BOLD),
+        #         ]))
+        #     story.append(summary_table)
+        #     story.append(Spacer(1, 15))
 
         # --- Блок работ (стоимость монтажа уже учтена в цикле выше) ---
         # logger.info(f"Общая стоимость монтажа: {total_installation_price:.2f}")  # Убрано избыточное логирование
@@ -749,6 +751,23 @@ async def generate_compose_commercial_offer_pdf(
 
         # --- Расчет итоговой суммы ---
         # Итоговая сумма = комплектующие + монтаж (кондиционеры НЕ включаются)
+        # Рассчитываем общую стоимость комплектующих из всех помещений
+        total_components = 0
+        for i, room in enumerate(rooms):
+            room_components = room.get('components_for_room', [])
+            for comp in room_components:
+                if comp.get("selected"):
+                    price = float(comp.get('price', 0))
+                    unit = comp.get('unit', 'шт.')
+                    
+                    if unit == 'м.':
+                        qty_or_length = int(comp.get('length', 0))
+                    else:
+                        qty_or_length = int(comp.get('qty', 0))
+                    
+                    total_without_discount = price * qty_or_length
+                    total_components += total_without_discount
+        
         total_pay = total_components + total_installation_price
         
         # --- Итоговая сумма ---

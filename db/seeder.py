@@ -13,8 +13,9 @@ from sqlalchemy import select, func, delete
 
 logger = Logger(name=__name__, log_file="db.log")
 
-AIRS_CATALOG_PATH = 'docs/airs.json'
-COMPONENTS_CATALOG_PATH = 'docs/components_catalog.json'
+# Пути относительно корня проекта (db/docs/)
+AIRS_CATALOG_PATH = 'db/docs/airs.json'
+COMPONENTS_CATALOG_PATH = 'db/docs/components_catalog.json'
 
 
 async def create_tables():
