@@ -63,8 +63,9 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app_schema TO app_user;
 
 -- Настраиваем права по умолчанию для будущих таблиц и последовательностей
 -- (применяется к объектам, созданным после выполнения этого скрипта)
-ALTER DEFAULT PRIVILEGES IN SCHEMA app_schema GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA app_schema GRANT USAGE, SELECT ON SEQUENCES TO app_user;
+-- FOR ROLE postgres указывает, что права применяются к объектам, создаваемым ролью postgres
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA app_schema GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA app_schema GRANT USAGE, SELECT ON SEQUENCES TO app_user;
 
 -- Настраиваем параметры автовакуума
 ALTER SYSTEM SET autovacuum = on;

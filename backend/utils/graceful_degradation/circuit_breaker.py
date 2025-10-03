@@ -138,11 +138,18 @@ class CircuitBreaker:
             # Проверяем, не пора ли перейти в HALF_OPEN
             if (self.last_failure_time and 
                 current_time - self.last_failure_time >= self.recovery_timeout):
-                async with self.state_lock:
-                    # Повторная проверка под блокировкой (double-checked locking)
+                # Защита от state_lock = None
+                if self.state_lock is None:
+                    # Если нет блокировки, выполняем проверку напрямую
                     if (self.state == CircuitState.OPEN and self.last_failure_time and 
                         current_time - self.last_failure_time >= self.recovery_timeout):
                         await self._transition_to_half_open()
+                else:
+                    async with self.state_lock:
+                        # Повторная проверка под блокировкой (double-checked locking)
+                        if (self.state == CircuitState.OPEN and self.last_failure_time and 
+                            current_time - self.last_failure_time >= self.recovery_timeout):
+                            await self._transition_to_half_open()
         
         elif self.state == CircuitState.HALF_OPEN:
             # В HALF_OPEN состоянии не делаем автоматических переходов
@@ -180,7 +187,7 @@ class CircuitBreaker:
         logger.info("✅ Circuit Breaker ЗАКРЫТ - нормальная работа БД восстановлена")
     
     def _on_success(self):
-        """Обработка успешного запроса"""
+        """Обработка успешного запроса (синхронная версия для call())"""
         if self.state == CircuitState.HALF_OPEN:
             # В HALF_OPEN успех означает восстановление БД
             self._safe_schedule_coroutine(self._safe_transition_to_closed())
@@ -188,23 +195,55 @@ class CircuitBreaker:
             # В CLOSED просто сбрасываем счетчик ошибок
             self.failure_count = 0
             self.last_success_time = time.time()
+    
+    async def _a_on_success(self):
+        """Обработка успешного запроса (асинхронная версия для acall())"""
+        if self.state == CircuitState.HALF_OPEN:
+            # В HALF_OPEN успех означает восстановление БД - ждем завершения перехода
+            await self._safe_transition_to_closed()
+        else:
+            # В CLOSED просто сбрасываем счетчик ошибок
+            self.failure_count = 0
+            self.last_success_time = time.time()
 
     async def _safe_transition_to_closed(self):
         """Thread-safe переход в CLOSED состояние из HALF_OPEN"""
-        async with self.state_lock:
-            # Проверка состояния под блокировкой, затем прямой вызов _transition_to_closed
-            # (блокировка уже захвачена, поэтому вложенного захвата не будет)
+        # Защита от state_lock = None
+        if self.state_lock is None:
+            # Если нет блокировки, выполняем переход напрямую
             if self.state == CircuitState.HALF_OPEN:
                 await self._transition_to_closed()
+        else:
+            async with self.state_lock:
+                # Проверка состояния под блокировкой, затем прямой вызов _transition_to_closed
+                # (блокировка уже захвачена, поэтому вложенного захвата не будет)
+                if self.state == CircuitState.HALF_OPEN:
+                    await self._transition_to_closed()
     
     async def _safe_transition_to_open(self):
         """Thread-safe переход в OPEN состояние"""
-        async with self.state_lock:
-            # Захватываем блокировку перед вызовом _transition_to_open
+        # Валидация состояния: проверяем, что состояние существует и не OPEN
+        if self.state is None:
+            logger.warning("Попытка перехода в OPEN при state=None, пропускаем")
+            return
+        
+        if self.state == CircuitState.OPEN:
+            logger.debug("Circuit Breaker уже в состоянии OPEN, пропускаем повторный переход")
+            return
+        
+        # Защита от state_lock = None
+        if self.state_lock is None:
+            # Если нет блокировки, выполняем переход напрямую
+            logger.debug("state_lock=None, выполняем переход в OPEN без блокировки")
             await self._transition_to_open()
+        else:
+            async with self.state_lock:
+                # Повторная проверка под блокировкой (double-checked locking)
+                if self.state != CircuitState.OPEN:
+                    await self._transition_to_open()
     
     def _on_failure(self, error: Exception):
-        """Обработка неуспешного запроса"""
+        """Обработка неуспешного запроса (синхронная версия для call())"""
         self.failure_count += 1
         self.last_failure_time = time.time()
         
@@ -212,11 +251,28 @@ class CircuitBreaker:
         
         if self.state == CircuitState.CLOSED:
             if self.failure_count >= self.failure_threshold:
+                # Планируем переход в фоне (неблокирующий)
                 self._safe_schedule_coroutine(self._safe_transition_to_open())
         
         elif self.state == CircuitState.HALF_OPEN:
-            # В HALF_OPEN любая ошибка возвращает в OPEN
+            # В HALF_OPEN любая ошибка возвращает в OPEN (планируем в фоне)
             self._safe_schedule_coroutine(self._safe_transition_to_open())
+    
+    async def _a_on_failure(self, error: Exception):
+        """Обработка неуспешного запроса (асинхронная версия для acall())"""
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+        
+        logger.warning(f"Ошибка БД #{self.failure_count}: {error}")
+        
+        if self.state == CircuitState.CLOSED:
+            if self.failure_count >= self.failure_threshold:
+                # Ждем завершения перехода в OPEN перед возвратом
+                await self._safe_transition_to_open()
+        
+        elif self.state == CircuitState.HALF_OPEN:
+            # В HALF_OPEN любая ошибка возвращает в OPEN - ждем завершения перехода
+            await self._safe_transition_to_open()
     
     def call(self, func: Callable, *args, **kwargs) -> Any:
         """
@@ -257,10 +313,12 @@ class CircuitBreaker:
         
         try:
             result = await func(*args, **kwargs)
-            self._on_success()
+            # Используем асинхронную версию для ожидания завершения переходов
+            await self._a_on_success()
             return result
         except self.expected_exception as e:
-            self._on_failure(e)
+            # Используем асинхронную версию для ожидания завершения переходов
+            await self._a_on_failure(e)
             raise
     
     def get_status(self) -> dict:

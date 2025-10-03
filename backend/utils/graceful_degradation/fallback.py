@@ -63,12 +63,8 @@ class FallbackManager:
         # Инициализируем fallback данные
         self._init_fallback_data()
         
-        if not HAS_PORTALOCKER:
-            if HAS_FCNTL:
-                logger.warning("⚠️ portalocker не установлен. Используется fcntl для файловой блокировки (только Unix).")
-            else:
-                logger.warning("⚠️ portalocker не установлен. Файловая блокировка будет базовой. "
-                         "Установите: pip install portalocker")
+        if not HAS_PORTALOCKER and HAS_FCNTL:
+            logger.warning("⚠️ portalocker не установлен. Используется fcntl для файловой блокировки (только Unix).")
         
         logger.info("Fallback Manager инициализирован (планировщик не запущен)")
     
