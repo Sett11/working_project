@@ -553,6 +553,9 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
         client_name = payload.get("client_data", {}).get('full_name', 'N/A')
         logger.info(f"Получен запрос на эндпоинт /api/generate_offer/ для клиента: {client_name}")
     try:
+        # Генерация PDF для обычных заказов отключена - все заказы теперь составные
+        return {"success": False, "error": "Генерация PDF для обычных заказов отключена. Используйте составные заказы (/api/generate_compose_offer/)."}
+        
         # Если в payload только id — подгружаем все данные заказа из базы
         if list(payload.keys()) == ["id"] or ("id" in payload and len(payload) == 1):
             order_id = payload["id"]
@@ -632,8 +635,6 @@ async def generate_offer_endpoint(payload: dict, db: AsyncSession = Depends(get_
                 comp_new.setdefault('unit', 'шт.')
                 comp_new.setdefault('discount_percent', discount)
                 components_for_pdf.append(comp_new)
-        # Генерация PDF для обычных заказов отключена - все заказы теперь составные
-        return {"success": False, "error": "Генерация PDF для обычных заказов отключена. Используйте составные заказы (/api/generate_compose_offer/)."}
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:

@@ -383,7 +383,7 @@ async def cleanup_connection_pool(request: Request, db: AsyncSession = Depends(g
         from db.database import engine
         pool = engine.pool
         
-        # Получаем настраиваемый таймаут из переменной окружения (по умолчанию 10 секунд)
+        # Получаем настраиваемый таймаут из переменной окружения (по умолчанию 5 секунд)
         drain_timeout = int(os.getenv("POOL_DRAIN_TIMEOUT", "5"))
         check_interval = 0.5  # Проверяем каждые 0.5 секунды
         

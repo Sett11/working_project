@@ -35,14 +35,25 @@ class OrderStatus(enum.Enum):
         """
         Преобразует строку в OrderStatus.
         
+        Если передан экземпляр OrderStatus, возвращает его без изменений.
+        При невалидном значении логирует предупреждение и возвращает OrderStatus.DRAFT.
+        
         Args:
-            value: Строковое значение статуса ('draft' или 'ready')
+            value: Строковое значение статуса ('draft' или 'ready') 
+                   или экземпляр OrderStatus
             
         Returns:
-            OrderStatus: Соответствующий Enum
+            OrderStatus: Соответствующий Enum или OrderStatus.DRAFT для невалидных значений
             
-        Raises:
-            ValueError: Если передано невалидное значение
+        Examples:
+            >>> OrderStatus.from_string('draft')
+            <OrderStatus.DRAFT: 'draft'>
+            >>> OrderStatus.from_string('ready')
+            <OrderStatus.READY: 'ready'>
+            >>> OrderStatus.from_string('invalid')  # Логирует warning
+            <OrderStatus.DRAFT: 'draft'>
+            >>> OrderStatus.from_string(OrderStatus.READY)
+            <OrderStatus.READY: 'ready'>
         """
         if isinstance(value, cls):
             return value

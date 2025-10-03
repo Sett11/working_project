@@ -18,9 +18,14 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Оператор должен вручную перезапустить сервер для применения pg_stat_statements.
 ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';
 ALTER SYSTEM SET track_activity_query_size = 2048;
--- Безопасное логирование: 'none' - не логировать запросы (рекомендуется для продакшена)
--- Альтернативы: 'ddl' - только DDL, 'mod' - DDL и изменения данных
-ALTER SYSTEM SET log_statement = 'none';
+-- Логирование запросов: 'ddl' - логирует изменения схемы (CREATE, ALTER, DROP)
+-- Это обеспечивает аудит критических операций для compliance и безопасности.
+-- Альтернативы: 'mod' - DDL + изменения данных (INSERT/UPDATE/DELETE), 'all' - все запросы
+-- Примечание: Для продакшена рекомендуется дополнительный мониторинг через:
+-- - APM системы (например, pg_stat_monitor, pgBadger)
+-- - Query monitoring инструменты
+-- - Централизованное логирование с ротацией и retention policy
+ALTER SYSTEM SET log_statement = 'ddl';
 -- Логирование медленных запросов (более 1000 мс)
 ALTER SYSTEM SET log_min_duration_statement = 1000;
 
@@ -43,12 +48,23 @@ GRANT USAGE ON SCHEMA public TO app_user;
 
 -- Создаем схему для приложения
 CREATE SCHEMA IF NOT EXISTS app_schema;
--- Предоставляем права на схему приложения
+
+-- Предоставляем права на схему приложения (ТОЛЬКО USAGE, без CREATE для безопасности)
 GRANT USAGE ON SCHEMA app_schema TO app_user;
-GRANT CREATE ON SCHEMA app_schema TO app_user;
--- После создания таблиц в app_schema необходимо явно предоставить права:
--- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app_schema TO app_user;
--- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app_schema TO app_user;
+
+-- ВАЖНО: DDL операции (CREATE, ALTER, DROP) должны выполняться отдельным миграционным
+-- пользователем или администратором БД в рамках контролируемого процесса деплоя.
+-- app_user получает ТОЛЬКО DML привилегии для работы с данными:
+
+-- Предоставляем DML права на все существующие таблицы в app_schema
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app_schema TO app_user;
+-- Предоставляем права на последовательности (для SERIAL/BIGSERIAL колонок)
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app_schema TO app_user;
+
+-- Настраиваем права по умолчанию для будущих таблиц и последовательностей
+-- (применяется к объектам, созданным после выполнения этого скрипта)
+ALTER DEFAULT PRIVILEGES IN SCHEMA app_schema GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA app_schema GRANT USAGE, SELECT ON SEQUENCES TO app_user;
 
 -- Настраиваем параметры автовакуума
 ALTER SYSTEM SET autovacuum = on;
@@ -62,8 +78,11 @@ ALTER SYSTEM SET autovacuum_analyze_threshold = 50;
 -- Раскомментируйте только если настраиваете репликацию:
 -- ALTER SYSTEM SET wal_level = replica;
 -- ALTER SYSTEM SET max_wal_senders = 3;
--- Используем современный параметр wal_keep_size вместо устаревшего wal_keep_segments
-ALTER SYSTEM SET wal_keep_size = '64MB';
+-- ALTER SYSTEM SET wal_keep_size = '64MB';  -- Используем современный параметр вместо устаревшего wal_keep_segments
+-- 
+-- Примечание: wal_keep_size актуален только при включенной репликации и определяет
+-- минимальный объем WAL файлов, которые нужно хранить для реплик.
+-- Без репликации этот параметр не используется и не должен быть установлен.
 
 -- Создаем таблицу для логирования инициализации в нашей схеме
 CREATE TABLE IF NOT EXISTS app_schema.initialization_log (
@@ -81,12 +100,19 @@ GRANT USAGE, SELECT ON SEQUENCE app_schema.initialization_log_id_seq TO app_user
 -- Применяем изменения конфигурации
 SELECT pg_reload_conf();
 
--- Проверяем работоспособность pg_stat_statements
--- (это read-only проверка, не пытаемся писать в системные view)
+-- Проверяем конфигурацию pg_stat_statements
+-- ВАЖНО: Эта проверка определяет, настроена ли библиотека в shared_preload_libraries,
+-- но НЕ проверяет runtime доступность (которая требует перезапуска PostgreSQL).
+-- После перезапуска сервера extension станет полностью функциональной.
 SELECT 
-    'pg_stat_statements extension verified' as verification_status,
-    count(*) as statements_count 
-FROM pg_stat_statements;
+    CASE 
+        WHEN setting LIKE '%pg_stat_statements%' 
+        THEN 'pg_stat_statements: CONFIGURED (restart required to activate)'
+        ELSE 'pg_stat_statements: NOT CONFIGURED'
+    END as configuration_status,
+    setting as current_value
+FROM pg_settings 
+WHERE name = 'shared_preload_libraries';
 
 -- Логируем успешную инициализацию в нашу таблицу
 INSERT INTO app_schema.initialization_log (status, postgres_version, user_id)

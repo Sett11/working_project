@@ -138,7 +138,11 @@ class CircuitBreaker:
             # Проверяем, не пора ли перейти в HALF_OPEN
             if (self.last_failure_time and 
                 current_time - self.last_failure_time >= self.recovery_timeout):
-                await self._transition_to_half_open()
+                async with self.state_lock:
+                    # Повторная проверка под блокировкой (double-checked locking)
+                    if (self.state == CircuitState.OPEN and self.last_failure_time and 
+                        current_time - self.last_failure_time >= self.recovery_timeout):
+                        await self._transition_to_half_open()
         
         elif self.state == CircuitState.HALF_OPEN:
             # В HALF_OPEN состоянии не делаем автоматических переходов
@@ -146,28 +150,34 @@ class CircuitBreaker:
             pass
     
     async def _transition_to_half_open(self):
-        """Переход в состояние HALF_OPEN"""
-        async with self.state_lock:
-            self.state = CircuitState.HALF_OPEN
-            self.failure_count = 0
-            logger.warning("🔄 Circuit Breaker перешел в состояние HALF_OPEN - "
-                          "разрешаем тестовые запросы к БД")
+        """
+        Переход в состояние HALF_OPEN.
+        ВАЖНО: Вызывающая сторона должна держать self.state_lock!
+        """
+        self.state = CircuitState.HALF_OPEN
+        self.failure_count = 0
+        logger.warning("🔄 Circuit Breaker перешел в состояние HALF_OPEN - "
+                      "разрешаем тестовые запросы к БД")
     
     async def _transition_to_open(self):
-        """Переход в состояние OPEN (блокировка)"""
-        async with self.state_lock:
-            self.state = CircuitState.OPEN
-            self.last_failure_time = time.time()
-            logger.error(f"🚨 Circuit Breaker ОТКРЫТ - блокируем запросы к БД "
-                        f"на {self.recovery_timeout} секунд")
+        """
+        Переход в состояние OPEN (блокировка).
+        ВАЖНО: Вызывающая сторона должна держать self.state_lock!
+        """
+        self.state = CircuitState.OPEN
+        self.last_failure_time = time.time()
+        logger.error(f"🚨 Circuit Breaker ОТКРЫТ - блокируем запросы к БД "
+                    f"на {self.recovery_timeout} секунд")
     
     async def _transition_to_closed(self):
-        """Переход в состояние CLOSED (нормальная работа)"""
-        async with self.state_lock:
-            self.state = CircuitState.CLOSED
-            self.failure_count = 0
-            self.last_success_time = time.time()
-            logger.info("✅ Circuit Breaker ЗАКРЫТ - нормальная работа БД восстановлена")
+        """
+        Переход в состояние CLOSED (нормальная работа).
+        ВАЖНО: Вызывающая сторона должна держать self.state_lock!
+        """
+        self.state = CircuitState.CLOSED
+        self.failure_count = 0
+        self.last_success_time = time.time()
+        logger.info("✅ Circuit Breaker ЗАКРЫТ - нормальная работа БД восстановлена")
     
     def _on_success(self):
         """Обработка успешного запроса"""
@@ -180,10 +190,18 @@ class CircuitBreaker:
             self.last_success_time = time.time()
 
     async def _safe_transition_to_closed(self):
-        """Thread-safe переход в CLOSED состояние"""
+        """Thread-safe переход в CLOSED состояние из HALF_OPEN"""
         async with self.state_lock:
+            # Проверка состояния под блокировкой, затем прямой вызов _transition_to_closed
+            # (блокировка уже захвачена, поэтому вложенного захвата не будет)
             if self.state == CircuitState.HALF_OPEN:
                 await self._transition_to_closed()
+    
+    async def _safe_transition_to_open(self):
+        """Thread-safe переход в OPEN состояние"""
+        async with self.state_lock:
+            # Захватываем блокировку перед вызовом _transition_to_open
+            await self._transition_to_open()
     
     def _on_failure(self, error: Exception):
         """Обработка неуспешного запроса"""
@@ -194,11 +212,11 @@ class CircuitBreaker:
         
         if self.state == CircuitState.CLOSED:
             if self.failure_count >= self.failure_threshold:
-                self._safe_schedule_coroutine(self._transition_to_open())
+                self._safe_schedule_coroutine(self._safe_transition_to_open())
         
         elif self.state == CircuitState.HALF_OPEN:
             # В HALF_OPEN любая ошибка возвращает в OPEN
-            self._safe_schedule_coroutine(self._transition_to_open())
+            self._safe_schedule_coroutine(self._safe_transition_to_open())
     
     def call(self, func: Callable, *args, **kwargs) -> Any:
         """

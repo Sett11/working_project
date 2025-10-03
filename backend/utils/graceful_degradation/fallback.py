@@ -20,6 +20,15 @@ try:
 except ImportError:
     HAS_PORTALOCKER = False
 
+# Импорт fcntl для Unix-систем (fallback блокировка)
+HAS_FCNTL = False
+if os.name != 'nt':  # Не Windows
+    try:
+        import fcntl
+        HAS_FCNTL = True
+    except ImportError:
+        HAS_FCNTL = False
+
 logger = Logger("fallback", "fallback.log")
 
 class FallbackManager:
@@ -48,14 +57,87 @@ class FallbackManager:
         self._is_running = False
         self._loop = None  # Сохраняем текущий event loop
         
+        # Проверка доступности механизма блокировки файлов
+        self._check_file_locking_availability()
+        
         # Инициализируем fallback данные
         self._init_fallback_data()
         
         if not HAS_PORTALOCKER:
-            logger.warning("⚠️ portalocker не установлен. Файловая блокировка будет базовой. "
+            if HAS_FCNTL:
+                logger.warning("⚠️ portalocker не установлен. Используется fcntl для файловой блокировки (только Unix).")
+            else:
+                logger.warning("⚠️ portalocker не установлен. Файловая блокировка будет базовой. "
                          "Установите: pip install portalocker")
         
         logger.info("Fallback Manager инициализирован (планировщик не запущен)")
+    
+    def _check_file_locking_availability(self):
+        """
+        Проверка доступности механизмов файловой блокировки.
+        Fail-fast если на Windows нет portalocker.
+        """
+        if os.name == 'nt':  # Windows
+            if not HAS_PORTALOCKER:
+                error_msg = (
+                    "КРИТИЧЕСКАЯ ОШИБКА: На Windows требуется библиотека portalocker для безопасной "
+                    "файловой блокировки. Без неё возможна коррупция данных при конкурентной записи. "
+                    "Установите portalocker командой: pip install portalocker"
+                )
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+            logger.info("✓ Используется portalocker для файловой блокировки (Windows)")
+        else:  # Unix-like системы
+            if HAS_PORTALOCKER:
+                logger.info("✓ Используется portalocker для файловой блокировки (кросс-платформенный)")
+            elif HAS_FCNTL:
+                logger.info("✓ Используется fcntl для файловой блокировки (Unix/Linux)")
+            else:
+                error_msg = (
+                    "КРИТИЧЕСКАЯ ОШИБКА: Не найден ни portalocker, ни fcntl для файловой блокировки. "
+                    "Установите portalocker командой: pip install portalocker"
+                )
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+    
+    def _acquire_lock(self, lock_file, lock_type: str = "exclusive"):
+        """
+        Получение блокировки файла.
+        
+        Args:
+            lock_file: Открытый файловый дескриптор
+            lock_type: Тип блокировки ("exclusive" для записи, "shared" для чтения)
+        """
+        if HAS_PORTALOCKER:
+            # Используем portalocker (кросс-платформенный)
+            lock_mode = portalocker.LOCK_EX if lock_type == "exclusive" else portalocker.LOCK_SH
+            portalocker.lock(lock_file, lock_mode)
+            logger.debug(f"Получена {lock_type} блокировка через portalocker: {self._file_lock_path}")
+        elif HAS_FCNTL:
+            # Используем fcntl на Unix-системах
+            lock_mode = fcntl.LOCK_EX if lock_type == "exclusive" else fcntl.LOCK_SH
+            fcntl.flock(lock_file, lock_mode)
+            logger.debug(f"Получена {lock_type} блокировка через fcntl: {self._file_lock_path}")
+        else:
+            # Не должны сюда попасть благодаря _check_file_locking_availability
+            raise RuntimeError("Механизм файловой блокировки недоступен")
+    
+    def _release_lock(self, lock_file):
+        """
+        Освобождение блокировки файла.
+        
+        Args:
+            lock_file: Открытый файловый дескриптор
+        """
+        try:
+            if HAS_PORTALOCKER:
+                portalocker.unlock(lock_file)
+                logger.debug(f"Блокировка освобождена через portalocker: {self._file_lock_path}")
+            elif HAS_FCNTL:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+                logger.debug(f"Блокировка освобождена через fcntl: {self._file_lock_path}")
+        except Exception as e:
+            logger.warning(f"Ошибка при освобождении блокировки: {e}")
     
     def _init_fallback_data(self):
         """Инициализация базовых fallback данных"""
@@ -305,13 +387,8 @@ class FallbackManager:
             lock_file = open(self._file_lock_path, 'w')
             
             try:
-                if HAS_PORTALOCKER:
-                    # Используем portalocker для кросс-платформенной блокировки
-                    portalocker.lock(lock_file, portalocker.LOCK_EX)
-                    logger.debug(f"Получена эксклюзивная блокировка файла: {self._file_lock_path}")
-                else:
-                    # Базовая блокировка без portalocker (менее надежная)
-                    logger.debug(f"Используется базовая блокировка (portalocker не установлен)")
+                # Получаем эксклюзивную блокировку через unified API
+                self._acquire_lock(lock_file, lock_type="exclusive")
                 
                 # Загружаем существующие данные внутри блокировки
                 existing_data = {}
@@ -351,13 +428,8 @@ class FallbackManager:
                     raise
                     
             finally:
-                # Освобождаем блокировку
-                if HAS_PORTALOCKER:
-                    try:
-                        portalocker.unlock(lock_file)
-                        logger.debug(f"Блокировка файла освобождена: {self._file_lock_path}")
-                    except Exception as e:
-                        logger.warning(f"Ошибка при освобождении блокировки: {e}")
+                # Освобождаем блокировку через unified API
+                self._release_lock(lock_file)
                 
         except Exception as e:
             logger.error(f"Ошибка сохранения критических данных: {e}")
@@ -392,10 +464,8 @@ class FallbackManager:
             lock_file = open(self._file_lock_path, 'w')
             
             try:
-                if HAS_PORTALOCKER:
-                    # Используем shared lock для чтения (несколько читателей могут работать одновременно)
-                    portalocker.lock(lock_file, portalocker.LOCK_SH)
-                    logger.debug(f"Получена shared блокировка для чтения: {self._file_lock_path}")
+                # Получаем shared блокировку через unified API (несколько читателей могут работать одновременно)
+                self._acquire_lock(lock_file, lock_type="shared")
                 
                 # Читаем данные внутри блокировки
                 with open(self._fallback_storage_path, 'r', encoding='utf-8') as f:
@@ -408,13 +478,8 @@ class FallbackManager:
                 return None
                 
             finally:
-                # Освобождаем блокировку
-                if HAS_PORTALOCKER:
-                    try:
-                        portalocker.unlock(lock_file)
-                        logger.debug(f"Shared блокировка освобождена: {self._file_lock_path}")
-                    except Exception as e:
-                        logger.warning(f"Ошибка при освобождении shared блокировки: {e}")
+                # Освобождаем блокировку через unified API
+                self._release_lock(lock_file)
             
         except Exception as e:
             logger.error(f"Ошибка загрузки критических данных: {e}")
