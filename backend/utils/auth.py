@@ -57,9 +57,12 @@ def verify_password(password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 
-def generate_token() -> str:
+def generate_token(token_data: dict = None) -> str:
     """
     Генерация простого токена для сессии.
+    
+    Args:
+        token_data (dict, optional): Данные для токена (не используется, для совместимости с API)
     
     Returns:
         str: Сгенерированный токен

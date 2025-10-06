@@ -15,7 +15,23 @@ class ApplicationMonitor:
     
     def __init__(self):
         self.last_alert_time = {}
-        self.alert_cooldown = 300  # 5 минут между алертами
+        # ИСПРАВЛЕНИЕ: Увеличен cooldown для предотвращения спама алертов
+        self.alert_cooldown = 1800  # 30 минут между алертами (было 5 минут)
+        # Разные cooldown для разных типов алертов
+        self.alert_cooldowns = {
+            "high_cpu": 1800,  # 30 минут для CPU
+            "high_memory": 1800,  # 30 минут для памяти
+            "high_disk": 3600,  # 1 час для диска (меняется редко)
+            "db_timeout": 600,  # 10 минут для таймаутов БД
+            "db_connection_error": 900,  # 15 минут для ошибок БД
+            "high_pool_utilization": 1200,  # 20 минут для утилизации пула
+            "pool_overflow": 900,  # 15 минут для переполнения пула
+            "pool_exhausted": 600,  # 10 минут для исчерпания пула (критично)
+            "long_degradation": 1800,  # 30 минут для длительной деградации
+            "recovery_exhausted": 3600,  # 1 час для исчерпания попыток восстановления
+            "critical_degradation": 1800,  # 30 минут для критической деградации
+            "default": 1800  # По умолчанию 30 минут
+        }
         self.monitoring_active = False
         self._monitor_task = None  # Ссылка на задачу мониторинга
         
@@ -75,8 +91,9 @@ class ApplicationMonitor:
                 await self._check_connection_pool()
                 await self._check_graceful_degradation()
                 
+                # ИСПРАВЛЕНИЕ: Увеличен интервал мониторинга для снижения нагрузки на CPU
                 # Пауза между проверками (увеличена для снижения нагрузки)
-                await asyncio.sleep(600)  # Проверяем каждые 10 минут (увеличено с 5 минут)
+                await asyncio.sleep(900)  # Проверяем каждые 15 минут (было 10 минут)
                 
             except asyncio.CancelledError:
                 raise  # Re-raise CancelledError to allow proper task cancellation
@@ -87,15 +104,27 @@ class ApplicationMonitor:
     async def _check_system_health(self):
         """Проверка системного здоровья (оптимизировано для контейнеров)"""
         try:
-            # В контейнерах Docker psutil.cpu_percent(interval=None) может работать некорректно
-            # Используем более безопасный подход с минимальным интервалом
-            cpu_percent = psutil.cpu_percent(interval=0.1)  # Минимальный интервал для корректной работы
+            # ИСПРАВЛЕНИЕ: Корректное измерение CPU в Docker-контейнерах
+            # Получаем количество ядер для нормализации
+            cpu_count = psutil.cpu_count() or 1
+            
+            # Используем interval=1 для более точного измерения
+            cpu_percent_raw = psutil.cpu_percent(interval=1, percpu=False)
+            
+            # Нормализуем для Docker: если CPU показывает > 100%, это суммарная загрузка всех ядер
+            # Делим на количество ядер для получения реальной загрузки одного ядра
+            if cpu_percent_raw > 100 and cpu_count > 1:
+                cpu_percent = min(cpu_percent_raw / cpu_count, 100.0)
+                logger.debug(f"CPU нормализован: {cpu_percent_raw}% -> {cpu_percent}% (ядер: {cpu_count})")
+            else:
+                cpu_percent = min(cpu_percent_raw, 100.0)
+            
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
             
             # Проверяем критические пороги
             if cpu_percent > 80:
-                await self._send_alert("system", f"Высокая загрузка CPU: {cpu_percent}%", 
+                await self._send_alert("system", f"Высокая загрузка CPU: {cpu_percent:.1f}%", 
                                       alert_template="high_cpu")
             
             if memory.percent > 85:
@@ -230,11 +259,14 @@ class ApplicationMonitor:
         template = alert_template if alert_template else self._normalize_alert_key(message)
         alert_key = f"{alert_type}_{template}"
         
+        # ИСПРАВЛЕНИЕ: Используем разные cooldown для разных типов алертов
+        cooldown = self.alert_cooldowns.get(template, self.alert_cooldown)
+        
         # Проверяем, не отправляли ли мы недавно такой же алерт
         if alert_key in self.last_alert_time:
-            if current_time - self.last_alert_time[alert_key] < self.alert_cooldown:
+            if current_time - self.last_alert_time[alert_key] < cooldown:
                 # Логируем факт пропуска алерта (debug level)
-                logger.debug(f"Алерт пропущен (cooldown): [{alert_type.upper()}] {message}")
+                logger.debug(f"Алерт пропущен (cooldown {cooldown}s): [{alert_type.upper()}] {message}")
                 return
         
         # Логируем алерт с полным динамическим сообщением
@@ -245,7 +277,16 @@ class ApplicationMonitor:
         """Получение текущего статуса здоровья приложения"""
         try:
             # Системная информация - оптимизировано для контейнеров
-            cpu_percent = psutil.cpu_percent(interval=0.1)  # Минимальный интервал для корректной работы в контейнерах
+            # ИСПРАВЛЕНИЕ: Корректное измерение CPU в Docker-контейнерах
+            cpu_count = psutil.cpu_count() or 1
+            cpu_percent_raw = psutil.cpu_percent(interval=1, percpu=False)
+            
+            # Нормализуем для Docker
+            if cpu_percent_raw > 100 and cpu_count > 1:
+                cpu_percent = min(cpu_percent_raw / cpu_count, 100.0)
+            else:
+                cpu_percent = min(cpu_percent_raw, 100.0)
+            
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
             

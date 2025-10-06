@@ -70,10 +70,11 @@ async def create_user(db: AsyncSession, user: schemas.UserCreate, password_hash:
     Returns:
         models.User: Созданный объект пользователя.
     """
-    logger.info(f"[CRUD] create_user: username={user.username}")
+    logger.info(f"[CRUD] create_user: username={user.username}, email={user.email}")
     db_user = models.User(
         username=user.username,
-        password_hash=password_hash
+        email=user.email,
+        hashed_password=password_hash  # Исправлено с password_hash на hashed_password
     )
     
     try:

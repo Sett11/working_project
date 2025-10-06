@@ -6,11 +6,14 @@ Middleware для аутентификации пользователей.
 - Добавление user_id в контекст запроса
 - Обработка неавторизованных запросов
 - Автоматическая установка user_id в контекст логгера
+- Rate limiting для предотвращения DDoS атак
 """
 from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+from collections import defaultdict
+import time
 from db.database import AsyncSessionLocal
 from db import crud
 from utils.auth import extract_token_from_header
@@ -18,6 +21,53 @@ from utils.mylogger import Logger
 from utils.user_context import set_user_id, reset_user_id
 
 logger = Logger(name=__name__, log_file="auth.log")
+
+# ИСПРАВЛЕНИЕ: Простой rate limiter для предотвращения DDoS атак
+# Хранит историю запросов по IP адресам
+_rate_limit_cache = defaultdict(list)
+_rate_limit_window = 60  # Окно в 60 секунд
+_rate_limit_max_requests = 30  # Максимум 30 запросов в минуту с одного IP
+
+
+def check_rate_limit(ip: str) -> bool:
+    """
+    Проверка rate limit для IP адреса.
+    
+    Args:
+        ip (str): IP адрес клиента
+        
+    Returns:
+        bool: True если запрос разрешён, False если превышен лимит
+    """
+    current_time = time.time()
+    requests = _rate_limit_cache[ip]
+    
+    # Удаляем старые запросы за пределами временного окна
+    requests = [req_time for req_time in requests if current_time - req_time < _rate_limit_window]
+    _rate_limit_cache[ip] = requests
+    
+    # Проверяем лимит
+    if len(requests) >= _rate_limit_max_requests:
+        return False
+    
+    # Добавляем текущий запрос
+    requests.append(current_time)
+    return True
+
+
+def cleanup_rate_limit_cache():
+    """
+    Периодическая очистка кэша rate limiter от старых записей.
+    Вызывается автоматически при каждой проверке.
+    """
+    current_time = time.time()
+    # Удаляем IP адреса без активности более 5 минут
+    inactive_ips = [
+        ip for ip, requests in _rate_limit_cache.items()
+        if not requests or (current_time - requests[-1] > 300)
+    ]
+    for ip in inactive_ips:
+        del _rate_limit_cache[ip]
 
 
 async def get_current_user(request: Request) -> Optional[dict]:
@@ -67,6 +117,18 @@ async def auth_middleware(request: Request, call_next):
     Returns:
         Response: Ответ от следующего обработчика
     """
+    # ИСПРАВЛЕНИЕ: Игнорируем статические файлы и служебные эндпоинты (без логирования)
+    # Это предотвращает спам в логах от браузеров и ботов
+    ignored_paths = {
+        '/favicon.ico', '/robots.txt', '/sitemap.xml', '/security.txt', 
+        '/.well-known/security.txt', '/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'
+    }
+    if request.url.path in ignored_paths:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": "Not found"}
+        )
+    
     # Исключаем эндпоинты аутентификации из проверки (точное совпадение)
     auth_paths = {'/api/auth/register', '/api/auth/login', '/docs', '/openapi.json', '/health'}
     if request.url.path in auth_paths:
@@ -89,10 +151,25 @@ async def auth_middleware(request: Request, call_next):
         finally:
             reset_user_id(context_token)
     
+    # ИСПРАВЛЕНИЕ: Проверяем rate limit для неавторизованных запросов
+    # Получаем IP адрес клиента
+    client_ip = request.client.host if request.client else "unknown"
+    
+    # Периодически очищаем кэш (каждый 100-й запрос)
+    if len(_rate_limit_cache) > 100:
+        cleanup_rate_limit_cache()
+    
     # Получаем пользователя
     user = await get_current_user(request)
     
     if not user:
+        # Проверяем rate limit только для неавторизованных запросов
+        if not check_rate_limit(client_ip):
+            logger.warning(f"Rate limit превышен для IP: {client_ip}, путь: {request.url.path}")
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "Слишком много запросов. Попробуйте позже."}
+            )
         # Сохраняем текущий контекст и устанавливаем user_id=system для неавторизованных запросов
         context_token = set_user_id("system")
         try:
@@ -113,7 +190,14 @@ async def auth_middleware(request: Request, call_next):
         request.state.user_id = user["id"]
         request.state.username = user["username"]
         
-        logger.info(f"Авторизованный доступ: user_id={user['id']}, username={user['username']}, path={request.url.path}")
+        # ИСПРАВЛЕНИЕ: Логируем только важные эндпоинты для снижения нагрузки
+        # Убрано избыточное логирование каждого авторизованного запроса
+        important_paths = {
+            '/api/auth/login', '/api/auth/register', '/api/auth/logout',
+            '/api/recreate_pool', '/api/cleanup_pool'  # Административные действия
+        }
+        if request.url.path in important_paths:
+            logger.info(f"Авторизованный доступ: user_id={user['id']}, username={user['username']}, path={request.url.path}")
         
         response = await call_next(request)
         return response

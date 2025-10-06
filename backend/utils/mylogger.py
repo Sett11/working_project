@@ -76,8 +76,9 @@ class Logger(logging.Logger):
             log_path = str(Path("logs") / log_file)
             ensure_log_directory(log_path)
             
-            # Попытка создать обработчик для ротации файлов по размеру (максимум 10MB на файл, максимум 5 файлов)
-            handler = RotatingFileHandler(log_path, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
+            # ИСПРАВЛЕНИЕ: Уменьшены размеры файлов логов для снижения нагрузки на диск
+            # Попытка создать обработчик для ротации файлов по размеру (максимум 5MB на файл, максимум 3 файлов)
+            handler = RotatingFileHandler(log_path, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')
             handler.setFormatter(formatter)
             
             # Добавление обработчика в логгер только при успешном создании

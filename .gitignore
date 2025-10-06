@@ -85,7 +85,9 @@ backups
 grafana_data
 prometheus_data
 buffer
-
+.seeder_flag
+*.lock
+MIGRATION_PROGRESS.md
 # Temporary files
 *.tmp
 *.tmp.*
@@ -125,7 +127,7 @@ images_airs
 /backend/docs/images_comp/*.png
 /backend/docs/airs.json
 /backend/docs/components_catalog.json
-/backend/commercial_offer_pdf/*.pdf
+/db/commercial_offer_pdf/*.pdf
 /backend/utils/fonts/*.ttf
 /backend/utils/image_for_pdf/*.png
 /backend/utils/graceful_degradation/*.png
@@ -143,7 +145,8 @@ MIGRATION_PROGRESS.txt
 README.md
 README_DEPLOYMENT.md
 README_POWERSHELL.md
-WARP.md
+SECURITY_AUDIT.md
+AUDIT_SUMMARY.md
 
 # ═══════════════════════════════════════════════════════════════
 # IMPORTANT: KEEP THESE FILES
@@ -157,3 +160,6 @@ WARP.md
 # !README.md
 
 
+
+# Allow .env.example to be committed
+!.env.example

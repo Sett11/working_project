@@ -162,8 +162,8 @@ async def health_check():
             "pool_size": pool.size(),
             "checked_in": pool.checkedin(),
             "checked_out": pool.checkedout(),
-            "overflow": pool.overflow(),
-            "invalid": pool.invalid()
+            "overflow": pool.overflow()
+            # Метод invalid() не существует для AsyncAdaptedQueuePool
         }
         
         return {
@@ -196,20 +196,28 @@ async def register_user(user_data: UserCreate, db: AsyncSession = Depends(get_se
         user = await crud.create_user(db, user_data, hashed_password)
         
         # Генерируем токен
+        expiry_time = get_token_expiry()
         token_data = {
             "user_id": user.id,
             "username": user.username,
-            "exp": get_token_expiry()
+            "exp": expiry_time
         }
         token = generate_token(token_data)
         
         logger.info(f"Пользователь {user.username} успешно зарегистрирован")
         
+        # Формируем ответ в формате, который ожидает frontend
         return TokenResponse(
-            access_token=token,
-            token_type="bearer",
-            user_id=user.id,
-            username=user.username
+            token=token,
+            expires_at=expiry_time.isoformat(),  # Конвертируем datetime в ISO string
+            user=UserResponse(
+                id=user.id,
+                username=user.username,
+                email=user.email,
+                is_active=user.is_active,
+                is_admin=user.is_admin,
+                created_at=user.created_at
+            )
         )
         
     except HTTPException:
@@ -236,20 +244,28 @@ async def login_user(user_data: UserLogin, db: AsyncSession = Depends(get_sessio
             raise HTTPException(status_code=401, detail="Аккаунт деактивирован")
         
         # Генерируем токен
+        expiry_time = get_token_expiry()
         token_data = {
             "user_id": user.id,
             "username": user.username,
-            "exp": get_token_expiry()
+            "exp": expiry_time
         }
         token = generate_token(token_data)
         
         logger.info(f"Пользователь {user.username} успешно аутентифицирован")
         
+        # Формируем ответ в формате, который ожидает frontend
         return TokenResponse(
-            access_token=token,
-            token_type="bearer",
-            user_id=user.id,
-            username=user.username
+            token=token,
+            expires_at=expiry_time.isoformat(),  # Конвертируем datetime в ISO string
+            user=UserResponse(
+                id=user.id,
+                username=user.username,
+                email=user.email,
+                is_active=user.is_active,
+                is_admin=user.is_admin,
+                created_at=user.created_at
+            )
         )
         
     except HTTPException:

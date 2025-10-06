@@ -206,7 +206,7 @@ async def generate_compose_commercial_offer_pdf(
     components: list,
     discount_percent: float,
     offer_number: str = None,
-    save_dir: str = "commercial_offer_pdf",
+    save_dir: str = "db/commercial_offer_pdf",
     db_session = None
 ) -> str:
     """

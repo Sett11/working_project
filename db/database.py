@@ -97,10 +97,8 @@ async def get_session():
     """
     Асинхронная зависимость FastAPI для получения сессии базы данных.
     
-    Интегрирована с системой Graceful Degradation:
-    - Circuit Breaker для предотвращения каскадных сбоев
-    - Fallback механизмы при недоступности БД
-    - Graceful responses для API эндпоинтов
+    Упрощённая версия без сложной логики восстановления для избежания
+    проблем с generator athrow().
 
     Yields:
         AsyncSession: Объект асинхронной сессии SQLAlchemy.
@@ -116,102 +114,28 @@ async def get_session():
         graceful_manager.enter_degradation_mode("Circuit Breaker открыт в get_session")
         raise CircuitBreakerOpenError("База данных недоступна (Circuit Breaker открыт)")
     
-    max_retries = 3
-    retry_count = 0
-    
-    while retry_count < max_retries:
+    # Создаём сессию и отдаём её
+    async with AsyncSessionLocal() as session:
+        session_id = id(session)
+        logger.debug(f"Асинхронная сессия базы данных {session_id} создана.")
+        
         try:
-            # Используем Circuit Breaker для защиты от каскадных сбоев
-            async with AsyncSessionLocal() as session:
-                session_id = id(session)
-                logger.debug(f"Асинхронная сессия базы данных {session_id} создана.")
-                
-                try:
-                    # Проверяем соединение с БД через Circuit Breaker
-                    await db_circuit_breaker.acall(_test_db_connection, session)
-                    yield session
-                    
-                except CircuitBreakerOpenError:
-                    logger.error(f"🚨 Circuit Breaker заблокировал сессию {session_id}")
-                    graceful_manager.enter_degradation_mode("Circuit Breaker заблокировал сессию")
-                    raise
-                    
-                except Exception as e:
-                    logger.error(f"Ошибка в сессии {session_id}: {e}")
-                    
-                    # Проверка критических ошибок соединения по типу исключения
-                    is_critical_error = isinstance(e, (
-                        InterfaceError,
-                        OperationalError,
-                        asyncpg.exceptions.ConnectionDoesNotExistError,
-                        asyncpg.exceptions.InterfaceError,
-                        ConnectionError
-                    ))
-                    
-                    if is_critical_error:
-                        logger.warning(f"🚨 КРИТИЧЕСКАЯ ОШИБКА СОЕДИНЕНИЯ: {e}")
-                        graceful_manager.enter_degradation_mode(f"Критическая ошибка БД: {e}")
-                        
-                        # Пытаемся восстановить соединение только если Circuit Breaker не открыт
-                        if db_circuit_breaker.get_status()["state"] != "open":
-                            logger.warning(f"Попытка восстановления {retry_count + 1}/{max_retries}")
-                            retry_count += 1
-                            if retry_count < max_retries:
-                                try:
-                                    # Используем helper для пересоздания пула с retry логикой
-                                    global engine, AsyncSessionLocal
-                                    new_engine, new_session_factory = await _recreate_connection_pool_with_retry()
-                                    engine = new_engine
-                                    AsyncSessionLocal = new_session_factory
-                                    logger.info("✅ Пул соединений успешно пересоздан")
-                                    await asyncio.sleep(2.0)  # Увеличено с 0.5 до 2.0 секунд для снижения нагрузки
-                                    continue
-                                except Exception as recreate_error:
-                                    logger.error(f"❌ Ошибка при пересоздании пула: {recreate_error}")
-                                    delay = min(2 ** retry_count, 15)  # Уменьшено с 30 до 15 секунд для снижения нагрузки
-                                    logger.info(f"⏳ Ожидание {delay} секунд перед следующей попыткой...")
-                                    await asyncio.sleep(delay)
-                    raise
-                    
-                finally:
-                    logger.debug(f"Асинхронная сессия базы данных {session_id} закрыта.")
-                    # Логируем статистику пула соединений
-                    try:
-                        pool = engine.pool
-                        utilization = (pool.checkedout() / pool.size() * 100) if pool.size() > 0 else 0
-                        logger.debug(f"Статистика пула: размер={pool.size()}, проверено={pool.checkedin()}, в использовании={pool.checkedout()}, утилизация={utilization:.1f}%")
-                    except Exception as pool_error:
-                        logger.warning(f"Не удалось получить статистику пула: {pool_error}")
-            break  # Успешное выполнение, выходим из цикла
-            
+            # Проверяем соединение с БД через Circuit Breaker
+            await db_circuit_breaker.acall(_test_db_connection, session)
+            logger.debug(f"Соединение с БД проверено успешно для сессии {session_id}")
         except CircuitBreakerOpenError:
-            # Circuit Breaker заблокировал доступ - не пытаемся повторно
+            logger.error(f"🚨 Circuit Breaker заблокировал сессию {session_id}")
+            graceful_manager.enter_degradation_mode("Circuit Breaker заблокировал сессию")
             raise
-            
-        except Exception as e:
-            retry_count += 1
-            logger.error(f"Попытка {retry_count}/{max_retries} создания сессии не удалась: {e}")
-            
-            if retry_count >= max_retries:
-                logger.error(f"❌ ИСЧЕРПАНЫ ВСЕ ПОПЫТКИ СОЗДАНИЯ СЕССИИ. Критическая ошибка!")
-                graceful_manager.enter_degradation_mode("Исчерпаны попытки создания сессии")
-                raise
-                
-            # Пытаемся восстановить соединение только если Circuit Breaker не открыт
-            if db_circuit_breaker.get_status()["state"] != "open":
-                try:
-                    # Используем helper для пересоздания пула с retry логикой
-                    global engine, AsyncSessionLocal
-                    new_engine, new_session_factory = await _recreate_connection_pool_with_retry()
-                    engine = new_engine
-                    AsyncSessionLocal = new_session_factory
-                    logger.info("✅ Пул соединений пересоздан после ошибки")
-                    await asyncio.sleep(2.0)  # Увеличено с 0.5 до 2.0 секунд для снижения нагрузки
-                except Exception as recreate_error:
-                    logger.error(f"❌ Не удалось пересоздать пул: {recreate_error}")
-                    delay = min(2 ** retry_count, 15)  # Уменьшено с 30 до 15 секунд для снижения нагрузки
-                    logger.info(f"⏳ Ожидание {delay} секунд перед следующей попыткой...")
-                    await asyncio.sleep(delay)
+        except Exception as test_error:
+            logger.error(f"Ошибка проверки соединения {session_id}: {test_error}")
+            graceful_manager.enter_degradation_mode(f"Ошибка проверки БД: {test_error}")
+            raise
+        
+        # Отдаём сессию
+        yield session
+        
+        logger.debug(f"Асинхронная сессия базы данных {session_id} закрыта.")
 
 async def _test_db_connection(session: AsyncSession):
     """

@@ -60,7 +60,8 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
-    secret_key: str
+    secret_key: Optional[str] = None  # Сделано опциональным для гибкости
+    email: Optional[str] = None  # Добавлено поле email
 
 class UserLogin(BaseModel):
     username: str
@@ -68,15 +69,17 @@ class UserLogin(BaseModel):
 
 class UserResponse(UserBase, OrmBase):
     id: int
+    email: Optional[str] = None  # Добавлено поле email
     created_at: datetime
     last_login: Optional[datetime] = None
     is_active: bool
     is_admin: Optional[bool] = False
 
 class TokenResponse(BaseModel):
-    token: str
-    expires_at: datetime
-    user: UserResponse
+    """Схема для ответа при аутентификации (login/register)"""
+    token: str  # JWT токен
+    expires_at: str  # ISO format datetime string для совместимости с frontend
+    user: UserResponse  # Полная информация о пользователе
 
 class ClientBase(BaseModel):
     full_name: str
