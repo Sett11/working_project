@@ -6,10 +6,12 @@ interface AuthState {
   user: User | null
   token: string | null
   isAuthenticated: boolean
+  isAuthInitialized: boolean
 
   setAuth: (user: User, token: string) => void
   clearAuth: () => void
   updateUser: (user: Partial<User>) => void
+  setAuthInitialized: () => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -18,14 +20,13 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
+      isAuthInitialized: false,
 
       setAuth: (user, token) => {
-        localStorage.setItem('auth_token', token)
         set({ user, token, isAuthenticated: true })
       },
 
       clearAuth: () => {
-        localStorage.removeItem('auth_token')
         set({ user: null, token: null, isAuthenticated: false })
       },
 
@@ -33,6 +34,10 @@ export const useAuthStore = create<AuthState>()(
         set(state => ({
           user: state.user ? { ...state.user, ...user } : null,
         })),
+
+      setAuthInitialized: () => {
+        set({ isAuthInitialized: true })
+      },
     }),
     {
       name: 'auth-storage',
@@ -41,6 +46,12 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
+      // После восстановления состояния из хранилища (через persist middleware), устанавливаем флаг инициализации
+      onRehydrateStorage: () => state => {
+        if (state) {
+          state.setAuthInitialized()
+        }
+      },
     }
   )
 )

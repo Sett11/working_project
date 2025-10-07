@@ -3,7 +3,7 @@
 
 Здесь определены таблицы и связи:
 - Client (Клиент)
-- Order (Заказ)
+- ComposeOrder (Составной заказ)
 - AirConditioner (Кондиционер)
 - Component (Комплектующее)
 - Ассоциативные таблицы для связей многие-ко-многим
@@ -91,22 +91,8 @@ class Client(Base):
     phone = Column(String, unique=True, index=True)  # Телефон клиента
     email = Column(String, nullable=True)  # Email клиента
     address = Column(String, nullable=True)  # Адрес клиента
-    orders = relationship("Order", back_populates="client")  # Связь с заказами клиента
     compose_orders = relationship("ComposeOrder", back_populates="client")  # Связь с составными заказами клиента
 
-class Order(Base):
-    """
-    Модель заказа (коммерческого предложения).
-    """
-    __tablename__ = 'orders'
-    id = Column(Integer, primary_key=True, index=True)  # Уникальный идентификатор заказа
-    status = Column(SQLEnum(OrderStatus), default=OrderStatus.DRAFT)  # Статус заказа: 'draft' или 'ready' (ограничено Enum)
-    pdf_path = Column(String, nullable=True)  # Путь к PDF-файлу (если есть)
-    order_data = Column(Text, nullable=False)  # Все данные заказа в формате JSON (строка)
-    order_type = Column(String, default='Order')  # Тип заказа: 'Order' или 'Compose'
-    created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата создания заказа
-    client_id = Column(Integer, ForeignKey('clients.id', ondelete='CASCADE'))  # Внешний ключ на клиента (CASCADE удаление)
-    client = relationship("Client", back_populates="orders", passive_deletes=True)  # Объект клиента
 
 class AirConditioner(Base):
     """
@@ -169,4 +155,4 @@ class ComposeOrder(Base):
     client_id = Column(Integer, ForeignKey('clients.id', ondelete='CASCADE'))  # Внешний ключ на клиента (CASCADE удаление)
     client = relationship("Client", back_populates="compose_orders", passive_deletes=True)  # Объект клиента
 
-logger.info("Все модели базы данных (Client, Order, AirConditioner, Component, OfferCounter, ComposeOrder) успешно определены.")
+logger.info("Все модели базы данных (User, Client, ComposeOrder, AirConditioner, Component, OfferCounter) успешно определены.")

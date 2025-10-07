@@ -93,33 +93,6 @@ class ClientCreate(ClientBase):
 class Client(ClientBase, OrmBase):
     id: int
 
-class OrderBase(BaseModel):
-    status: Optional[Union[OrderStatus, str]] = "draft"  # Поддержка Enum и строк для обратной совместимости
-    pdf_path: Optional[str] = None
-    order_data: dict
-    order_type: Optional[str] = "Order"
-
-class OrderCreate(OrderBase):
-    client_id: int
-    created_at: date
-
-class Order(OrderBase, OrmBase):
-    id: int
-    created_at: date
-    client: Client
-
-class CommercialOfferPayload(BaseModel):
-    client_data: ClientCreate
-    order_params: dict
-    aircon_params: dict
-
-class FullOrderCreate(BaseModel):
-    id: Optional[int] = None
-    client_data: ClientCreate
-    order_params: dict
-    aircon_params: dict
-    components: list
-    status: Optional[Union[OrderStatus, str]] = "draft"  # Поддержка Enum и строк для обратной совместимости
 
 class OfferCounterBase(BaseModel):
     current_number: int

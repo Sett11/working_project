@@ -32,4 +32,8 @@ export const authService = {
     const response = await apiClient.get<UserResponse>(API_ENDPOINTS.AUTH.ME)
     return response.data
   },
+
+  async deleteAccount(): Promise<void> {
+    await apiClient.delete(API_ENDPOINTS.AUTH.DELETE_ACCOUNT)
+  },
 }

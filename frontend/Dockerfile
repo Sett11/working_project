@@ -23,7 +23,7 @@ COPY . .
 RUN npm run build
 
 # Этап 2: Production образ с Nginx
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 
 # Копируем собранное приложение из builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html

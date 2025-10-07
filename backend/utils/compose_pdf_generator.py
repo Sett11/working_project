@@ -206,7 +206,7 @@ async def generate_compose_commercial_offer_pdf(
     components: list,
     discount_percent: float,
     offer_number: str = None,
-    save_dir: str = "db/commercial_offer_pdf",
+    save_dir: str = "generated_pdf",
     db_session = None
 ) -> str:
     """
@@ -218,7 +218,7 @@ async def generate_compose_commercial_offer_pdf(
         components (list): Список комплектующих
         discount_percent (float): Процент скидки
         offer_number (str): Номер КП
-        save_dir (str): Директория для сохранения
+        save_dir (str): Директория для сохранения (по умолчанию 'generated_pdf')
         db_session: Сессия базы данных
         
     Returns:

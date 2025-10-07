@@ -1,3 +1,5 @@
+import type { ComponentCategory } from '@/types'
+
 export const API_ENDPOINTS = {
   // Auth
   AUTH: {
@@ -5,44 +7,35 @@ export const API_ENDPOINTS = {
     LOGIN: '/auth/login',
     LOGOUT: '/auth/logout',
     ME: '/auth/me',
+    DELETE_ACCOUNT: '/auth/delete',
   },
 
-  // Air Conditioners
+  // Air Conditioners (не используются в текущей версии, но оставлены для будущего)
   AIR_CONDITIONERS: {
     LIST: '/air-conditioners',
     DETAIL: (id: number) => `/air-conditioners/${id}`,
   },
 
-  // Components
+  // Components (не используются в текущей версии, но оставлены для будущего)
   COMPONENTS: {
     LIST: '/components',
     DETAIL: (id: number) => `/components/${id}`,
-    BY_CATEGORY: (category: string) => `/components/category/${category}`,
+    BY_CATEGORY: (category: ComponentCategory) => `/components/category/${category}`,
   },
 
-  // Clients
+  // Clients (не используются в текущей версии, но оставлены для будущего)
   CLIENTS: {
     LIST: '/clients',
     CREATE: '/clients',
     DETAIL: (id: number) => `/clients/${id}`,
   },
 
-  // Orders
-  ORDERS: {
-    LIST: '/orders',
-    ALL: '/all_orders/',
-    CREATE: '/orders',
-    SAVE: '/save_order/',
-    DETAIL: (id: number) => `/orders/${id}`,
-    GENERATE_PDF: (id: number) => `/orders/${id}/generate-pdf`,
-  },
-
-  // Compose Orders
+  // Compose Orders (единственный тип заказов в системе)
   COMPOSE_ORDERS: {
     SAVE: '/save_compose_order/',
     DETAIL: (id: number) => `/compose_order/${id}`,
     DELETE: (id: number) => `/compose_order/${id}`,
-    GENERATE_PDF: '/generate_compose_offer/',
+    GENERATE_PDF: (id: number) => `/compose_order/${id}/generate-pdf`,
   },
 
   // Air Conditioner Selection

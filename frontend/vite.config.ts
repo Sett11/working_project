@@ -13,11 +13,15 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    open: true, // Автоматически открывает браузер
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+    },
+    hmr: {
+      overlay: true, // Показывает ошибки в браузере
     },
   },
 })

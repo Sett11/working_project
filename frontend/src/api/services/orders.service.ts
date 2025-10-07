@@ -1,42 +1,24 @@
 import apiClient from '../client'
 import { API_ENDPOINTS } from '../endpoints'
-import type { Order, ComposeOrder, CreateOrderData } from '@/types'
+import type { ComposeOrder } from '@/types'
 
-export const ordersService = {
+/**
+ * Сервис для работы с ComposeOrder (составными заказами).
+ * Это единственный тип заказов в системе.
+ */
+export const composeOrdersService = {
+  /**
+   * Получение списка всех заказов
+   */
   async getAll(): Promise<any[]> {
-    const response = await apiClient.get<any[]>(API_ENDPOINTS.ORDERS.ALL)
+    const response = await apiClient.get<any[]>('/api/all_orders/')
     return response.data
   },
 
-  async getById(id: number): Promise<Order> {
-    const response = await apiClient.get<Order>(
-      API_ENDPOINTS.ORDERS.DETAIL(id)
-    )
-    return response.data
-  },
-
-  async create(data: CreateOrderData): Promise<Order> {
-    const response = await apiClient.post<Order>(
-      API_ENDPOINTS.ORDERS.CREATE,
-      data
-    )
-    return response.data
-  },
-
+  /**
+   * Сохранение составного заказа
+   */
   async save(data: any): Promise<any> {
-    const response = await apiClient.post(API_ENDPOINTS.ORDERS.SAVE, data)
-    return response.data
-  },
-
-  async generatePdf(id: number): Promise<{ pdf_path: string }> {
-    const response = await apiClient.post<{ pdf_path: string }>(
-      API_ENDPOINTS.ORDERS.GENERATE_PDF(id)
-    )
-    return response.data
-  },
-
-  // Compose Orders
-  async saveComposeOrder(data: any): Promise<any> {
     const response = await apiClient.post(
       API_ENDPOINTS.COMPOSE_ORDERS.SAVE,
       data
@@ -44,22 +26,33 @@ export const ordersService = {
     return response.data
   },
 
-  async getComposeOrderById(id: number): Promise<ComposeOrder> {
+  /**
+   * Получение заказа по ID
+   */
+  async getById(id: number): Promise<ComposeOrder> {
     const response = await apiClient.get<ComposeOrder>(
       API_ENDPOINTS.COMPOSE_ORDERS.DETAIL(id)
     )
     return response.data
   },
 
-  async deleteComposeOrder(id: number): Promise<void> {
+  /**
+   * Удаление заказа
+   */
+  async delete(id: number): Promise<void> {
     await apiClient.delete(API_ENDPOINTS.COMPOSE_ORDERS.DELETE(id))
   },
 
-  async generateComposeOfferPdf(data: any): Promise<any> {
-    const response = await apiClient.post(
-      API_ENDPOINTS.COMPOSE_ORDERS.GENERATE_PDF,
-      data
+  /**
+   * Генерация PDF коммерческого предложения
+   */
+  async generatePdf(id: number): Promise<{ success: boolean; pdf_path?: string; error?: string }> {
+    const response = await apiClient.post<{ success: boolean; pdf_path?: string; error?: string }>(
+      API_ENDPOINTS.COMPOSE_ORDERS.GENERATE_PDF(id)
     )
     return response.data
   },
 }
+
+// Экспорт для обратной совместимости (если используется старое имя)
+export const ordersService = composeOrdersService

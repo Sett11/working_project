@@ -12,7 +12,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d
       - ./db/docs:/db/docs:ro  # Данные каталогов (read-only)
-      - backups:/backups
     expose:
       - "5432"
     restart: always
@@ -61,7 +60,8 @@ services:
       - ./backend/utils:/app/utils:ro
       - ./backend/init.sh:/app/init.sh:ro
       - ./backend/entrypoint.sh:/app/entrypoint.sh:ro
-      - ./db:/app/db  # Backend имеет доступ к db для записи PDF
+      - ./db:/app/db:ro  # Read-only доступ к db модулям и данным
+      - ./generated_pdf:/app/generated_pdf  # Директория для генерируемых PDF (write access)
       - ./logs:/app/logs
       - seeder_state:/app/.seeder_data  # Volume для хранения состояния seeder
     ports:
@@ -120,8 +120,6 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
-  backups:
     driver: local
   seeder_state:
     driver: local

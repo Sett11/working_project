@@ -67,17 +67,26 @@ export const useCartStore = create<CartState>()(
       getTotalPrice: () => {
         const items = get().items
         return items.reduce((total, item) => {
-          const price =
+          // Безопасное извлечение цены с fallback на 0
+          const rawPrice =
             'retail_price_byn' in item.item
               ? item.item.retail_price_byn
               : item.item.price
-          return total + Number(price) * item.quantity
+          const price = Number(rawPrice ?? 0) || 0
+          
+          // Безопасное извлечение количества с fallback на 0
+          const quantity = Number(item.quantity ?? 0) || 0
+          
+          return total + price * quantity
         }, 0)
       },
 
       getItemCount: () => {
         const items = get().items
-        return items.reduce((count, item) => count + item.quantity, 0)
+        return items.reduce((count, item) => {
+          const quantity = Number(item.quantity ?? 0) || 0
+          return count + quantity
+        }, 0)
       },
     }),
     {

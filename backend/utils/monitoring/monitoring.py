@@ -102,22 +102,14 @@ class ApplicationMonitor:
                 await asyncio.sleep(60)  # При ошибке проверяем через 1 минуту (увеличено с 30 секунд)
     
     async def _check_system_health(self):
-        """Проверка системного здоровья (оптимизировано для контейнеров)"""
+        """Проверка системного здоровья"""
         try:
-            # ИСПРАВЛЕНИЕ: Корректное измерение CPU в Docker-контейнерах
-            # Получаем количество ядер для нормализации
-            cpu_count = psutil.cpu_count() or 1
+            # Получаем сырое значение CPU (может быть >100% на multi-core системах)
+            # ПРИМЕЧАНИЕ: Для контейнер-специфичного CPU используйте cgroup accounting
+            # (/sys/fs/cgroup/cpu,cpuacct/cpuacct.usage) или Docker Stats API
+            cpu_percent = psutil.cpu_percent(interval=1, percpu=False)
             
-            # Используем interval=1 для более точного измерения
-            cpu_percent_raw = psutil.cpu_percent(interval=1, percpu=False)
-            
-            # Нормализуем для Docker: если CPU показывает > 100%, это суммарная загрузка всех ядер
-            # Делим на количество ядер для получения реальной загрузки одного ядра
-            if cpu_percent_raw > 100 and cpu_count > 1:
-                cpu_percent = min(cpu_percent_raw / cpu_count, 100.0)
-                logger.debug(f"CPU нормализован: {cpu_percent_raw}% -> {cpu_percent}% (ядер: {cpu_count})")
-            else:
-                cpu_percent = min(cpu_percent_raw, 100.0)
+            logger.debug(f"CPU загрузка: {cpu_percent}%")
             
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
@@ -276,16 +268,10 @@ class ApplicationMonitor:
     async def get_health_status(self) -> Dict[str, Any]:
         """Получение текущего статуса здоровья приложения"""
         try:
-            # Системная информация - оптимизировано для контейнеров
-            # ИСПРАВЛЕНИЕ: Корректное измерение CPU в Docker-контейнерах
-            cpu_count = psutil.cpu_count() or 1
-            cpu_percent_raw = psutil.cpu_percent(interval=1, percpu=False)
-            
-            # Нормализуем для Docker
-            if cpu_percent_raw > 100 and cpu_count > 1:
-                cpu_percent = min(cpu_percent_raw / cpu_count, 100.0)
-            else:
-                cpu_percent = min(cpu_percent_raw, 100.0)
+            # Получаем сырое значение CPU (может быть >100% на multi-core системах)
+            # ПРИМЕЧАНИЕ: Для контейнер-специфичного CPU используйте cgroup accounting
+            # (/sys/fs/cgroup/cpu,cpuacct/cpuacct.usage) или Docker Stats API
+            cpu_percent = psutil.cpu_percent(interval=1, percpu=False)
             
             memory = psutil.virtual_memory()
             disk = psutil.disk_usage('/')

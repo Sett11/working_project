@@ -6,16 +6,16 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => ({
     mode,
     ...(mode === 'light'
       ? {
-          // Light mode
+          // Light mode - Ocean Green theme
           primary: {
-            main: '#1976d2',
-            light: '#42a5f5',
-            dark: '#1565c0',
+            main: '#00897B',    // Ocean Green
+            light: '#4DB6AC',   // Light Ocean Green
+            dark: '#00695C',    // Dark Ocean Green
           },
           secondary: {
-            main: '#dc004e',
-            light: '#f73378',
-            dark: '#9a0036',
+            main: '#00BCD4',    // Cyan (complementary color)
+            light: '#62EFFF',
+            dark: '#008BA3',
           },
           background: {
             default: '#f5f5f5',
@@ -27,16 +27,16 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => ({
           },
         }
       : {
-          // Dark mode
+          // Dark mode - Ocean Green theme
           primary: {
-            main: '#90caf9',
-            light: '#e3f2fd',
-            dark: '#42a5f5',
+            main: '#26A69A',    // Lighter Ocean Green for dark mode
+            light: '#64D8CB',
+            dark: '#00897B',
           },
           secondary: {
-            main: '#f48fb1',
-            light: '#ffc1e3',
-            dark: '#bf5f82',
+            main: '#80DEEA',    // Light Cyan for dark mode
+            light: '#B2EBF2',
+            dark: '#4DD0E1',
           },
           background: {
             default: '#121212',
@@ -50,6 +50,8 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => ({
   },
   typography: {
     fontFamily: [
+      '"Inter"',
+      '"SF Pro Display"',
       '-apple-system',
       'BlinkMacSystemFont',
       '"Segoe UI"',
@@ -60,27 +62,43 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => ({
     ].join(','),
     h1: {
       fontSize: '2.5rem',
-      fontWeight: 600,
+      fontWeight: 700,
+      letterSpacing: '-0.02em',
     },
     h2: {
       fontSize: '2rem',
-      fontWeight: 600,
+      fontWeight: 700,
+      letterSpacing: '-0.01em',
     },
     h3: {
       fontSize: '1.75rem',
-      fontWeight: 600,
+      fontWeight: 700,
+      letterSpacing: '-0.01em',
     },
     h4: {
       fontSize: '1.5rem',
       fontWeight: 600,
+      letterSpacing: '-0.005em',
     },
     h5: {
       fontSize: '1.25rem',
       fontWeight: 600,
+      letterSpacing: '0em',
     },
     h6: {
       fontSize: '1rem',
       fontWeight: 600,
+      letterSpacing: '0.01em',
+    },
+    body1: {
+      fontSize: '1rem',
+      lineHeight: 1.7,
+      letterSpacing: '0.005em',
+    },
+    body2: {
+      fontSize: '0.875rem',
+      lineHeight: 1.6,
+      letterSpacing: '0.01em',
     },
   },
   components: {

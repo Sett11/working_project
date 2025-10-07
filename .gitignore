@@ -81,12 +81,11 @@ old_app_logs/*
 
 # Docker volumes
 postgres_data
-backups
 grafana_data
 prometheus_data
 buffer
 .seeder_flag
-*.lock
+flag.lock
 MIGRATION_PROGRESS.md
 # Temporary files
 *.tmp
@@ -128,6 +127,7 @@ images_airs
 /backend/docs/airs.json
 /backend/docs/components_catalog.json
 /db/commercial_offer_pdf/*.pdf
+/generated_pdf/*.pdf
 /backend/utils/fonts/*.ttf
 /backend/utils/image_for_pdf/*.png
 /backend/utils/graceful_degradation/*.png

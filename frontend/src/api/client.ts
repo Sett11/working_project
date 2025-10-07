@@ -1,5 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { ENV } from '@/config/env'
+import { navigateTo } from '@/utils/navigation'
+import { useAuthStore } from '@/store/authStore'
 
 const apiClient = axios.create({
   baseURL: ENV.API_BASE_URL,
@@ -12,7 +14,8 @@ const apiClient = axios.create({
 // Request interceptor - добавляем токен к каждому запросу
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('auth_token')
+    // Получаем токен из zustand store (который использует persist middleware)
+    const token = useAuthStore.getState().token
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -27,14 +30,27 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   response => response,
   (error: AxiosError) => {
-    // Обработка ошибки 401 (неавторизован)
+    // Обработка ошибки 401 (неавторизован) или 404 (пользователь не найден)
     if (error.response?.status === 401) {
-      // Удаляем токен
-      localStorage.removeItem('auth_token')
+      console.warn('⚠️ 401 Unauthorized - очистка состояния аутентификации')
+      // Очищаем аутентификацию через zustand store (который использует persist middleware)
+      useAuthStore.getState().clearAuth()
       
-      // Перенаправляем на логин, если не находимся на странице логина
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
+      // Перенаправляем на главную страницу
+      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        navigateTo('/', true)
+      }
+    }
+    
+    // Обработка 404 для эндпоинта /auth/me (пользователь удален из БД)
+    if (error.response?.status === 404 && error.config?.url?.includes('/auth/me')) {
+      console.warn('⚠️ 404 User Not Found - пользователь удален из базы, очистка состояния')
+      // Очищаем аутентификацию
+      useAuthStore.getState().clearAuth()
+      
+      // Перенаправляем на главную страницу
+      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        navigateTo('/', true)
       }
     }
     

@@ -117,8 +117,24 @@ async def auth_middleware(request: Request, call_next):
     Returns:
         Response: Ответ от следующего обработчика
     """
+    # ИСПРАВЛЕНИЕ: Получаем IP адрес клиента в самом начале для rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    
+    # ИСПРАВЛЕНИЕ: Применяем rate limit ко ВСЕМ запросам (включая статические и авторизованные)
+    # Это защищает от DDoS атак через любые эндпоинты
+    if not check_rate_limit(client_ip):
+        logger.warning(f"Rate limit превышен для IP: {client_ip}, путь: {request.url.path}")
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": "Слишком много запросов. Попробуйте позже."}
+        )
+    
+    # Периодически очищаем кэш (каждый 100-й запрос)
+    if len(_rate_limit_cache) > 100:
+        cleanup_rate_limit_cache()
+    
     # ИСПРАВЛЕНИЕ: Игнорируем статические файлы и служебные эндпоинты (без логирования)
-    # Это предотвращает спам в логах от браузеров и ботов
+    # Теперь после проверки rate limit - это предотвращает спам в логах, но защищает от атак
     ignored_paths = {
         '/favicon.ico', '/robots.txt', '/sitemap.xml', '/security.txt', 
         '/.well-known/security.txt', '/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'
@@ -151,25 +167,11 @@ async def auth_middleware(request: Request, call_next):
         finally:
             reset_user_id(context_token)
     
-    # ИСПРАВЛЕНИЕ: Проверяем rate limit для неавторизованных запросов
-    # Получаем IP адрес клиента
-    client_ip = request.client.host if request.client else "unknown"
-    
-    # Периодически очищаем кэш (каждый 100-й запрос)
-    if len(_rate_limit_cache) > 100:
-        cleanup_rate_limit_cache()
-    
-    # Получаем пользователя
+    # ИСПРАВЛЕНИЕ: Получаем пользователя ТОЛЬКО после прохождения rate limit проверки
+    # Это защищает дорогостоящий DB lookup от перегрузки
     user = await get_current_user(request)
     
     if not user:
-        # Проверяем rate limit только для неавторизованных запросов
-        if not check_rate_limit(client_ip):
-            logger.warning(f"Rate limit превышен для IP: {client_ip}, путь: {request.url.path}")
-            return JSONResponse(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                content={"detail": "Слишком много запросов. Попробуйте позже."}
-            )
         # Сохраняем текущий контекст и устанавливаем user_id=system для неавторизованных запросов
         context_token = set_user_id("system")
         try:

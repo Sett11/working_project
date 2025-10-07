@@ -23,7 +23,7 @@ from db import crud, schemas
 from db.database import get_session, AsyncSessionLocal, engine
 from utils.mylogger import Logger
 from utils.graceful_degradation import graceful_fallback, graceful_manager
-from db.schemas import FullOrderCreate, UserCreate, UserLogin, TokenResponse, UserResponse
+from db.schemas import UserCreate, UserLogin, TokenResponse, UserResponse
 from utils.auth import hash_password, verify_password, generate_token, get_token_expiry, verify_secret_key
 from utils.auth_middleware import auth_middleware, get_user_id_from_request, get_username_from_request
 import json
@@ -300,6 +300,33 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_sess
         logger.error(f"Ошибка при получении информации о пользователе: {e}")
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
+@app.delete("/api/auth/delete")
+async def delete_account(request: Request, db: AsyncSession = Depends(get_session)):
+    """Удаление аккаунта текущего пользователя"""
+    try:
+        user_id = get_user_id_from_request(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Требуется аутентификация")
+        
+        # Проверяем, существует ли пользователь
+        user = await crud.get_user_by_id(db, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        # Удаляем пользователя
+        deleted = await crud.delete_user(db, user_id)
+        if not deleted:
+            raise HTTPException(status_code=500, detail="Не удалось удалить аккаунт")
+        
+        logger.info(f"Пользователь {user.username} (id={user_id}) успешно удалил свой аккаунт")
+        return {"message": "Аккаунт успешно удален"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка при удалении аккаунта: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
 # === МОНИТОРИНГ ===
 
 @app.get("/api/monitoring/status")
@@ -408,8 +435,7 @@ async def cleanup_connection_pool(request: Request, db: AsyncSession = Depends(g
             "pool_size": pool.size(),
             "checked_in": pool.checkedin(),
             "checked_out": pool.checkedout(),
-            "overflow": pool.overflow(),
-            "invalid": pool.invalid()
+            "overflow": pool.overflow()
         }
         
         logger.info(f"Администратор user_id={user_id} начинает graceful очистку пула. Текущее состояние: {before_stats}")
@@ -435,8 +461,7 @@ async def cleanup_connection_pool(request: Request, db: AsyncSession = Depends(g
             "pool_size": pool.size(),
             "checked_in": pool.checkedin(),
             "checked_out": pool.checkedout(),
-            "overflow": pool.overflow(),
-            "invalid": pool.invalid()
+            "overflow": pool.overflow()
         }
         
         # Проверяем, истек ли таймаут
@@ -535,58 +560,6 @@ async def select_aircons_endpoint(request: Request, payload: dict, db: AsyncSess
         logger.error(f"Ошибка при подборе кондиционеров: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка при подборе кондиционеров: {e}")
 
-@app.post("/api/save_order/")
-async def save_order_endpoint(request: Request, payload: dict, db: AsyncSession = Depends(get_session)):
-    """Сохранение обычного заказа (для совместимости)"""
-    try:
-        user_id = get_user_id_from_request(request)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Требуется аутентификация")
-        
-        # Определяем режим: только КП, только components, или оба
-        has_kp = 'client_data' in payload and 'order_params' in payload and 'aircon_params' in payload
-        has_components = 'components' in payload
-        order_id = payload.get('id')
-        
-        if not has_kp and not has_components:
-            return {"success": False, "error": "Нет данных для сохранения"}
-        
-        # Если есть ID заказа, пытаемся найти существующий
-        order = None
-        if order_id:
-            order = await crud.get_order_by_id(db, order_id)
-        
-        # Если нет заказа и есть данные для КП, создаем новый
-        if not order and has_kp:
-            from datetime import date
-            order_data = {k: payload[k] for k in ("client_data", "order_params", "aircon_params") if k in payload}
-            order_payload = FullOrderCreate(
-                user_id=user_id,
-                order_data=order_data,
-                status=payload.get("status", "draft")
-            )
-            order = await crud.create_order(db, order_payload)
-            logger.info(f"Создан новый заказ с id={order.id}")
-            return {"success": True, "order_id": order.id, "updated": False}
-        
-        # Если заказ есть — обновить только нужные поля
-        if order:
-            if has_components:
-                # Обновляем только components
-                updated_data = order.order_data.copy()
-                updated_data["components"] = payload["components"]
-                order.order_data = updated_data
-                order.status = payload.get("status", order.status)
-            
-            await db.commit()
-            logger.info(f"Обновлён заказ id={order.id}. Итоговое order_data: {order.order_data}")
-            return {"success": True, "order_id": order.id, "updated": True}
-        
-        logger.error("Не удалось найти или создать заказ для обновления.")
-        return {"success": False, "error": "Не удалось найти или создать заказ."}
-    except Exception as e:
-        logger.error(f"Ошибка при сохранении/обновлении заказа: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Внутренняя ошибка сервера при обработке заказа: {e}")
 
 @app.get("/api/all_orders/")
 @graceful_fallback("orders_list", cache_key="all_orders_list", cache_ttl=300)
@@ -661,80 +634,13 @@ async def delete_compose_order_by_id(request: Request, order_id: int, db: AsyncS
         logger.error(f"Ошибка при удалении составного заказа: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
-@app.post("/api/save_compose_order/")
-async def save_compose_order_endpoint(request: Request, payload: dict, db: AsyncSession = Depends(get_session)):
-    """Сохранение составного заказа"""
-    try:
-        user_id = get_user_id_from_request(request)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Требуется аутентификация")
-        
-        order_id = payload.get("id")
-        compose_order_data = payload.get("compose_order_data", {})
-        status = payload.get("status", "draft")
-        components_update = payload.get("components", [])
-        
-        # Если есть компоненты для обновления, сохраняем их в rooms[0].components_for_room
-        if components_update:
-            if "rooms" not in compose_order_data:
-                compose_order_data["rooms"] = [{}]
-            if len(compose_order_data["rooms"]) == 0:
-                compose_order_data["rooms"].append({})
-            
-            compose_order_data["rooms"][0]["components_for_room"] = components_update
-            logger.info(f"Обновлены комплектующие для помещения: {len(components_update)} элементов")
-        
-        if order_id:
-            # Обновляем существующий заказ
-            existing_order = await crud.get_compose_order_by_id(db, order_id)
-            if not existing_order or existing_order.user_id != user_id:
-                logger.warning(f"Заказ id={order_id} не найден или не принадлежит user_id={user_id}")
-                return {"success": False, "error": f"Заказ с id={order_id} не найден или не принадлежит пользователю"}
-            
-            # Объединяем данные
-            existing_data = existing_order.compose_order_data.copy() if isinstance(existing_order.compose_order_data, dict) else {}
-            existing_data.update(compose_order_data)
-            
-            # Обновляем заказ
-            existing_order.compose_order_data = existing_data
-            existing_order.status = status
-            
-            # Коммитим изменения перед возвратом
-            await db.commit()
-            await db.refresh(existing_order)
-            
-            logger.info(f"Обновлен составной заказ id={existing_order.id} для user_id={user_id}")
-            return {"success": True, "order_id": existing_order.id, "updated": True}
-        else:
-            # Создаем новый заказ, если order_id не предоставлен
-            logger.info(f"Создание нового составного заказа для user_id={user_id}")
-            
-            new_order = await crud.create_compose_order_simple(
-                db=db,
-                user_id=user_id,
-                compose_order_data=compose_order_data,
-                status=status
-            )
-            
-            logger.info(f"Создан новый составной заказ id={new_order.id} для user_id={user_id}")
-            return {"success": True, "order_id": new_order.id, "created": True}
-            
-    except Exception as e:
-        logger.error(f"Ошибка при сохранении составного заказа для user_id={user_id}: {e}", exc_info=True)
-        await db.rollback()
-        return {"success": False, "error": str(e)}
-
-@app.post("/api/generate_compose_offer/")
-async def generate_compose_offer_endpoint(request: Request, payload: dict, db: AsyncSession = Depends(get_session)):
+@app.post("/api/compose_order/{order_id}/generate-pdf")
+async def generate_compose_order_pdf(request: Request, order_id: int, db: AsyncSession = Depends(get_session)):
     """Генерация коммерческого предложения для составного заказа"""
     try:
         user_id = get_user_id_from_request(request)
         if not user_id:
             raise HTTPException(status_code=401, detail="Требуется аутентификация")
-        
-        order_id = payload.get("id")
-        if not order_id:
-            return {"error": "Не указан ID заказа"}
         
         # Получаем данные составного заказа
         compose_order = await crud.get_compose_order_by_id(db, order_id)
@@ -798,4 +704,67 @@ async def generate_compose_offer_endpoint(request: Request, payload: dict, db: A
         
     except Exception as e:
         logger.error(f"Ошибка при генерации КП для составного заказа: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/save_compose_order/")
+async def save_compose_order_endpoint(request: Request, payload: dict, db: AsyncSession = Depends(get_session)):
+    """Сохранение составного заказа"""
+    try:
+        user_id = get_user_id_from_request(request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Требуется аутентификация")
+        
+        order_id = payload.get("id")
+        compose_order_data = payload.get("compose_order_data", {})
+        status = payload.get("status", "draft")
+        components_update = payload.get("components", [])
+        
+        # Если есть компоненты для обновления, сохраняем их в rooms[0].components_for_room
+        if components_update:
+            if "rooms" not in compose_order_data:
+                compose_order_data["rooms"] = [{}]
+            if len(compose_order_data["rooms"]) == 0:
+                compose_order_data["rooms"].append({})
+            
+            compose_order_data["rooms"][0]["components_for_room"] = components_update
+            logger.info(f"Обновлены комплектующие для помещения: {len(components_update)} элементов")
+        
+        if order_id:
+            # Обновляем существующий заказ
+            existing_order = await crud.get_compose_order_by_id(db, order_id)
+            if not existing_order or existing_order.user_id != user_id:
+                logger.warning(f"Заказ id={order_id} не найден или не принадлежит user_id={user_id}")
+                return {"success": False, "error": f"Заказ с id={order_id} не найден или не принадлежит пользователю"}
+            
+            # Объединяем данные
+            existing_data = existing_order.compose_order_data.copy() if isinstance(existing_order.compose_order_data, dict) else {}
+            existing_data.update(compose_order_data)
+            
+            # Обновляем заказ
+            existing_order.compose_order_data = existing_data
+            existing_order.status = status
+            
+            # Коммитим изменения перед возвратом
+            await db.commit()
+            await db.refresh(existing_order)
+            
+            logger.info(f"Обновлен составной заказ id={existing_order.id} для user_id={user_id}")
+            return {"success": True, "order_id": existing_order.id, "updated": True}
+        else:
+            # Создаем новый заказ, если order_id не предоставлен
+            logger.info(f"Создание нового составного заказа для user_id={user_id}")
+            
+            new_order = await crud.create_compose_order_simple(
+                db=db,
+                user_id=user_id,
+                compose_order_data=compose_order_data,
+                status=status
+            )
+            
+            logger.info(f"Создан новый составной заказ id={new_order.id} для user_id={user_id}")
+            return {"success": True, "order_id": new_order.id, "created": True}
+            
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении составного заказа для user_id={user_id}: {e}", exc_info=True)
+        await db.rollback()
         return {"success": False, "error": str(e)}

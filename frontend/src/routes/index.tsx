@@ -1,68 +1,100 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useAuthStore } from '@/store'
 import LoginPage from '@/pages/LoginPage'
 import RegisterPage from '@/pages/RegisterPage'
+import NotFoundPage from '@/pages/NotFoundPage'
+import LandingPage from '@/pages/LandingPage'
 import App from '@/App'
+import SettingsPage from '@/pages/DashboardPages/SettingsPage'
+import OrdersPage from '@/pages/DashboardPages/OrdersPage'
+import { setNavigate } from '@/utils/navigation'
 
-// Компонент для защиты маршрутов
-interface ProtectedRouteProps {
+// Общий интерфейс для охранных компонентов маршрутов
+interface RouteGuardProps {
   children: React.ReactNode
 }
 
-function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated } = useAuthStore()
+function ProtectedRoute({ children }: RouteGuardProps) {
+  const { isAuthenticated, isAuthInitialized } = useAuthStore()
   
+  // Ждем завершения инициализации аутентификации
+  if (!isAuthInitialized) {
+    return null
+  }
+  
+  // Редиректим на логин только после инициализации, если не аутентифицирован
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
   
-  return <>{children}</>
+  return children
 }
 
 // Компонент для публичных маршрутов (недоступны после входа)
-function PublicRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated } = useAuthStore()
+function AuthOnlyRoute({ children }: RouteGuardProps) {
+  const { isAuthenticated, isAuthInitialized } = useAuthStore()
   
+  // Ждем завершения инициализации аутентификации
+  if (!isAuthInitialized) {
+    return null
+  }
+  
+  // Редиректим на главную только после инициализации, если аутентифицирован
   if (isAuthenticated) {
     return <Navigate to="/" replace />
   }
   
-  return <>{children}</>
+  return children
 }
 
 export default function AppRoutes() {
+  const navigate = useNavigate()
+  
+  // Инициализируем глобальную функцию навигации для использования вне компонентов
+  useEffect(() => {
+    setNavigate(navigate)
+  }, [navigate])
+  
   return (
     <Routes>
-      {/* Публичные маршруты */}
+      {/* Публичная главная страница */}
+      <Route path="/" element={<LandingPage />} />
+
+      {/* Публичные маршруты (только для неавторизованных) */}
       <Route
         path="/login"
         element={
-          <PublicRoute>
+          <AuthOnlyRoute>
             <LoginPage />
-          </PublicRoute>
+          </AuthOnlyRoute>
         }
       />
       <Route
         path="/register"
         element={
-          <PublicRoute>
+          <AuthOnlyRoute>
             <RegisterPage />
-          </PublicRoute>
+          </AuthOnlyRoute>
         }
       />
 
       {/* Защищённые маршруты */}
       <Route
-        path="/"
+        path="/dashboard"
         element={
           <ProtectedRoute>
             <App />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route path="settings" element={<SettingsPage />} />
+        <Route path="orders" element={<OrdersPage />} />
+        <Route index element={<Navigate to="/dashboard/orders?filter=my" replace />} />
+      </Route>
 
-      {/* Перенаправление на логин для всех остальных маршрутов */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      {/* Страница 404 для всех остальных маршрутов */}
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )
 }

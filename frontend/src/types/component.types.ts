@@ -1,7 +1,7 @@
 export interface Component {
   id: number
   name: string
-  category: string
+  category: ComponentCategory
   category_folder?: string
   size?: string
   characteristics?: string

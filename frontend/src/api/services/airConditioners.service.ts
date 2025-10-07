@@ -1,6 +1,10 @@
 import apiClient from '../client'
 import { API_ENDPOINTS } from '../endpoints'
-import type { AirConditioner } from '@/types'
+import type {
+  AirConditioner,
+  AirconSelectParams,
+  AirconSelectResponse,
+} from '@/types'
 
 export const airConditionersService = {
   async getAll(): Promise<AirConditioner[]> {
@@ -17,10 +21,20 @@ export const airConditionersService = {
     return response.data
   },
 
-  async selectAircons(aircon_params: any): Promise<any> {
-    const response = await apiClient.post(API_ENDPOINTS.SELECT_AIRCONS, {
-      aircon_params,
-    })
+  /**
+   * Подбор кондиционеров по заданным параметрам
+   * @param airconParams - параметры для подбора кондиционеров
+   * @returns объект с общим количеством и списком подобранных кондиционеров
+   */
+  async selectAircons(
+    airconParams: AirconSelectParams
+  ): Promise<AirconSelectResponse> {
+    const response = await apiClient.post<AirconSelectResponse>(
+      API_ENDPOINTS.SELECT_AIRCONS,
+      {
+        aircon_params: airconParams,
+      }
+    )
     return response.data
   },
 }

@@ -2,10 +2,11 @@
 Модуль для выполнения CRUD-операций (Create, Read, Update, Delete) с базой данных.
 
 Здесь определены функции для взаимодействия с моделями SQLAlchemy:
+- User (пользователь)
 - Client (клиент)
 - AirConditioner (кондиционер)
 - Component (комплектующее)
-- Order (заказ)
+- ComposeOrder (составной заказ)
 
 Каждая функция принимает сессию БД и необходимые данные, выполняет операцию
 и возвращает результат. Ведётся подробное логирование всех действий.
@@ -61,6 +62,8 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> models.User | None:
 async def create_user(db: AsyncSession, user: schemas.UserCreate, password_hash: str) -> models.User:
     """
     Создание нового пользователя в базе данных.
+    
+    Первый зарегистрировавшийся пользователь автоматически получает права администратора.
 
     Args:
         db (AsyncSession): Сессия базы данных.
@@ -71,17 +74,27 @@ async def create_user(db: AsyncSession, user: schemas.UserCreate, password_hash:
         models.User: Созданный объект пользователя.
     """
     logger.info(f"[CRUD] create_user: username={user.username}, email={user.email}")
+    
+    # Проверяем, есть ли уже пользователи в системе
+    result = await db.execute(select(models.User))
+    existing_users = result.scalars().all()
+    is_first_user = len(existing_users) == 0
+    
     db_user = models.User(
         username=user.username,
         email=user.email,
-        hashed_password=password_hash  # Исправлено с password_hash на hashed_password
+        hashed_password=password_hash,
+        is_admin=is_first_user  # Первый пользователь становится администратором
     )
     
     try:
         db.add(db_user)
         await db.commit()
         await db.refresh(db_user)
-        logger.info(f"Пользователь '{user.username}' успешно создан с id={db_user.id}.")
+        if is_first_user:
+            logger.info(f"✨ Пользователь '{user.username}' успешно создан с id={db_user.id} и назначен АДМИНИСТРАТОРОМ (первый пользователь в системе).")
+        else:
+            logger.info(f"Пользователь '{user.username}' успешно создан с id={db_user.id}.")
         return db_user
     except Exception as e:
         logger.error(f"Ошибка при создании пользователя '{user.username}': {e}", exc_info=True)
@@ -150,6 +163,37 @@ async def get_user_by_token(db: AsyncSession, token: str) -> models.User | None:
     user = result.scalar_one_or_none()
     logger.info(f"[CRUD] get_user_by_token: found={bool(user)}, now_utc={now_utc}")
     return user
+
+
+async def delete_user(db: AsyncSession, user_id: int) -> bool:
+    """
+    Удаление пользователя по ID.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+        user_id (int): ID пользователя для удаления.
+
+    Returns:
+        bool: True если пользователь удален, False если не найден.
+    """
+    logger.info(f"[CRUD] delete_user: удаление пользователя user_id={user_id}")
+    
+    result = await db.execute(select(models.User).where(models.User.id == user_id))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        logger.warning(f"[CRUD] delete_user: пользователь user_id={user_id} не найден")
+        return False
+    
+    try:
+        await db.delete(user)
+        await db.commit()
+        logger.info(f"[CRUD] delete_user: пользователь '{user.username}' (id={user_id}) успешно удален")
+        return True
+    except Exception as e:
+        logger.error(f"[CRUD] delete_user: ошибка при удалении пользователя user_id={user_id}: {e}", exc_info=True)
+        await db.rollback()
+        raise
 
 
 # --- CRUD-операции для Клиентов (Client) ---
@@ -357,56 +401,6 @@ async def get_all_components(db: AsyncSession) -> list[models.Component]:
     return components
 
 
-# --- CRUD-операции для Заказов (Order) ---
-
-async def create_order(db: AsyncSession, order: schemas.OrderCreate) -> models.Order:
-    """
-    Создание нового заказа в базе данных.
-    """
-    logger.info(f"[CRUD] create_order: {order}")
-    db_order = models.Order(
-        client_id=order.client_id,
-        status=order.status,
-        pdf_path=order.pdf_path,
-        order_data=json.dumps(order.order_data, ensure_ascii=False),
-        created_at=order.created_at
-    )
-    try:
-        db.add(db_order)
-        await db.commit()
-        await db.refresh(db_order)
-        logger.info(f"Заказ для клиента id={order.client_id} успешно создан с id={db_order.id}.")
-        return db_order
-    except Exception as e:
-        logger.error(f"Ошибка при создании заказа для клиента id={order.client_id}: {e}", exc_info=True)
-        await db.rollback()
-        raise
-
-
-async def update_order_by_id(db: AsyncSession, order_id: int, order_update: schemas.OrderCreate) -> models.Order | None:
-    """
-    Обновляет заказ по id. Если заказа нет — возвращает None.
-    """
-    logger.info(f"[CRUD] update_order_by_id: order_id={order_id}, order_update={order_update}")
-    result = await db.execute(select(models.Order).where(models.Order.id == order_id))
-    db_order = result.scalar_one_or_none()
-    if not db_order:
-        logger.warning(f"Заказ с id={order_id} не найден для обновления.")
-        return None
-    try:
-        db_order.status = order_update.status
-        db_order.pdf_path = order_update.pdf_path
-        db_order.order_data = json.dumps(order_update.order_data, ensure_ascii=False)
-        db_order.created_at = order_update.created_at
-        db_order.client_id = order_update.client_id
-        await db.commit()
-        await db.refresh(db_order)
-        logger.info(f"Заказ с id={order_id} успешно обновлён.")
-        return db_order
-    except Exception as e:
-        logger.error(f"Ошибка при обновлении заказа id={order_id}: {e}", exc_info=True)
-        await db.rollback()
-        raise
 
 # --- CRUD-операции для счетчика КП (OfferCounter) ---
 
