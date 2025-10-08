@@ -1,18 +1,12 @@
 import { Box, Container, Typography, Button, Paper } from '@mui/material'
-import { Home as HomeIcon, Login as LoginIcon } from '@mui/icons-material'
+import { Home as HomeIcon } from '@mui/icons-material'
 import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '@/store'
 
 export default function NotFoundPage() {
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuthStore()
 
   const handleNavigation = () => {
-    if (isAuthenticated) {
-      navigate('/')
-    } else {
-      navigate('/login')
-    }
+    navigate('/')
   }
 
   return (
@@ -70,11 +64,11 @@ export default function NotFoundPage() {
           <Button
             variant="contained"
             size="large"
-            startIcon={isAuthenticated ? <HomeIcon /> : <LoginIcon />}
+            startIcon={<HomeIcon />}
             onClick={handleNavigation}
             sx={{ minWidth: 200 }}
           >
-            {isAuthenticated ? 'На главную' : 'Войти в систему'}
+            На главную
           </Button>
         </Paper>
       </Box>

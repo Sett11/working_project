@@ -1,4 +1,4 @@
-import { Box, Typography, Paper, Alert, CircularProgress } from '@mui/material'
+import { Box, Typography, Paper, Alert } from '@mui/material'
 import { Receipt as ReceiptIcon } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/store'
@@ -26,7 +26,7 @@ export default function OrdersPage() {
 
       {isMyOrders && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          Показаны только ваши заказы
+          {t('dashboard:showing_only_your_orders')}
         </Alert>
       )}
 
@@ -43,8 +43,8 @@ export default function OrdersPage() {
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {isMyOrders 
-              ? `Фильтр: только заказы пользователя ${user?.username}`
-              : 'Показаны все заказы всех пользователей'
+              ? t('dashboard:filter_user_orders', { username: user?.username })
+              : t('dashboard:showing_all_users_orders')
             }
           </Typography>
           

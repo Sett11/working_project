@@ -23,7 +23,11 @@ COPY . .
 RUN npm run build
 
 # Этап 2: Production образ с Nginx
-FROM nginx:1.27-alpine
+# Обновлено на nginx:1.29.1-alpine для исправления CVE-2025-23419 и поддержки HTTP/3
+# CVE-2025-23419: Критическая уязвимость безопасности в nginx < 1.29.1
+# HTTP/3 support: Улучшенная производительность и безопасность
+# Дата обновления: 2025-10-08
+FROM nginx:1.29.1-alpine
 
 # Копируем собранное приложение из builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html

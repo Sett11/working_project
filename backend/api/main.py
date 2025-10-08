@@ -595,7 +595,7 @@ async def get_all_orders_list(request: Request, db: AsyncSession = Depends(get_s
         return all_orders
     except Exception as e:
         logger.error(f"Ошибка при получении объединенного списка заказов: {e}", exc_info=True)
-        return {"success": False, "error": str(e)}
+        raise HTTPException(status_code=500, detail=f"Ошибка при получении списка заказов: {str(e)}")
 
 @app.get("/api/compose_order/{order_id}")
 async def get_compose_order_by_id(request: Request, order_id: int, db: AsyncSession = Depends(get_session)):
@@ -607,16 +607,18 @@ async def get_compose_order_by_id(request: Request, order_id: int, db: AsyncSess
         
         compose_order = await crud.get_compose_order_by_id(db, order_id)
         if not compose_order or compose_order.user_id != user_id:
-            return {"error": f"Составной заказ с id={order_id} не найден или не принадлежит пользователю"}
+            raise HTTPException(status_code=404, detail=f"Составной заказ с id={order_id} не найден или не принадлежит пользователю")
         
         compose_order_data = compose_order.compose_order_data
         compose_order_data["id"] = compose_order.id
         compose_order_data["status"] = compose_order.status
         
         return compose_order_data
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Ошибка при получении составного заказа по id: {e}", exc_info=True)
-        return {"success": False, "error": str(e)}
+        raise HTTPException(status_code=500, detail=f"Ошибка при получении заказа: {str(e)}")
 
 @app.delete("/api/compose_order/{order_id}")
 async def delete_compose_order_by_id(request: Request, order_id: int, db: AsyncSession = Depends(get_session)):
@@ -632,7 +634,7 @@ async def delete_compose_order_by_id(request: Request, order_id: int, db: AsyncS
         return {"success": True}
     except Exception as e:
         logger.error(f"Ошибка при удалении составного заказа: {e}", exc_info=True)
-        return {"success": False, "error": str(e)}
+        raise HTTPException(status_code=500, detail=f"Ошибка при удалении заказа: {str(e)}")
 
 @app.post("/api/compose_order/{order_id}/generate-pdf")
 async def generate_compose_order_pdf(request: Request, order_id: int, db: AsyncSession = Depends(get_session)):
@@ -645,14 +647,14 @@ async def generate_compose_order_pdf(request: Request, order_id: int, db: AsyncS
         # Получаем данные составного заказа
         compose_order = await crud.get_compose_order_by_id(db, order_id)
         if not compose_order or compose_order.user_id != user_id:
-            return {"error": f"Составной заказ с id={order_id} не найден"}
+            raise HTTPException(status_code=404, detail=f"Составной заказ с id={order_id} не найден или не принадлежит пользователю")
         
         compose_order_data = compose_order.compose_order_data
         
         # Извлекаем данные из rooms
         rooms = compose_order_data.get("rooms", [])
         if not rooms:
-            return {"error": "В составном заказе нет данных помещений"}
+            raise HTTPException(status_code=400, detail="В составном заказе нет данных помещений")
         
         # Формируем данные для генерации PDF
         aircon_results = []
@@ -702,9 +704,11 @@ async def generate_compose_order_pdf(request: Request, order_id: int, db: AsyncS
         logger.info(f"КП для составного заказа {order_id} успешно сгенерировано: {pdf_path}")
         return {"success": True, "pdf_path": pdf_path}
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Ошибка при генерации КП для составного заказа: {e}", exc_info=True)
-        return {"success": False, "error": str(e)}
+        raise HTTPException(status_code=500, detail=f"Ошибка при генерации коммерческого предложения: {str(e)}")
 
 @app.post("/api/save_compose_order/")
 async def save_compose_order_endpoint(request: Request, payload: dict, db: AsyncSession = Depends(get_session)):
@@ -719,22 +723,64 @@ async def save_compose_order_endpoint(request: Request, payload: dict, db: Async
         status = payload.get("status", "draft")
         components_update = payload.get("components", [])
         
-        # Если есть компоненты для обновления, сохраняем их в rooms[0].components_for_room
+        # Распределяем компоненты по комнатам на основе метаданных
         if components_update:
+            # Инициализируем rooms если их нет
             if "rooms" not in compose_order_data:
-                compose_order_data["rooms"] = [{}]
-            if len(compose_order_data["rooms"]) == 0:
-                compose_order_data["rooms"].append({})
+                compose_order_data["rooms"] = []
             
-            compose_order_data["rooms"][0]["components_for_room"] = components_update
-            logger.info(f"Обновлены комплектующие для помещения: {len(components_update)} элементов")
+            # Группируем компоненты по room_index
+            components_by_room = {}
+            components_without_room = []
+            
+            for component in components_update:
+                # Каждый компонент должен содержать room_index, указывающий на комнату
+                room_idx = component.get("room_index")
+                
+                # Валидация room_index
+                if room_idx is None:
+                    logger.warning(f"Компонент без указания room_index будет присвоен первой комнате: {component.get('name', 'неизвестный')}")
+                    components_without_room.append(component)
+                    room_idx = 0
+                elif not isinstance(room_idx, int) or room_idx < 0:
+                    logger.error(f"Некорректный room_index={room_idx} для компонента {component.get('name', 'неизвестный')}, присваиваем 0")
+                    room_idx = 0
+                
+                if room_idx not in components_by_room:
+                    components_by_room[room_idx] = []
+                components_by_room[room_idx].append(component)
+            
+            # Логируем предупреждение если есть компоненты без room_index
+            if components_without_room:
+                logger.warning(f"Найдено {len(components_without_room)} компонентов без room_index, они присвоены комнате 0")
+            
+            # Валидация: проверяем, что индексы комнат не превышают разумные пределы
+            max_room_idx = max(components_by_room.keys()) if components_by_room else 0
+            if max_room_idx > 100:  # Защита от случайных больших значений
+                logger.error(f"Обнаружен слишком большой индекс комнаты: {max_room_idx}, это может быть ошибкой")
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Индекс комнаты {max_room_idx} превышает допустимое значение. Проверьте корректность данных."
+                )
+            
+            # Обновляем компоненты для каждой комнаты
+            for room_idx, room_components in components_by_room.items():
+                # Убедимся, что комната с таким индексом существует
+                while len(compose_order_data["rooms"]) <= room_idx:
+                    compose_order_data["rooms"].append({})
+                
+                # Обновляем компоненты для комнаты
+                compose_order_data["rooms"][room_idx]["components_for_room"] = room_components
+                logger.info(f"Обновлены комплектующие для комнаты {room_idx}: {len(room_components)} элементов")
+            
+            logger.info(f"Всего обновлено компонентов: {len(components_update)} в {len(components_by_room)} комнатах")
         
         if order_id:
             # Обновляем существующий заказ
             existing_order = await crud.get_compose_order_by_id(db, order_id)
             if not existing_order or existing_order.user_id != user_id:
                 logger.warning(f"Заказ id={order_id} не найден или не принадлежит user_id={user_id}")
-                return {"success": False, "error": f"Заказ с id={order_id} не найден или не принадлежит пользователю"}
+                raise HTTPException(status_code=404, detail=f"Заказ с id={order_id} не найден или не принадлежит пользователю")
             
             # Объединяем данные
             existing_data = existing_order.compose_order_data.copy() if isinstance(existing_order.compose_order_data, dict) else {}
@@ -764,7 +810,9 @@ async def save_compose_order_endpoint(request: Request, payload: dict, db: Async
             logger.info(f"Создан новый составной заказ id={new_order.id} для user_id={user_id}")
             return {"success": True, "order_id": new_order.id, "created": True}
             
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Ошибка при сохранении составного заказа для user_id={user_id}: {e}", exc_info=True)
         await db.rollback()
-        return {"success": False, "error": str(e)}
+        raise HTTPException(status_code=500, detail=f"Ошибка при сохранении заказа: {str(e)}")

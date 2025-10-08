@@ -142,11 +142,12 @@ components_catalog.json
 form_com_offer_backup
 MIGRATION_PLAN.txt
 MIGRATION_PROGRESS.txt
-README.md
 README_DEPLOYMENT.md
 README_POWERSHELL.md
 SECURITY_AUDIT.md
 AUDIT_SUMMARY.md
+QUICK_START.md
+EXAMPLES.md
 
 # ═══════════════════════════════════════════════════════════════
 # IMPORTANT: KEEP THESE FILES

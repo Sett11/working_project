@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -14,6 +14,7 @@ import {
   InputAdornment,
   IconButton,
   CircularProgress,
+  useTheme,
 } from '@mui/material'
 import {
   Visibility,
@@ -22,18 +23,43 @@ import {
 } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 import { loginSchema, type LoginFormData } from '@/types/validation.schemas'
-import { authService } from '@/api/services/auth.service'
-import { useAuthStore } from '@/store'
+import { useLogin } from '@/hooks/queries'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher'
 
 export default function LoginPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-  const { setAuth } = useAuthStore()
+  const theme = useTheme()
+  const loginMutation = useLogin()
   
   const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+
+  // Переиспользуемые стили для TextField (username и password)
+  const textFieldSx = {
+    '& .MuiOutlinedInput-root': {
+      backgroundColor: '#E0F2F1',
+      '& fieldset': {
+        borderColor: 'primary.main',
+        borderWidth: '2px',
+      },
+      '&:hover fieldset': {
+        borderColor: 'primary.dark',
+        borderWidth: '2px',
+      },
+      '&.Mui-focused fieldset': {
+        borderColor: 'primary.main',
+        borderWidth: '2px',
+      },
+      '& input': {
+        color: '#000',
+        fontWeight: 500,
+        fontSize: '16px',
+      },
+      '& input::placeholder': {
+        color: '#000',
+        opacity: 0.6,
+      },
+    },
+  }
 
   const {
     control,
@@ -47,22 +73,8 @@ export default function LoginPage() {
     },
   })
 
-  const onSubmit = async (data: LoginFormData) => {
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const response = await authService.login(data)
-      setAuth(response.user, response.token)
-      navigate('/', { replace: true })
-    } catch (err: any) {
-      console.error('Login error:', err)
-      setError(
-        err.response?.data?.detail || t('auth:login_error')
-      )
-    } finally {
-      setIsLoading(false)
-    }
+  const onSubmit = (data: LoginFormData) => {
+    loginMutation.mutate(data)
   }
 
   return (
@@ -72,7 +84,7 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #00897B 0%, #00695C 100%)',
+        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
         py: 4,
         position: 'relative',
       }}
@@ -98,7 +110,7 @@ export default function LoginPage() {
               width: 48,
               height: 48,
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #00897B 0%, #00695C 100%)',
+              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -116,9 +128,9 @@ export default function LoginPage() {
             {t('common:app_name')}
           </Typography>
 
-          {error && (
+          {loginMutation.isError && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-              {error}
+              {(loginMutation.error as any)?.response?.data?.detail || t('auth:login_error')}
             </Alert>
           )}
 
@@ -142,37 +154,12 @@ export default function LoginPage() {
                   autoFocus
                   error={!!errors.username}
                   helperText={errors.username?.message}
-                  disabled={isLoading}
+                  disabled={loginMutation.isPending}
                   InputLabelProps={{ 
                     shrink: true,
                     sx: { color: '#333', fontWeight: 600 }
                   }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      backgroundColor: '#E0F2F1',
-                      '& fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: '#00695C',
-                        borderWidth: '2px',
-                      },
-                      '&.Mui-focused fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '& input': {
-                        color: '#000',
-                        fontWeight: 500,
-                        fontSize: '16px',
-                      },
-                      '& input::placeholder': {
-                        color: '#000',
-                        opacity: 0.6,
-                      },
-                    },
-                  }}
+                  sx={textFieldSx}
                 />
               )}
             />
@@ -192,7 +179,7 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   error={!!errors.password}
                   helperText={errors.password?.message}
-                  disabled={isLoading}
+                  disabled={loginMutation.isPending}
                   InputLabelProps={{ 
                     shrink: true,
                     sx: { color: '#333', fontWeight: 600 }
@@ -203,40 +190,15 @@ export default function LoginPage() {
                         <IconButton
                           onClick={() => setShowPassword(!showPassword)}
                           edge="end"
-                          disabled={isLoading}
-                          sx={{ color: '#00897B' }}
+                          disabled={loginMutation.isPending}
+                          sx={{ color: 'primary.main' }}
                         >
                           {showPassword ? <VisibilityOff /> : <Visibility />}
                         </IconButton>
                       </InputAdornment>
                     ),
                   }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      backgroundColor: '#E0F2F1',
-                      '& fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: '#00695C',
-                        borderWidth: '2px',
-                      },
-                      '&.Mui-focused fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '& input': {
-                        color: '#000',
-                        fontWeight: 500,
-                        fontSize: '16px',
-                      },
-                      '& input::placeholder': {
-                        color: '#000',
-                        opacity: 0.6,
-                      },
-                    },
-                  }}
+                  sx={textFieldSx}
                 />
               )}
             />
@@ -246,18 +208,18 @@ export default function LoginPage() {
               fullWidth
               variant="contained"
               size="large"
-              disabled={isLoading}
+              disabled={loginMutation.isPending}
               sx={{ 
                 mt: 3, 
                 mb: 2,
                 py: 1.5,
-                background: 'linear-gradient(135deg, #00897B 0%, #00695C 100%)',
+                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #00695C 0%, #00897B 100%)',
+                  background: `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
                 },
               }}
             >
-              {isLoading ? <CircularProgress size={24} color="inherit" /> : t('auth:login_button')}
+              {loginMutation.isPending ? <CircularProgress size={24} color="inherit" /> : t('auth:login_button')}
             </Button>
 
             <Box sx={{ textAlign: 'center', mt: 2 }}>
@@ -266,7 +228,7 @@ export default function LoginPage() {
                 <Link
                   component={RouterLink}
                   to="/register"
-                  sx={{ color: '#00897B', fontWeight: 600 }}
+                  sx={{ color: 'primary.main', fontWeight: 600 }}
                 >
                   {t('auth:register')}
                 </Link>

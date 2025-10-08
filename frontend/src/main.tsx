@@ -9,14 +9,35 @@ import './i18n'
 import AppRoutes from './routes'
 import { createAppTheme } from './theme'
 import { useUIStore } from './store'
+import { useDocumentLang } from './hooks/useDocumentLang'
+import DocumentHead from './components/common/DocumentHead'
 
-// Создаём QueryClient для TanStack Query
+/**
+ * TanStack Query Client Configuration
+ * 
+ * Global settings for all queries and mutations:
+ * - Automatic caching and deduplication
+ * - Background refetching on window focus
+ * - Retry logic for failed requests
+ * - Stale time management
+ */
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
+      // Refetch when window regains focus (useful for stale data)
+      refetchOnWindowFocus: true,
+      // Retry failed requests once before showing error
       retry: 1,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      // Data considered fresh for 5 minutes (no refetch during this time)
+      staleTime: 5 * 60 * 1000,
+      // Cache data for 10 minutes after last usage
+      gcTime: 10 * 60 * 1000,
+      // Show stale data while refetching in background
+      refetchOnMount: true,
+    },
+    mutations: {
+      // Retry failed mutations once
+      retry: 1,
     },
   },
 })
@@ -26,9 +47,14 @@ function AppProviders() {
   const theme = useUIStore(state => state.theme)
   const muiTheme = useMemo(() => createAppTheme(theme), [theme])
 
+  // Синхронизируем атрибут lang HTML-элемента с текущим языком i18n
+  useDocumentLang()
+
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
+      {/* Компонент для динамического обновления заголовка документа */}
+      <DocumentHead />
       <AppRoutes />
     </ThemeProvider>
   )

@@ -1,4 +1,4 @@
-import { Box, Typography, Paper, Alert } from '@mui/material'
+import { Box, Typography, Paper, Alert, CircularProgress } from '@mui/material'
 import { Settings as SettingsIcon } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/store'
@@ -6,9 +6,25 @@ import { Navigate } from 'react-router-dom'
 
 export default function SettingsPage() {
   const { t } = useTranslation()
-  const { user } = useAuthStore()
+  const { user, isAuthInitialized } = useAuthStore()
 
-  // Проверка прав администратора
+  // Показываем загрузку, пока аутентификация инициализируется
+  if (!isAuthInitialized) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '400px',
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    )
+  }
+
+  // Проверка прав администратора после завершения загрузки
   if (!user?.is_admin) {
     return <Navigate to="/dashboard" replace />
   }
@@ -28,10 +44,10 @@ export default function SettingsPage() {
 
       <Paper elevation={2} sx={{ p: 4, borderRadius: 3 }}>
         <Typography variant="h6" gutterBottom fontWeight={600}>
-          Настройки системы
+          {t('dashboard:settings_title')}
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Здесь будут размещены настройки системы для администраторов.
+          {t('dashboard:settings_description')}
         </Typography>
         
         {/* TODO: Добавить настройки */}

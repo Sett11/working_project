@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-import { useNavigate, Link as RouterLink } from 'react-router-dom'
+import { useState } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -22,21 +22,48 @@ import {
 } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 import { registerSchema, type RegisterFormData } from '@/types/validation.schemas'
-import { authService } from '@/api/services/auth.service'
-import { useAuthStore } from '@/store'
+import { useRegister } from '@/hooks/queries'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher'
 
 export default function RegisterPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-  const { setAuth } = useAuthStore()
+  const registerMutation = useRegister()
   
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
-  const redirectTimeoutRef = useRef<number | null>(null)
+
+  // Общие стили для всех TextField
+  const textFieldSxProps = {
+    '& .MuiOutlinedInput-root': {
+      backgroundColor: '#E0F2F1',
+      '& fieldset': {
+        borderColor: '#00897B',
+        borderWidth: '2px',
+      },
+      '&:hover fieldset': {
+        borderColor: '#4DB6AC',
+        borderWidth: '2px',
+      },
+      '&.Mui-focused fieldset': {
+        borderColor: '#00897B',
+        borderWidth: '2px',
+      },
+      '& input': {
+        color: '#000',
+        fontWeight: 500,
+        fontSize: '16px',
+      },
+      '& input::placeholder': {
+        color: '#000',
+        opacity: 0.6,
+      },
+    },
+  }
+
+  const textFieldLabelProps = {
+    shrink: true,
+    sx: { color: '#333', fontWeight: 600 },
+  }
 
   const {
     control,
@@ -52,40 +79,13 @@ export default function RegisterPage() {
     },
   })
 
-  useEffect(() => {
-    return () => {
-      if (redirectTimeoutRef.current !== null) {
-        clearTimeout(redirectTimeoutRef.current)
-      }
+  const onSubmit = (data: RegisterFormData) => {
+    const { confirmPassword, secretKey, ...rest } = data
+    const registerData = {
+      ...rest,
+      secret_key: secretKey
     }
-  }, [])
-
-  const onSubmit = async (data: RegisterFormData) => {
-    setIsLoading(true)
-    setError(null)
-    setSuccess(false)
-
-    try {
-      const { confirmPassword, secretKey, ...rest } = data
-      const registerData = {
-        ...rest,
-        secret_key: secretKey
-      }
-      const response = await authService.register(registerData)
-      setSuccess(true)
-      setAuth(response.user, response.token)
-      
-      redirectTimeoutRef.current = window.setTimeout(() => {
-        navigate('/', { replace: true })
-      }, 1500)
-    } catch (err: any) {
-      console.error('Registration error:', err)
-      setError(
-        err.response?.data?.detail || 'Ошибка регистрации'
-      )
-    } finally {
-      setIsLoading(false)
-    }
+    registerMutation.mutate(registerData)
   }
 
   return (
@@ -139,13 +139,13 @@ export default function RegisterPage() {
             {t('common:app_name')}
           </Typography>
 
-          {error && (
+          {registerMutation.isError && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-              {error}
+              {(registerMutation.error as any)?.response?.data?.detail || t('auth:registration_error')}
             </Alert>
           )}
 
-          {success && (
+          {registerMutation.isSuccess && (
             <Alert severity="success" sx={{ width: '100%', mb: 2 }}>
               {t('auth:registration_success')}
             </Alert>
@@ -171,37 +171,9 @@ export default function RegisterPage() {
                   autoFocus
                   error={!!errors.username}
                   helperText={errors.username?.message}
-                  disabled={isLoading || success}
-                  InputLabelProps={{ 
-                    shrink: true,
-                    sx: { color: '#333', fontWeight: 600 }
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      backgroundColor: '#E0F2F1',
-                      '& fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: '#4DB6AC',
-                        borderWidth: '2px',
-                      },
-                      '&.Mui-focused fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '& input': {
-                        color: '#000',
-                        fontWeight: 500,
-                        fontSize: '16px',
-                      },
-                      '& input::placeholder': {
-                        color: '#000',
-                        opacity: 0.6,
-                      },
-                    },
-                  }}
+                  disabled={registerMutation.isPending || registerMutation.isSuccess}
+                  InputLabelProps={textFieldLabelProps}
+                  sx={textFieldSxProps}
                 />
               )}
             />
@@ -221,18 +193,15 @@ export default function RegisterPage() {
                   autoComplete="new-password"
                   error={!!errors.password}
                   helperText={errors.password?.message}
-                  disabled={isLoading || success}
-                  InputLabelProps={{ 
-                    shrink: true,
-                    sx: { color: '#333', fontWeight: 600 }
-                  }}
+                  disabled={registerMutation.isPending || registerMutation.isSuccess}
+                  InputLabelProps={textFieldLabelProps}
                   InputProps={{
                     endAdornment: (
                       <InputAdornment position="end">
                         <IconButton
                           onClick={() => setShowPassword(!showPassword)}
                           edge="end"
-                          disabled={isLoading || success}
+                          disabled={registerMutation.isPending || registerMutation.isSuccess}
                           sx={{ color: '#00897B' }}
                         >
                           {showPassword ? <VisibilityOff /> : <Visibility />}
@@ -240,32 +209,7 @@ export default function RegisterPage() {
                       </InputAdornment>
                     ),
                   }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      backgroundColor: '#E0F2F1',
-                      '& fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: '#4DB6AC',
-                        borderWidth: '2px',
-                      },
-                      '&.Mui-focused fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '& input': {
-                        color: '#000',
-                        fontWeight: 500,
-                        fontSize: '16px',
-                      },
-                      '& input::placeholder': {
-                        color: '#000',
-                        opacity: 0.6,
-                      },
-                    },
-                  }}
+                  sx={textFieldSxProps}
                 />
               )}
             />
@@ -285,18 +229,15 @@ export default function RegisterPage() {
                   autoComplete="new-password"
                   error={!!errors.confirmPassword}
                   helperText={errors.confirmPassword?.message}
-                  disabled={isLoading || success}
-                  InputLabelProps={{ 
-                    shrink: true,
-                    sx: { color: '#333', fontWeight: 600 }
-                  }}
+                  disabled={registerMutation.isPending || registerMutation.isSuccess}
+                  InputLabelProps={textFieldLabelProps}
                   InputProps={{
                     endAdornment: (
                       <InputAdornment position="end">
                         <IconButton
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                           edge="end"
-                          disabled={isLoading || success}
+                          disabled={registerMutation.isPending || registerMutation.isSuccess}
                           sx={{ color: '#00897B' }}
                         >
                           {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
@@ -304,32 +245,7 @@ export default function RegisterPage() {
                       </InputAdornment>
                     ),
                   }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      backgroundColor: '#E0F2F1',
-                      '& fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: '#4DB6AC',
-                        borderWidth: '2px',
-                      },
-                      '&.Mui-focused fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '& input': {
-                        color: '#000',
-                        fontWeight: 500,
-                        fontSize: '16px',
-                      },
-                      '& input::placeholder': {
-                        color: '#000',
-                        opacity: 0.6,
-                      },
-                    },
-                  }}
+                  sx={textFieldSxProps}
                 />
               )}
             />
@@ -347,37 +263,9 @@ export default function RegisterPage() {
                   margin="normal"
                   error={!!errors.secretKey}
                   helperText={errors.secretKey?.message || t('auth:secret_key_helper')}
-                  disabled={isLoading || success}
-                  InputLabelProps={{ 
-                    shrink: true,
-                    sx: { color: '#333', fontWeight: 600 }
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      backgroundColor: '#E0F2F1',
-                      '& fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: '#4DB6AC',
-                        borderWidth: '2px',
-                      },
-                      '&.Mui-focused fieldset': {
-                        borderColor: '#00897B',
-                        borderWidth: '2px',
-                      },
-                      '& input': {
-                        color: '#000',
-                        fontWeight: 500,
-                        fontSize: '16px',
-                      },
-                      '& input::placeholder': {
-                        color: '#000',
-                        opacity: 0.6,
-                      },
-                    },
-                  }}
+                  disabled={registerMutation.isPending || registerMutation.isSuccess}
+                  InputLabelProps={textFieldLabelProps}
+                  sx={textFieldSxProps}
                 />
               )}
             />
@@ -387,7 +275,7 @@ export default function RegisterPage() {
               fullWidth
               variant="contained"
               size="large"
-              disabled={isLoading || success}
+              disabled={registerMutation.isPending || registerMutation.isSuccess}
               sx={{ 
                 mt: 3, 
                 mb: 2,
@@ -398,9 +286,9 @@ export default function RegisterPage() {
                 },
               }}
             >
-              {isLoading ? (
+              {registerMutation.isPending ? (
                 <CircularProgress size={24} color="inherit" />
-              ) : success ? (
+              ) : registerMutation.isSuccess ? (
                 t('auth:registration_success_short')
               ) : (
                 t('auth:register_button')

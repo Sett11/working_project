@@ -1,10 +1,10 @@
 import React from 'react'
-import { Box, Typography, Button, Stack, Paper, AppBar, Toolbar, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material'
+import { Box, Typography, Button, Stack, Paper, AppBar, Toolbar, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, CircularProgress } from '@mui/material'
 import { Logout as LogoutIcon, Settings as SettingsIcon, Receipt as ReceiptIcon, Person as PersonIcon, DeleteForever as DeleteForeverIcon, Home as HomeIcon } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, Outlet, useLocation } from 'react-router-dom'
 import { useUIStore, useAuthStore } from './store'
-import { authService } from './api/services/auth.service'
+import { useLogout, useDeleteAccount } from './hooks/queries'
 import LanguageSwitcher from './components/common/LanguageSwitcher'
 
 const DRAWER_WIDTH = 280
@@ -14,32 +14,27 @@ function App() {
   const navigate = useNavigate()
   const location = useLocation()
   const { theme, toggleTheme } = useUIStore()
-  const { user, clearAuth } = useAuthStore()
+  const { user } = useAuthStore()
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  
+  const logoutMutation = useLogout()
+  const deleteAccountMutation = useDeleteAccount()
 
-  const handleLogout = async () => {
-    try {
-      await authService.logout()
-    } catch (error) {
-      console.error('Logout error:', error)
-    } finally {
-      clearAuth()
-      navigate('/login')
-    }
+  const handleLogout = () => {
+    logoutMutation.mutate()
   }
 
-  const handleDeleteAccount = async () => {
-    try {
-      await authService.deleteAccount()
-      clearAuth()
-      navigate('/')
-      alert(t('dashboard:delete_account_success'))
-    } catch (error) {
-      console.error('Delete account error:', error)
-      alert(t('dashboard:delete_account_error'))
-    } finally {
-      setDeleteDialogOpen(false)
-    }
+  const handleDeleteAccount = () => {
+    deleteAccountMutation.mutate(undefined, {
+      onSuccess: () => {
+        setDeleteDialogOpen(false)
+        alert(t('dashboard:delete_account_success'))
+      },
+      onError: () => {
+        alert(t('dashboard:delete_account_error'))
+        setDeleteDialogOpen(false)
+      }
+    })
   }
 
   const menuItems = [
@@ -84,8 +79,9 @@ function App() {
           </Button>
           <Button
             color="inherit"
-            startIcon={<LogoutIcon />}
+            startIcon={logoutMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <LogoutIcon />}
             onClick={handleLogout}
+            disabled={logoutMutation.isPending}
             sx={{ ml: 2 }}
           >
             {t('auth:logout')}
@@ -146,8 +142,9 @@ function App() {
               variant="outlined"
               color="error"
               fullWidth
-              startIcon={<DeleteForeverIcon />}
+              startIcon={deleteAccountMutation.isPending ? <CircularProgress size={20} color="error" /> : <DeleteForeverIcon />}
               onClick={() => setDeleteDialogOpen(true)}
+              disabled={deleteAccountMutation.isPending}
               sx={{ borderRadius: 2 }}
             >
               {t('dashboard:delete_account')}
@@ -179,11 +176,20 @@ function App() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>
+          <Button 
+            onClick={() => setDeleteDialogOpen(false)}
+            disabled={deleteAccountMutation.isPending}
+          >
             {t('common:cancel')}
           </Button>
-          <Button onClick={handleDeleteAccount} color="error" variant="contained">
-            {t('common:delete')}
+          <Button 
+            onClick={handleDeleteAccount} 
+            color="error" 
+            variant="contained"
+            disabled={deleteAccountMutation.isPending}
+            startIcon={deleteAccountMutation.isPending ? <CircularProgress size={20} color="inherit" /> : undefined}
+          >
+            {deleteAccountMutation.isPending ? t('common:deleting') : t('common:delete')}
           </Button>
         </DialogActions>
       </Dialog>

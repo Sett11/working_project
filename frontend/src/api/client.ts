@@ -2,6 +2,7 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { ENV } from '@/config/env'
 import { navigateTo } from '@/utils/navigation'
 import { useAuthStore } from '@/store/authStore'
+import { useNavigationStore } from '@/store/navigationStore'
 
 const apiClient = axios.create({
   baseURL: ENV.API_BASE_URL,

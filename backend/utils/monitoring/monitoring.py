@@ -104,11 +104,10 @@ class ApplicationMonitor:
     async def _check_system_health(self):
         """Проверка системного здоровья"""
         try:
-            # Получаем сырое значение CPU (может быть >100% на multi-core системах)
+            # Получаем среднее значение CPU по всем ядрам (0–100%)
             # ПРИМЕЧАНИЕ: Для контейнер-специфичного CPU используйте cgroup accounting
             # (/sys/fs/cgroup/cpu,cpuacct/cpuacct.usage) или Docker Stats API
-            cpu_percent = psutil.cpu_percent(interval=1, percpu=False)
-            
+            cpu_percent = psutil.cpu_percent(interval=1, percpu=False)            
             logger.debug(f"CPU загрузка: {cpu_percent}%")
             
             memory = psutil.virtual_memory()

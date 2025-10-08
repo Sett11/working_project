@@ -8,9 +8,9 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => ({
       ? {
           // Light mode - Ocean Green theme
           primary: {
-            main: '#00897B',    // Ocean Green
-            light: '#4DB6AC',   // Light Ocean Green
-            dark: '#00695C',    // Dark Ocean Green
+            main: '#00695C',    // Dark Ocean Green (WCAG AA compliant: 6.51:1 contrast)
+            light: '#00897B',   // Ocean Green
+            dark: '#004D40',    // Darker Ocean Green
           },
           secondary: {
             main: '#00BCD4',    // Cyan (complementary color)

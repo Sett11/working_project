@@ -1,31 +1,33 @@
-import type { NavigateFunction } from 'react-router-dom'
-
-// Глобальная ссылка на функцию навигации
-let navigateFunction: NavigateFunction | null = null
+import { useNavigationStore } from '@/store/navigationStore'
 
 /**
- * Инициализирует глобальную функцию навигации
- * Должна быть вызвана из корневого компонента с помощью useNavigate()
+ * Navigate to a path without page reload (SPA-style navigation)
+ * 
+ * Uses Zustand store instead of global variable for better:
+ * - SSR compatibility (no module-level state)
+ * - HMR stability (no stale references)
+ * - Testing (isolated state per test)
+ * 
+ * @param path - Target path to navigate to
+ * @param replace - If true, replaces current history entry. Default: false (standard behavior)
  */
-export const setNavigate = (navigate: NavigateFunction) => {
-  navigateFunction = navigate
-}
-
-/**
- * Навигация без перезагрузки страницы (SPA-стиль)
- * Использует replace по умолчанию, чтобы не добавлять запись в историю
- */
-export const navigateTo = (path: string, replace = true) => {
-  if (navigateFunction) {
-    navigateFunction(path, { replace })
+export const navigateTo = (path: string, replace = false) => {
+  const navigate = useNavigationStore.getState().navigate
+  
+  if (navigate) {
+    navigate(path, { replace })
   } else {
-    // Fallback на window.location, если navigate не инициализирован
-    console.warn('Navigate function not initialized, falling back to window.location')
+    // Fallback to History API if navigate not initialized (preserves SPA behavior)
+    console.error('Navigate function not initialized, using History API fallback')
+    
     if (replace) {
-      window.location.replace(path)
+      window.history.replaceState(null, '', path)
     } else {
-      window.location.href = path
+      window.history.pushState(null, '', path)
     }
+    
+    // Dispatch popstate event to notify React Router about the change
+    window.dispatchEvent(new PopStateEvent('popstate'))
   }
 }
 

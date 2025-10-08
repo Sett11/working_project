@@ -12,7 +12,7 @@
 и возвращает результат. Ведётся подробное логирование всех действий.
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from . import models, schemas
 from utils.mylogger import Logger
@@ -75,10 +75,10 @@ async def create_user(db: AsyncSession, user: schemas.UserCreate, password_hash:
     """
     logger.info(f"[CRUD] create_user: username={user.username}, email={user.email}")
     
-    # Проверяем, есть ли уже пользователи в системе
-    result = await db.execute(select(models.User))
-    existing_users = result.scalars().all()
-    is_first_user = len(existing_users) == 0
+    # Проверяем, есть ли уже пользователи в системе (эффективно, без race condition)
+    result = await db.execute(select(func.count()).select_from(models.User))
+    user_count = result.scalar()
+    is_first_user = user_count == 0
     
     db_user = models.User(
         username=user.username,

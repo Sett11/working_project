@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
-import { useAuthStore } from '@/store'
+import { useAuthStore, useNavigationStore } from '@/store'
 import LoginPage from '@/pages/LoginPage'
 import RegisterPage from '@/pages/RegisterPage'
 import NotFoundPage from '@/pages/NotFoundPage'
@@ -8,7 +8,7 @@ import LandingPage from '@/pages/LandingPage'
 import App from '@/App'
 import SettingsPage from '@/pages/DashboardPages/SettingsPage'
 import OrdersPage from '@/pages/DashboardPages/OrdersPage'
-import { setNavigate } from '@/utils/navigation'
+import { Box, CircularProgress } from '@mui/material'
 
 // Общий интерфейс для охранных компонентов маршрутов
 interface RouteGuardProps {
@@ -35,14 +35,25 @@ function ProtectedRoute({ children }: RouteGuardProps) {
 function AuthOnlyRoute({ children }: RouteGuardProps) {
   const { isAuthenticated, isAuthInitialized } = useAuthStore()
   
-  // Ждем завершения инициализации аутентификации
+  // Показываем индикатор загрузки во время инициализации аутентификации
   if (!isAuthInitialized) {
-    return null
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '100vh',
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    )
   }
   
-  // Редиректим на главную только после инициализации, если аутентифицирован
+  // Редиректим на dashboard только после инициализации, если аутентифицирован
   if (isAuthenticated) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/dashboard" replace />
   }
   
   return children
@@ -50,11 +61,12 @@ function AuthOnlyRoute({ children }: RouteGuardProps) {
 
 export default function AppRoutes() {
   const navigate = useNavigate()
+  const setNavigate = useNavigationStore(state => state.setNavigate)
   
-  // Инициализируем глобальную функцию навигации для использования вне компонентов
+  // Initialize navigation function in Zustand store for imperative usage outside components
   useEffect(() => {
     setNavigate(navigate)
-  }, [navigate])
+  }, [navigate, setNavigate])
   
   return (
     <Routes>

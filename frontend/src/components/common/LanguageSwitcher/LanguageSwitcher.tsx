@@ -9,14 +9,15 @@ import {
   Tooltip,
 } from '@mui/material'
 import { Language as LanguageIcon } from '@mui/icons-material'
+import Flag from 'react-world-flags'
 
 const languages = [
-  { code: 'ru', name: 'Русский', flag: '🇷🇺' },
-  { code: 'en', name: 'English', flag: '🇬🇧' },
+  { code: 'ru', name: 'Русский', flagCode: 'RU' },
+  { code: 'en', name: 'English', flagCode: 'GB' },
 ]
 
 export default function LanguageSwitcher() {
-  const { i18n } = useTranslation()
+  const { i18n, t } = useTranslation()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const open = Boolean(anchorEl)
 
@@ -33,11 +34,9 @@ export default function LanguageSwitcher() {
     handleClose()
   }
 
-  const currentLanguage = languages.find((lang) => lang.code === i18n.language) || languages[0]
-
   return (
     <>
-      <Tooltip title="Сменить язык / Change language">
+      <Tooltip title={t('common.changeLanguage')}>
         <IconButton
           onClick={handleClick}
           size="large"
@@ -72,9 +71,13 @@ export default function LanguageSwitcher() {
             key={language.code}
             onClick={() => handleLanguageChange(language.code)}
             selected={language.code === i18n.language}
+            aria-label={language.name}
           >
-            <ListItemIcon sx={{ fontSize: 24 }}>
-              {language.flag}
+            <ListItemIcon aria-hidden="true">
+              <Flag 
+                code={language.flagCode} 
+                style={{ width: '24px', height: '18px', objectFit: 'cover' }} 
+              />
             </ListItemIcon>
             <ListItemText>
               {language.name}

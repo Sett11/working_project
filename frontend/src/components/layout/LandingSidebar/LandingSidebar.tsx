@@ -1,4 +1,5 @@
-import { Box, Drawer, Button, Typography, Avatar, Divider, List, ListItem } from '@mui/material'
+import { useState } from 'react'
+import { Box, Drawer, Button, Typography, Avatar, Divider, CircularProgress } from '@mui/material'
 import { Login as LoginIcon, Dashboard as DashboardIcon, Person as PersonIcon, Logout as LogoutIcon } from '@mui/icons-material'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -15,6 +16,7 @@ export default function LandingSidebar({ open, onClose, variant = 'temporary' }:
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user, isAuthenticated, clearAuth } = useAuthStore()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const handleLoginClick = () => {
     navigate('/login')
@@ -27,14 +29,19 @@ export default function LandingSidebar({ open, onClose, variant = 'temporary' }:
   }
 
   const handleLogout = async () => {
+    setIsLoggingOut(true)
     try {
       await authService.logout()
-    } catch (error) {
-      console.error('Logout error:', error)
-    } finally {
+      // Очищаем auth только при успешном logout
       clearAuth()
       navigate('/')
       onClose()
+    } catch (error) {
+      console.error('Logout error:', error)
+      // Показываем ошибку пользователю
+      alert(t('auth:logout_error'))
+    } finally {
+      setIsLoggingOut(false)
     }
   }
 
@@ -134,8 +141,9 @@ export default function LandingSidebar({ open, onClose, variant = 'temporary' }:
           <Button
             variant="outlined"
             size="large"
-            startIcon={<LogoutIcon />}
+            startIcon={isLoggingOut ? <CircularProgress size={20} color="inherit" /> : <LogoutIcon />}
             onClick={handleLogout}
+            disabled={isLoggingOut}
             fullWidth
             sx={{
               borderColor: '#dc2626',
@@ -146,9 +154,13 @@ export default function LandingSidebar({ open, onClose, variant = 'temporary' }:
                 bgcolor: 'rgba(220, 38, 38, 0.04)',
                 borderWidth: 2,
               },
+              '&.Mui-disabled': {
+                borderColor: 'rgba(220, 38, 38, 0.3)',
+                color: 'rgba(220, 38, 38, 0.3)',
+              },
             }}
           >
-            {t('auth:logout')}
+            {isLoggingOut ? t('common:loading') : t('auth:logout')}
           </Button>
         </Box>
       )}

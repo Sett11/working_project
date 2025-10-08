@@ -18,6 +18,7 @@ i18n
       ru: {
         common: {
           app_name: 'Система продаж кондиционеров',
+          document_title: 'Everis - Система управления продажами',
           welcome: 'Добро пожаловать',
           loading: 'Загрузка...',
           error: 'Ошибка',
@@ -39,6 +40,7 @@ i18n
           current_theme: 'Текущая тема',
           theme_light: 'Светлая',
           theme_dark: 'Тёмная',
+          changeLanguage: 'Сменить язык',
         },
         dashboard: {
           control_panel: 'Панель управления заказами',
@@ -47,6 +49,8 @@ i18n
           all_orders: 'Все заказы',
           orders_page_title: 'Заказы',
           settings_page_title: 'Настройки системы',
+          settings_title: 'Настройки системы',
+          settings_description: 'Здесь будут размещены настройки системы для администраторов.',
           no_orders: 'Нет заказов',
           loading: 'Загрузка...',
           admin_only: 'Только для администраторов',
@@ -55,6 +59,9 @@ i18n
           delete_account_confirm_text: 'Вы уверены, что хотите удалить свой аккаунт? Это действие необратимо и приведет к удалению всех ваших данных.',
           delete_account_success: 'Аккаунт успешно удален',
           delete_account_error: 'Ошибка при удалении аккаунта',
+          showing_only_your_orders: 'Показаны только ваши заказы',
+          filter_user_orders: 'Фильтр: только заказы пользователя {{username}}',
+          showing_all_users_orders: 'Показаны все заказы всех пользователей',
         },
       auth: {
         login: 'Вход',
@@ -79,6 +86,7 @@ i18n
         registration_error: 'Ошибка регистрации. Проверьте данные и попробуйте снова.',
         registration_success_short: 'Успешно!',
         toggle_password_visibility: 'Показать/скрыть пароль',
+        logout_error: 'Ошибка при выходе из системы',
       },
         products: {
           air_conditioners: 'Кондиционеры',
@@ -91,7 +99,6 @@ i18n
         },
         landing: {
           hero_title: 'Everis',
-          hero_subtitle: 'Мы делаем жизнь проще',
           about_title: 'О сервисе',
           about_description: 'Everis - современная система управления продажами кондиционеров. Мы помогаем вашему бизнесу расти, оптимизируя процессы и упрощая работу.',
           sidebar_guest_text: 'Войдите в систему чтобы получить доступ ко всем функциям',
@@ -110,7 +117,7 @@ i18n
           faq_subtitle: 'Найдите ответы на самые популярные вопросы',
           faq_q1: 'Что мы предлагаем?',
           faq_a1: 'Мы предлагаем полный цикл управления продажами кондиционеров: от каталога товаров до формирования документов. Удобный интерфейс, быстрая работа, многоязычность.',
-          faq_q2: 'Почему мы лучшие?',
+          faq_q2: 'Почему выбрать нас?',
           faq_a2: 'Наша система разработана с учётом современных технологий и лучших практик. Мы постоянно совершенствуем функционал и слушаем наших клиентов.',
           faq_q3: 'Как начать работу?',
           faq_a3: 'Просто зарегистрируйтесь в системе, используя секретный ключ от администратора. После входа вы получите доступ ко всем функциям системы.',
@@ -123,6 +130,7 @@ i18n
       en: {
         common: {
           app_name: 'AirCon Sales System',
+          document_title: 'Everis - Sales Management System',
           welcome: 'Welcome',
           loading: 'Loading...',
           error: 'Error',
@@ -144,6 +152,7 @@ i18n
           current_theme: 'Current Theme',
           theme_light: 'Light',
           theme_dark: 'Dark',
+          changeLanguage: 'Change language',
         },
         dashboard: {
           control_panel: 'Order Management Panel',
@@ -152,6 +161,8 @@ i18n
           all_orders: 'All Orders',
           orders_page_title: 'Orders',
           settings_page_title: 'System Settings',
+          settings_title: 'System Settings',
+          settings_description: 'Administrator system settings will be placed here.',
           no_orders: 'No orders',
           loading: 'Loading...',
           admin_only: 'Admin Only',
@@ -160,6 +171,9 @@ i18n
           delete_account_confirm_text: 'Are you sure you want to delete your account? This action is irreversible and will delete all your data.',
           delete_account_success: 'Account successfully deleted',
           delete_account_error: 'Error deleting account',
+          showing_only_your_orders: 'Showing only your orders',
+          filter_user_orders: 'Filter: only orders from user {{username}}',
+          showing_all_users_orders: 'Showing orders from all users',
         },
       auth: {
         login: 'Login',
@@ -184,6 +198,7 @@ i18n
         registration_error: 'Registration error. Please check your data and try again.',
         registration_success_short: 'Success!',
         toggle_password_visibility: 'Toggle password visibility',
+        logout_error: 'Error logging out',
       },
         products: {
           air_conditioners: 'Air Conditioners',

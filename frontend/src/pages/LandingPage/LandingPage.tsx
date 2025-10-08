@@ -6,7 +6,6 @@ import {
   IconButton,
   Box,
   Card,
-  CardContent,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -85,8 +84,7 @@ export default function LandingPage() {
       width: '100%',
       margin: 0,
       padding: 0,
-      bgcolor: 'background.default', 
-      overflow: 'hidden'
+      bgcolor: 'background.default'
     }}>
       {/* AppBar */}
       <AppBar position="sticky" elevation={2} sx={{ zIndex: 1100 }}>
@@ -133,7 +131,7 @@ export default function LandingPage() {
       <LandingSidebar
         open={sidebarOpen}
         onClose={toggleSidebar}
-        variant={isMobile ? 'temporary' : 'temporary'}
+        variant={isMobile ? 'temporary' : 'permanent'}
       />
 
       {/* Hero Section */}
@@ -259,11 +257,7 @@ export default function LandingPage() {
           >
             {features.map((feature, index) => (
               <Grid 
-                item 
-                xs={12} 
-                sm={6} 
-                md={6} 
-                lg={3} 
+                size={{ xs: 12, sm: 6, md: 6, lg: 3 }}
                 key={index}
                 sx={{
                   display: 'flex',
@@ -480,7 +474,7 @@ export default function LandingPage() {
               mb: 1.5
             }}
           >
-            © 2025 Everis - {t('landing:footer_text')}
+            © {new Date().getFullYear()} Everis - {t('landing:footer_text')}
           </Typography>
           <Typography 
             variant="body2" 
