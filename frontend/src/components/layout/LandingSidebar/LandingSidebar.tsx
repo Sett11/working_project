@@ -1,10 +1,9 @@
-import { useState } from 'react'
 import { Box, Drawer, Button, Typography, Avatar, Divider, CircularProgress } from '@mui/material'
 import { Login as LoginIcon, Dashboard as DashboardIcon, Person as PersonIcon, Logout as LogoutIcon } from '@mui/icons-material'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/store'
-import { authService } from '@/api/services/auth.service'
+import { useLogout } from '@/hooks/queries'
 
 interface LandingSidebarProps {
   open: boolean
@@ -15,8 +14,8 @@ interface LandingSidebarProps {
 export default function LandingSidebar({ open, onClose, variant = 'temporary' }: LandingSidebarProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { user, isAuthenticated, clearAuth } = useAuthStore()
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const { user, isAuthenticated } = useAuthStore()
+  const logoutMutation = useLogout()
 
   const handleLoginClick = () => {
     navigate('/login')
@@ -28,21 +27,11 @@ export default function LandingSidebar({ open, onClose, variant = 'temporary' }:
     onClose()
   }
 
-  const handleLogout = async () => {
-    setIsLoggingOut(true)
-    try {
-      await authService.logout()
-      // Очищаем auth только при успешном logout
-      clearAuth()
-      navigate('/')
-      onClose()
-    } catch (error) {
-      console.error('Logout error:', error)
-      // Показываем ошибку пользователю
-      alert(t('auth:logout_error'))
-    } finally {
-      setIsLoggingOut(false)
-    }
+  const handleLogout = () => {
+    // Закрываем sidebar перед logout
+    onClose()
+    // Вызываем mutation, вся логика обработки в хуке
+    logoutMutation.mutate()
   }
 
   const drawerContent = (
@@ -141,9 +130,9 @@ export default function LandingSidebar({ open, onClose, variant = 'temporary' }:
           <Button
             variant="outlined"
             size="large"
-            startIcon={isLoggingOut ? <CircularProgress size={20} color="inherit" /> : <LogoutIcon />}
+            startIcon={logoutMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <LogoutIcon />}
             onClick={handleLogout}
-            disabled={isLoggingOut}
+            disabled={logoutMutation.isPending}
             fullWidth
             sx={{
               borderColor: '#dc2626',
@@ -160,7 +149,7 @@ export default function LandingSidebar({ open, onClose, variant = 'temporary' }:
               },
             }}
           >
-            {isLoggingOut ? t('common:loading') : t('auth:logout')}
+            {logoutMutation.isPending ? t('common:loading') : t('auth:logout')}
           </Button>
         </Box>
       )}

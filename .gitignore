@@ -148,6 +148,24 @@ SECURITY_AUDIT.md
 AUDIT_SUMMARY.md
 QUICK_START.md
 EXAMPLES.md
+# Trivy cache directory
+cache/
+.trivy-cache/
+
+# Trivy reports (можно закомментировать, если нужно хранить отчёты в Git)
+reports/*.json
+reports/*.txt
+reports/*.html
+reports/*.sarif
+
+# Trivy logs
+logs/*.log
+logs/*.txt
+
+# Временные файлы
+temp_*
+*.tmp
+
 
 # ═══════════════════════════════════════════════════════════════
 # IMPORTANT: KEEP THESE FILES

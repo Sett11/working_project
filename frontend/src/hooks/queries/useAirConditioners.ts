@@ -1,5 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { airConditionersService } from '@/api/services/airConditioners.service'
+import { useNotificationStore } from '@/store/notificationStore'
+import { extractErrorMessage } from '@/utils'
 import type { AirconSelectParams } from '@/types'
 
 /**
@@ -48,10 +50,21 @@ export function useAirConditioner(id: number) {
 /**
  * Hook for selecting air conditioners based on parameters
  * Uses mutation instead of query because it's a POST request with body
+ * Shows error notification on failure
  */
 export function useSelectAirConditioners() {
+  const { showError } = useNotificationStore()
+  
   return useMutation({
     mutationFn: (params: AirconSelectParams) => 
       airConditionersService.selectAircons(params),
+    onError: (error: unknown) => {
+      // Log the error for debugging
+      console.error('Failed to select air conditioners:', error)
+      
+      // Show user-facing error message
+      const errorMessage = extractErrorMessage(error, 'Не удалось подобрать кондиционеры. Пожалуйста, попробуйте снова.')
+      showError(errorMessage)
+    },
   })
 }

@@ -10,7 +10,6 @@ import {
   Button,
   Typography,
   Link,
-  Alert,
   InputAdornment,
   IconButton,
   CircularProgress,
@@ -36,7 +35,7 @@ export default function LoginPage() {
   // Переиспользуемые стили для TextField (username и password)
   const textFieldSx = {
     '& .MuiOutlinedInput-root': {
-      backgroundColor: '#E0F2F1',
+      backgroundColor: theme.palette.mode === 'light' ? '#E0F2F1' : theme.palette.grey[800],
       '& fieldset': {
         borderColor: 'primary.main',
         borderWidth: '2px',
@@ -50,12 +49,12 @@ export default function LoginPage() {
         borderWidth: '2px',
       },
       '& input': {
-        color: '#000',
+        color: 'text.primary',
         fontWeight: 500,
         fontSize: '16px',
       },
       '& input::placeholder': {
-        color: '#000',
+        color: 'text.secondary',
         opacity: 0.6,
       },
     },
@@ -128,12 +127,6 @@ export default function LoginPage() {
             {t('common:app_name')}
           </Typography>
 
-          {loginMutation.isError && (
-            <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-              {(loginMutation.error as any)?.response?.data?.detail || t('auth:login_error')}
-            </Alert>
-          )}
-
           <Box
             component="form"
             onSubmit={handleSubmit(onSubmit)}
@@ -157,7 +150,7 @@ export default function LoginPage() {
                   disabled={loginMutation.isPending}
                   InputLabelProps={{ 
                     shrink: true,
-                    sx: { color: '#333', fontWeight: 600 }
+                    sx: { color: 'text.primary', fontWeight: 600 }
                   }}
                   sx={textFieldSx}
                 />
@@ -182,7 +175,7 @@ export default function LoginPage() {
                   disabled={loginMutation.isPending}
                   InputLabelProps={{ 
                     shrink: true,
-                    sx: { color: '#333', fontWeight: 600 }
+                    sx: { color: 'text.primary', fontWeight: 600 }
                   }}
                   InputProps={{
                     endAdornment: (

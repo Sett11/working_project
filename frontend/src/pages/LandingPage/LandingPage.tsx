@@ -30,7 +30,8 @@ export default function LandingPage() {
   const { t } = useTranslation()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  // Начальное состояние: на десктопе сайдбар открыт, на мобильных - закрыт
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile)
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen)
@@ -131,7 +132,7 @@ export default function LandingPage() {
       <LandingSidebar
         open={sidebarOpen}
         onClose={toggleSidebar}
-        variant={isMobile ? 'temporary' : 'permanent'}
+        variant={isMobile ? 'temporary' : 'persistent'}
       />
 
       {/* Hero Section */}

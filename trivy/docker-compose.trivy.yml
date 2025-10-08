@@ -7,7 +7,10 @@ version: '3.8'
 services:
   # Сервис Trivy для сканирования безопасности
   trivy-scan:
-    image: aquasec/trivy:latest
+    # Закрепленная версия: 0.63.0 (выпущена 30.05.2025)
+    # Для обеспечения воспроизводимости сборок используется конкретная версия
+    # Проверить актуальность: https://github.com/aquasecurity/trivy/releases
+    image: aquasec/trivy:0.63.0
     container_name: trivy_scanner
     
     # Монтируем необходимые директории
@@ -16,11 +19,14 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       
       # Кэш Trivy для ускорения повторных сканирований
-      - trivy-cache:/root/.cache/trivy
+      # Используется переменная окружения TRIVY_CACHE_DIR
+      - trivy-cache:${TRIVY_CACHE_DIR:-/tmp/trivy-cache}
       
       # Конфигурационные файлы
       - ./trivy-config.yaml:/config/trivy-config.yaml:ro
-      - ../.trivyignore:/.trivyignore:ro
+      
+      # Файл с исключениями CVE (монтируется в рабочую директорию)
+      - ../.trivyignore:/work/.trivyignore:ro
       
       # Директории для отчётов и логов
       - ./reports:/reports
@@ -30,14 +36,17 @@ services:
     environment:
       # Конфигурация Trivy
       - TRIVY_CONFIG=/config/trivy-config.yaml
-      - TRIVY_CACHE_DIR=/root/.cache/trivy
+      
+      # Кэш директория (можно переопределить через .env или docker-compose)
+      - TRIVY_CACHE_DIR=${TRIVY_CACHE_DIR:-/tmp/trivy-cache}
+      
+      # Основные настройки
       - TRIVY_DEBUG=false
       - TRIVY_TIMEOUT=10m
       
       # Настройки отчётов
       - TRIVY_FORMAT=table
       - TRIVY_SEVERITY=CRITICAL,HIGH,MEDIUM
-      - TRIVY_EXIT_CODE=0
       
       # Дополнительные опции
       - TRIVY_NO_PROGRESS=false

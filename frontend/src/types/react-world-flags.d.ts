@@ -1,13 +1,7 @@
 declare module 'react-world-flags' {
-  import { CSSProperties } from 'react'
-
-  interface FlagProps {
-    code: string
-    style?: CSSProperties
-    className?: string
+  interface FlagProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
+    code?: string
     fallback?: React.ReactNode
-    height?: string | number
-    width?: string | number
   }
 
   const Flag: React.FC<FlagProps>

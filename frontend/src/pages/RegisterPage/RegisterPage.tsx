@@ -10,10 +10,10 @@ import {
   Button,
   Typography,
   Link,
-  Alert,
   InputAdornment,
   IconButton,
   CircularProgress,
+  useTheme,
 } from '@mui/material'
 import {
   Visibility,
@@ -27,6 +27,7 @@ import LanguageSwitcher from '@/components/common/LanguageSwitcher'
 
 export default function RegisterPage() {
   const { t } = useTranslation()
+  const theme = useTheme()
   const registerMutation = useRegister()
   
   const [showPassword, setShowPassword] = useState(false)
@@ -35,26 +36,26 @@ export default function RegisterPage() {
   // Общие стили для всех TextField
   const textFieldSxProps = {
     '& .MuiOutlinedInput-root': {
-      backgroundColor: '#E0F2F1',
+      backgroundColor: theme.palette.mode === 'light' ? '#E0F2F1' : theme.palette.grey[800],
       '& fieldset': {
-        borderColor: '#00897B',
+        borderColor: 'primary.main',
         borderWidth: '2px',
       },
       '&:hover fieldset': {
-        borderColor: '#4DB6AC',
+        borderColor: 'primary.dark',
         borderWidth: '2px',
       },
       '&.Mui-focused fieldset': {
-        borderColor: '#00897B',
+        borderColor: 'primary.main',
         borderWidth: '2px',
       },
       '& input': {
-        color: '#000',
+        color: 'text.primary',
         fontWeight: 500,
         fontSize: '16px',
       },
       '& input::placeholder': {
-        color: '#000',
+        color: 'text.secondary',
         opacity: 0.6,
       },
     },
@@ -62,7 +63,7 @@ export default function RegisterPage() {
 
   const textFieldLabelProps = {
     shrink: true,
-    sx: { color: '#333', fontWeight: 600 },
+    sx: { color: 'text.primary', fontWeight: 600 },
   }
 
   const {
@@ -139,18 +140,6 @@ export default function RegisterPage() {
             {t('common:app_name')}
           </Typography>
 
-          {registerMutation.isError && (
-            <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-              {(registerMutation.error as any)?.response?.data?.detail || t('auth:registration_error')}
-            </Alert>
-          )}
-
-          {registerMutation.isSuccess && (
-            <Alert severity="success" sx={{ width: '100%', mb: 2 }}>
-              {t('auth:registration_success')}
-            </Alert>
-          )}
-
           <Box
             component="form"
             onSubmit={handleSubmit(onSubmit)}
@@ -201,7 +190,7 @@ export default function RegisterPage() {
                         <IconButton
                           onClick={() => setShowPassword(!showPassword)}
                           edge="end"
-                          disabled={registerMutation.isPending || registerMutation.isSuccess}
+                          disabled={false}
                           sx={{ color: '#00897B' }}
                         >
                           {showPassword ? <VisibilityOff /> : <Visibility />}
@@ -237,7 +226,7 @@ export default function RegisterPage() {
                         <IconButton
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                           edge="end"
-                          disabled={registerMutation.isPending || registerMutation.isSuccess}
+                          disabled={false}
                           sx={{ color: '#00897B' }}
                         >
                           {showConfirmPassword ? <VisibilityOff /> : <Visibility />}

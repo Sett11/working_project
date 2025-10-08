@@ -33,7 +33,7 @@ export function useComponents() {
 
 /**
  * Hook for fetching a single component by ID
- * Automatically caches and refetches on window focus
+ * Automatically caches; does not refetch on window focus
  */
 export function useComponent(id: number) {
   return useQuery({
@@ -48,7 +48,7 @@ export function useComponent(id: number) {
 
 /**
  * Hook for fetching components by category
- * Automatically caches and refetches on window focus
+ * Automatically caches; does not refetch on window focus
  */
 export function useComponentsByCategory(category: ComponentCategory) {
   return useQuery({

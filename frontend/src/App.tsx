@@ -1,9 +1,9 @@
 import React from 'react'
-import { Box, Typography, Button, Stack, Paper, AppBar, Toolbar, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, CircularProgress } from '@mui/material'
+import { Box, Typography, Button, AppBar, Toolbar, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, CircularProgress } from '@mui/material'
 import { Logout as LogoutIcon, Settings as SettingsIcon, Receipt as ReceiptIcon, Person as PersonIcon, DeleteForever as DeleteForeverIcon, Home as HomeIcon } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, Outlet, useLocation } from 'react-router-dom'
-import { useUIStore, useAuthStore } from './store'
+import { useAuthStore } from './store'
 import { useLogout, useDeleteAccount } from './hooks/queries'
 import LanguageSwitcher from './components/common/LanguageSwitcher'
 
@@ -13,7 +13,6 @@ function App() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
-  const { theme, toggleTheme } = useUIStore()
   const { user } = useAuthStore()
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   
@@ -25,16 +24,11 @@ function App() {
   }
 
   const handleDeleteAccount = () => {
-    deleteAccountMutation.mutate(undefined, {
-      onSuccess: () => {
-        setDeleteDialogOpen(false)
-        alert(t('dashboard:delete_account_success'))
-      },
-      onError: () => {
-        alert(t('dashboard:delete_account_error'))
-        setDeleteDialogOpen(false)
-      }
-    })
+    // Close dialog before mutation
+    setDeleteDialogOpen(false)
+    
+    // All success/error handling is now in the useDeleteAccount hook
+    deleteAccountMutation.mutate()
   }
 
   const menuItems = [

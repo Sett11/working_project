@@ -44,6 +44,7 @@ $images = @{
 # Директории для отчётов и логов
 $reportsDir = Join-Path $PSScriptRoot "reports"
 $logsDir = Join-Path $PSScriptRoot "logs"
+$cacheDir = Join-Path $PSScriptRoot "cache"
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 $summaryFile = Join-Path $reportsDir "summary_${timestamp}.txt"
 
@@ -53,6 +54,9 @@ if (-not (Test-Path $reportsDir)) {
 }
 if (-not (Test-Path $logsDir)) {
     New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
+}
+if (-not (Test-Path $cacheDir)) {
+    New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
 }
 
 # =============================================================================
@@ -118,7 +122,9 @@ function Scan-Image {
             -v /var/run/docker.sock:/var/run/docker.sock `
             -v "${PSScriptRoot}:/config:ro" `
             -v "${reportsDir}:/reports" `
-            aquasec/trivy:latest `
+            -v "${cacheDir}:/cache" `
+            -e TRIVY_CACHE_DIR=/cache `
+            aquasec/trivy:0.63.0 `
             image `
             --severity CRITICAL,HIGH,MEDIUM `
             --format table `
@@ -136,7 +142,9 @@ function Scan-Image {
             -v /var/run/docker.sock:/var/run/docker.sock `
             -v "${PSScriptRoot}:/config:ro" `
             -v "${reportsDir}:/reports" `
-            aquasec/trivy:latest `
+            -v "${cacheDir}:/cache" `
+            -e TRIVY_CACHE_DIR=/cache `
+            aquasec/trivy:0.63.0 `
             image `
             --severity CRITICAL,HIGH,MEDIUM,LOW `
             --format json `
@@ -229,7 +237,16 @@ catch {
 
 # Проверяем наличие образа Trivy
 Write-Host "  Проверка образа Trivy..." -ForegroundColor $COLOR_CYAN
-docker pull aquasec/trivy:latest 2>&1 | Out-Null
+$pullOutput = docker pull aquasec/trivy:0.63.0 2>&1
+$pullExitCode = $LASTEXITCODE
+
+if ($pullExitCode -ne 0) {
+    Write-Host "✗ Не удалось загрузить образ Trivy!" -ForegroundColor $COLOR_RED
+    Write-Host "Вывод команды docker pull:" -ForegroundColor $COLOR_YELLOW
+    Write-Host $pullOutput -ForegroundColor $COLOR_YELLOW
+    exit 1
+}
+
 Write-Host "✓ Образ Trivy обновлён" -ForegroundColor $COLOR_GREEN
 
 # Сканируем все образы

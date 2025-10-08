@@ -11,29 +11,25 @@ import { createAppTheme } from './theme'
 import { useUIStore } from './store'
 import { useDocumentLang } from './hooks/useDocumentLang'
 import DocumentHead from './components/common/DocumentHead'
+import GlobalSnackbar from './components/common/GlobalSnackbar'
 
 /**
  * TanStack Query Client Configuration
  * 
  * Global settings for all queries and mutations:
  * - Automatic caching and deduplication
- * - Background refetching on window focus
  * - Retry logic for failed requests
  * - Stale time management
  */
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Refetch when window regains focus (useful for stale data)
-      refetchOnWindowFocus: true,
       // Retry failed requests once before showing error
       retry: 1,
       // Data considered fresh for 5 minutes (no refetch during this time)
       staleTime: 5 * 60 * 1000,
       // Cache data for 10 minutes after last usage
       gcTime: 10 * 60 * 1000,
-      // Show stale data while refetching in background
-      refetchOnMount: true,
     },
     mutations: {
       // Retry failed mutations once
@@ -56,6 +52,8 @@ function AppProviders() {
       {/* Компонент для динамического обновления заголовка документа */}
       <DocumentHead />
       <AppRoutes />
+      {/* Глобальный компонент для уведомлений (toast/snackbar) */}
+      <GlobalSnackbar />
     </ThemeProvider>
   )
 }

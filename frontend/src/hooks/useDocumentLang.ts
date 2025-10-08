@@ -16,8 +16,10 @@ export function useDocumentLang() {
       htmlElement.setAttribute('lang', i18n.language)
     }
 
-    // Логируем изменение для отладки
-    console.log(`[i18n] Document language changed to: ${i18n.language}`)
+    // Логируем изменение для отладки (только в development)
+    if (import.meta.env.DEV) {
+      console.log(`[i18n] Document language changed to: ${i18n.language}`)
+    }
   }, [i18n.language])
 }
 

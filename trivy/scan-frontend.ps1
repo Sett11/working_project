@@ -21,7 +21,7 @@ $projectName = "working_project"
 if (Test-Path $envFile) {
     Get-Content $envFile | ForEach-Object {
         if ($_ -match "^COMPOSE_PROJECT_NAME=(.+)$") {
-            $projectName = $matches[1]
+            $projectName = $matches[1].Trim()
         }
     }
 }
@@ -29,6 +29,7 @@ if (Test-Path $envFile) {
 $imageName = "${projectName}_frontend"
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 $reportsDir = Join-Path $PSScriptRoot "reports"
+$cacheDir = Join-Path $PSScriptRoot "cache"
 
 Write-Host "`n🛡️  TRIVY - Сканирование Frontend образа`n" -ForegroundColor $COLOR_CYAN
 Write-Host "Образ: $imageName" -ForegroundColor White
@@ -45,9 +46,12 @@ if (-not $exists) {
 Write-Host "✓ Образ найден" -ForegroundColor $COLOR_GREEN
 Write-Host "`nЗапуск сканирования...`n" -ForegroundColor $COLOR_CYAN
 
-# Создаём директорию если не существует
+# Создаём директории если не существуют
 if (-not (Test-Path $reportsDir)) {
     New-Item -ItemType Directory -Path $reportsDir -Force | Out-Null
+}
+if (-not (Test-Path $cacheDir)) {
+    New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
 }
 
 # Файлы отчётов
@@ -58,31 +62,55 @@ $tableReport = Join-Path $reportsDir "scan_frontend_${timestamp}.txt"
 docker run --rm `
     -v /var/run/docker.sock:/var/run/docker.sock `
     -v "${reportsDir}:/reports" `
-    aquasec/trivy:latest `
+    -v "${cacheDir}:/cache" `
+    -e TRIVY_CACHE_DIR=/cache `
+    aquasec/trivy:0.63.0 `
     image `
     --severity CRITICAL,HIGH,MEDIUM `
     --format table `
     --output /reports/temp_frontend.txt `
     $imageName
 
-if (Test-Path (Join-Path $reportsDir "temp_frontend.txt")) {
-    Move-Item (Join-Path $reportsDir "temp_frontend.txt") $tableReport -Force
+$tempTableFile = Join-Path $reportsDir "temp_frontend.txt"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "`n✗ Ошибка при сканировании (table format)!" -ForegroundColor $COLOR_RED
+    Write-Host "  Код выхода: $LASTEXITCODE" -ForegroundColor $COLOR_RED
+    exit 1
 }
+
+if (-not (Test-Path $tempTableFile)) {
+    Write-Host "`n✗ Временный файл отчёта не найден: $tempTableFile" -ForegroundColor $COLOR_RED
+    exit 1
+}
+
+Move-Item $tempTableFile $tableReport -Force
 
 # JSON отчёт
 docker run --rm `
     -v /var/run/docker.sock:/var/run/docker.sock `
     -v "${reportsDir}:/reports" `
-    aquasec/trivy:latest `
+    -v "${cacheDir}:/cache" `
+    -e TRIVY_CACHE_DIR=/cache `
+    aquasec/trivy:0.63.0 `
     image `
     --severity CRITICAL,HIGH,MEDIUM,LOW `
     --format json `
     --output /reports/temp_frontend.json `
     $imageName
 
-if (Test-Path (Join-Path $reportsDir "temp_frontend.json")) {
-    Move-Item (Join-Path $reportsDir "temp_frontend.json") $jsonReport -Force
+$tempJsonFile = Join-Path $reportsDir "temp_frontend.json"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "`n✗ Ошибка при сканировании (JSON format)!" -ForegroundColor $COLOR_RED
+    Write-Host "  Код выхода: $LASTEXITCODE" -ForegroundColor $COLOR_RED
+    exit 1
 }
+
+if (-not (Test-Path $tempJsonFile)) {
+    Write-Host "`n✗ Временный файл отчёта не найден: $tempJsonFile" -ForegroundColor $COLOR_RED
+    exit 1
+}
+
+Move-Item $tempJsonFile $jsonReport -Force
 
 Write-Host "`n✓ Сканирование завершено!" -ForegroundColor $COLOR_GREEN
 Write-Host "  Отчёты сохранены в: $reportsDir" -ForegroundColor $COLOR_CYAN
