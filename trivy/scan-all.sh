@@ -48,15 +48,15 @@ scan_image() {
   local image_name="$1"
   local display_name="$2"
 
-  echo
-  echo "Сканирование: ${display_name}"
+  echo >&2
+  echo "Сканирование: ${display_name}" >&2
 
   # Use image name directly
   local image_ref="${image_name}"
 
   # Check if image exists locally
   if [[ -z "$(docker images -q "${image_ref}" 2>/dev/null)" ]]; then
-    echo "Образ '${image_ref}' не найден локально для '${display_name}'. Пропуск."
+    echo "Образ '${image_ref}' не найден локально для '${display_name}'. Пропуск." >&2
     echo "SKIPPED|${display_name}|${image_ref}|0|0|0|0"
     return 0
   fi
@@ -68,7 +68,7 @@ scan_image() {
   local json_report="${REPORTS_DIR}/scan_${safe_image_name}_${TIMESTAMP}.json"
   local table_report="${REPORTS_DIR}/scan_${safe_image_name}_${TIMESTAMP}.txt"
 
-  echo "Генерация отчета (table)..."
+  echo "Генерация отчета (table)..." >&2
   export MSYS_NO_PATHCONV=1
   export MSYS2_ARG_CONV_EXCL="*"
   docker run --rm \
@@ -86,7 +86,7 @@ scan_image() {
 
   [[ -f "${REPORTS_DIR}/temp_table.txt" ]] && mv -f "${REPORTS_DIR}/temp_table.txt" "${table_report}"
 
-  echo "Генерация отчета (JSON)..."
+  echo "Генерация отчета (JSON)..." >&2
   docker run --rm \
     -v //var/run/docker.sock:/var/run/docker.sock \
     -v "${SCRIPT_DIR}:/config:ro" \
