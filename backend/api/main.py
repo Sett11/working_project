@@ -204,7 +204,9 @@ async def register_user(user_data: UserCreate, db: AsyncSession = Depends(get_se
         }
         token = generate_token(token_data)
         
-        logger.info(f"Пользователь {user.username} успешно зарегистрирован")
+        # ИСПРАВЛЕНИЕ: Сохраняем токен в базе данных
+        await crud.update_user_token(db, user.id, token, expiry_time)
+        logger.info(f"Пользователь {user.username} успешно зарегистрирован, токен сохранен в БД")
         
         # Формируем ответ в формате, который ожидает frontend
         return TokenResponse(
@@ -252,7 +254,9 @@ async def login_user(user_data: UserLogin, db: AsyncSession = Depends(get_sessio
         }
         token = generate_token(token_data)
         
-        logger.info(f"Пользователь {user.username} успешно аутентифицирован")
+        # ИСПРАВЛЕНИЕ: Сохраняем токен в базе данных
+        await crud.update_user_token(db, user.id, token, expiry_time)
+        logger.info(f"Пользователь {user.username} успешно аутентифицирован, токен сохранен в БД")
         
         # Формируем ответ в формате, который ожидает frontend
         return TokenResponse(
@@ -291,6 +295,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_sess
             username=user.username,
             email=user.email,
             is_active=user.is_active,
+            is_admin=user.is_admin,
             created_at=user.created_at
         )
         
@@ -325,6 +330,37 @@ async def delete_account(request: Request, db: AsyncSession = Depends(get_sessio
         raise
     except Exception as e:
         logger.error(f"Ошибка при удалении аккаунта: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
+
+@app.get("/api/users", response_model=List[UserResponse])
+async def get_all_users(request: Request, db: AsyncSession = Depends(get_session)):
+    """
+    Получение списка всех пользователей (только для администраторов)
+    """
+    try:
+        # Проверяем права администратора
+        await verify_admin(request, db)
+        
+        # Получаем список всех пользователей
+        users = await crud.get_all_users(db)
+        
+        # Преобразуем в Pydantic схемы
+        return [
+            UserResponse(
+                id=user.id,
+                username=user.username,
+                email=user.email,
+                is_active=user.is_active,
+                is_admin=user.is_admin,
+                created_at=user.created_at
+            )
+            for user in users
+        ]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ошибка при получении списка пользователей: {e}")
         raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 # === МОНИТОРИНГ ===

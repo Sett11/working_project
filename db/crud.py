@@ -153,6 +153,23 @@ async def get_user_by_token(db: AsyncSession, token: str) -> models.User | None:
     logger.info(f"[CRUD] get_user_by_token: token={token[:10]}...")
     # Используем UTC-aware datetime для корректного сравнения с token_expires_at
     now_utc = datetime.now(timezone.utc)
+    
+    # DEBUG: Сначала ищем пользователя только по токену, без дополнительных проверок
+    debug_result = await db.execute(
+        select(models.User).where(models.User.current_token == token)
+    )
+    debug_user = debug_result.scalar_one_or_none()
+    
+    if debug_user:
+        logger.debug(f"[CRUD_DEBUG] Пользователь с токеном найден: {debug_user.username}")
+        logger.debug(f"[CRUD_DEBUG] token_expires_at: {debug_user.token_expires_at}")
+        logger.debug(f"[CRUD_DEBUG] now_utc: {now_utc}")
+        logger.debug(f"[CRUD_DEBUG] токен истек: {debug_user.token_expires_at <= now_utc}")
+        logger.debug(f"[CRUD_DEBUG] is_active: {debug_user.is_active}")
+    else:
+        logger.warning(f"[CRUD_DEBUG] Пользователь с токеном {token[:10]}... НЕ НАЙДЕН в БД!")
+    
+    # Основной запрос с проверками
     result = await db.execute(
         select(models.User).where(
             models.User.current_token == token,
@@ -163,6 +180,29 @@ async def get_user_by_token(db: AsyncSession, token: str) -> models.User | None:
     user = result.scalar_one_or_none()
     logger.info(f"[CRUD] get_user_by_token: found={bool(user)}, now_utc={now_utc}")
     return user
+
+
+async def get_all_users(db: AsyncSession) -> list[models.User]:
+    """
+    Получение списка всех пользователей.
+
+    Args:
+        db (AsyncSession): Сессия базы данных.
+
+    Returns:
+        list[models.User]: Список всех пользователей.
+    """
+    logger.info("[CRUD] get_all_users: получение списка всех пользователей")
+    try:
+        result = await db.execute(
+            select(models.User).order_by(models.User.created_at.desc())
+        )
+        users = result.scalars().all()
+        logger.info(f"[CRUD] get_all_users: найдено {len(users)} пользователей")
+        return list(users)
+    except Exception as e:
+        logger.error(f"[CRUD] get_all_users: ошибка при получении списка пользователей: {e}", exc_info=True)
+        raise
 
 
 async def delete_user(db: AsyncSession, user_id: int) -> bool:

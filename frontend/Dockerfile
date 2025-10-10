@@ -9,12 +9,13 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 WORKDIR /app
 
-# Копируем файлы зависимостей
-COPY package*.json ./
+# Копируем файлы зависимостей и конфигурацию npm
+COPY package*.json .npmrc ./
 
 # Устанавливаем ВСЕ зависимости (включая devDependencies для сборки)
 # Для Alpine Linux с Rollup нужны все опциональные зависимости
-RUN npm ci && npm cache clean --force
+# Добавлены повторные попытки и увеличенные таймауты для стабильности
+RUN npm ci --prefer-offline --no-audit --loglevel=verbose && npm cache clean --force
 
 # Копируем исходный код
 COPY . .

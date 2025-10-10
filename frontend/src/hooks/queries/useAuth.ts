@@ -103,11 +103,18 @@ export function useRegister() {
       // Invalidate and refetch current user query
       queryClient.invalidateQueries({ queryKey: authKeys.currentUser() })
       
+      // Clear any existing timeout before setting a new one
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+      
       // Navigate to home page after short delay
       // Store timeout ID for cleanup
       timeoutRef.current = setTimeout(() => {
-        navigate('/', { replace: true })
+        // Clear timeout reference before navigating
+        clearTimeout(timeoutRef.current!)
         timeoutRef.current = null
+        navigate('/', { replace: true })
       }, 1500)
     },
     onError: (error: unknown) => {
@@ -156,8 +163,10 @@ export function useLogout() {
  * Automatically clears auth store, cache, and redirects to login on success
  * Shows error notification without clearing auth on failure
  * Uses React.useRef to track timeout and clean it up on unmount
+ * 
+ * @param onCloseDialog - Optional callback to close the delete confirmation dialog on success
  */
-export function useDeleteAccount() {
+export function useDeleteAccount(onCloseDialog?: () => void) {
   const navigate = useNavigate()
   const { clearAuth } = useAuthStore()
   const { showSuccess, showError } = useNotificationStore()
@@ -181,17 +190,29 @@ export function useDeleteAccount() {
       // Show success notification
       showSuccess('Аккаунт успешно удален')
       
+      // Close the dialog if callback provided (allows user to see the loading state)
+      if (onCloseDialog) {
+        onCloseDialog()
+      }
+      
       // Clear auth store
       clearAuth()
       
       // Clear all queries from cache
       queryClient.clear()
       
+      // Clear any existing timeout before setting a new one
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+      
       // Navigate to login page after short delay to let user see the notification
       // Store timeout ID for cleanup
       timeoutRef.current = setTimeout(() => {
-        navigate('/login', { replace: true })
+        // Clear timeout reference before navigating
+        clearTimeout(timeoutRef.current!)
         timeoutRef.current = null
+        navigate('/login', { replace: true })
       }, 1000)
     },
     onError: (error: unknown) => {
@@ -202,6 +223,7 @@ export function useDeleteAccount() {
       const errorMessage = extractErrorMessage(error, 'Не удалось удалить аккаунт. Пожалуйста, попробуйте снова.')
       showError(errorMessage)
       
+      // Do NOT close dialog on error - user stays in dialog to see error and retry
       // Do NOT clear auth or navigate on error - user stays logged in
     },
   })

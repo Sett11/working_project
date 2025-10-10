@@ -1,14 +1,16 @@
-import { Box, Drawer, Button, Typography, Avatar, Divider, CircularProgress } from '@mui/material'
-import { Login as LoginIcon, Dashboard as DashboardIcon, Person as PersonIcon, Logout as LogoutIcon } from '@mui/icons-material'
+import { Box, Drawer, Button, Typography, Avatar, Divider, CircularProgress, IconButton } from '@mui/material'
+import type { DrawerProps } from '@mui/material'
+import { Login as LoginIcon, Dashboard as DashboardIcon, Person as PersonIcon, Logout as LogoutIcon, Menu as MenuIcon } from '@mui/icons-material'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/store'
 import { useLogout } from '@/hooks/queries'
+import LanguageSwitcher from '@/components/common/LanguageSwitcher'
 
 interface LandingSidebarProps {
   open: boolean
   onClose: () => void
-  variant?: 'temporary' | 'permanent'
+  variant?: DrawerProps['variant']
 }
 
 export default function LandingSidebar({ open, onClose, variant = 'temporary' }: LandingSidebarProps) {
@@ -46,6 +48,12 @@ export default function LandingSidebar({ open, onClose, variant = 'temporary' }:
         p: { xs: 2, sm: 3 },
       }}
     >
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+        <IconButton aria-label="toggle sidebar" onClick={onClose} size="small">
+          <MenuIcon />
+        </IconButton>
+        <LanguageSwitcher />
+      </Box>
       <Typography 
         variant="h6" 
         sx={{ 
@@ -170,9 +178,13 @@ export default function LandingSidebar({ open, onClose, variant = 'temporary' }:
       open={open}
       onClose={onClose}
       variant={variant}
+      ModalProps={{ keepMounted: true }}
       sx={{
+        zIndex: (theme) => theme.zIndex.appBar - 1,
         '& .MuiDrawer-paper': {
           boxSizing: 'border-box',
+          width: { xs: '85vw', sm: 320, md: 360 },
+          maxWidth: 400,
         },
       }}
     >

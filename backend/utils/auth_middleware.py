@@ -82,9 +82,13 @@ async def get_current_user(request: Request) -> Optional[dict]:
     """
     # Извлекаем токен из заголовка
     authorization = request.headers.get('Authorization')
+    logger.debug(f"[AUTH_DEBUG] Заголовок Authorization: {authorization[:20] + '...' if authorization else 'ОТСУТСТВУЕТ'}")
+    
     token = extract_token_from_header(authorization)
+    logger.debug(f"[AUTH_DEBUG] Извлечённый токен: {token[:10] + '...' if token else 'ОТСУТСТВУЕТ'}")
     
     if not token:
+        logger.warning(f"[AUTH_DEBUG] Токен не найден в заголовках для пути {request.url.path}")
         return None
     
     # Получаем сессию БД напрямую
@@ -92,17 +96,24 @@ async def get_current_user(request: Request) -> Optional[dict]:
         try:
             # Ищем пользователя по токену
             user = await crud.get_user_by_token(db, token)
+            logger.debug(f"[AUTH_DEBUG] Результат поиска по токену: {user.username if user else 'НЕ НАЙДЕН'}")
+            
             # Проверяем, что пользователь существует И активен
             if user and user.is_active:
+                logger.info(f"[AUTH_DEBUG] Пользователь успешно авторизован: {user.username} (ID: {user.id})")
                 return {
                     "id": user.id,
                     "username": user.username,
                     "is_active": user.is_active
                 }
             # Если пользователь неактивен или не найден - возвращаем None
+            if user and not user.is_active:
+                logger.warning(f"[AUTH_DEBUG] Пользователь {user.username} неактивен")
+            else:
+                logger.warning(f"[AUTH_DEBUG] Пользователь с токеном не найден в БД")
             return None
         except Exception as e:
-            logger.error(f"Ошибка при получении пользователя: {e}")
+            logger.error(f"[AUTH_DEBUG] Ошибка при получении пользователя: {e}")
             return None
 
 

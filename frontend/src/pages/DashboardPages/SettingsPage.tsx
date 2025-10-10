@@ -1,12 +1,13 @@
-import { Box, Typography, Paper, Alert, CircularProgress } from '@mui/material'
-import { Settings as SettingsIcon } from '@mui/icons-material'
+import { Box, Typography, Paper, Alert, CircularProgress, Button } from '@mui/material'
+import { Settings as SettingsIcon, People as PeopleIcon } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/store'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 
 export default function SettingsPage() {
   const { t } = useTranslation()
   const { user, isAuthInitialized } = useAuthStore()
+  const navigate = useNavigate()
 
   // Показываем загрузку, пока аутентификация инициализируется
   if (!isAuthInitialized) {
@@ -46,11 +47,25 @@ export default function SettingsPage() {
         <Typography variant="h6" gutterBottom fontWeight={600}>
           {t('dashboard:settings_title')}
         </Typography>
-        <Typography variant="body1" color="text.secondary">
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           {t('dashboard:settings_description')}
         </Typography>
         
-        {/* TODO: Добавить настройки */}
+        {/* Управление пользователями (только для администраторов) */}
+        <Box sx={{ mt: 3, borderTop: '1px solid', borderColor: 'divider', pt: 3 }}>
+          <Typography variant="h6" gutterBottom fontWeight={600}>
+            {t('dashboard:user_management')}
+          </Typography>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<PeopleIcon />}
+            onClick={() => navigate('/dashboard/users')}
+            sx={{ mt: 2 }}
+          >
+            {t('dashboard:view_all_users')}
+          </Button>
+        </Box>
       </Paper>
     </Box>
   )

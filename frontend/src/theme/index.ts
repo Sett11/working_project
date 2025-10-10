@@ -25,6 +25,9 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => ({
             primary: 'rgba(0, 0, 0, 0.87)',
             secondary: 'rgba(0, 0, 0, 0.6)',
           },
+          brand: {
+            teal50: '#E0F2F1',  // Light teal background for input fields
+          },
         }
       : {
           // Dark mode - Ocean Green theme
@@ -45,6 +48,9 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => ({
           text: {
             primary: '#ffffff',
             secondary: 'rgba(255, 255, 255, 0.7)',
+          },
+          brand: {
+            teal50: '#263238',  // Dark grey-teal for dark mode input fields
           },
         }),
   },

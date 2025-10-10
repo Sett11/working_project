@@ -2,7 +2,6 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { ENV } from '@/config/env'
 import { navigateTo } from '@/utils/navigation'
 import { useAuthStore } from '@/store/authStore'
-import { useNavigationStore } from '@/store/navigationStore'
 
 const apiClient = axios.create({
   baseURL: ENV.API_BASE_URL,
@@ -17,6 +16,15 @@ apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // Получаем токен из zustand store (который использует persist middleware)
     const token = useAuthStore.getState().token
+    const user = useAuthStore.getState().user
+    
+    console.log('🔵 API Request:', {
+      url: config.url,
+      method: config.method,
+      hasToken: !!token,
+      user: user ? { username: user.username, is_admin: user.is_admin } : null,
+    })
+    
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -31,7 +39,15 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   response => response,
   (error: AxiosError) => {
-    // Обработка ошибки 401 (неавторизован) или 404 (пользователь не найден)
+    // Логируем все ошибки для отладки
+    console.log('🔴 API Error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    })
+    
+    // Обработка ошибки 401 (неавторизован)
     if (error.response?.status === 401) {
       console.warn('⚠️ 401 Unauthorized - очистка состояния аутентификации')
       // Очищаем аутентификацию через zustand store (который использует persist middleware)
@@ -41,6 +57,12 @@ apiClient.interceptors.response.use(
       if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
         navigateTo('/', true)
       }
+    }
+    
+    // Обработка ошибки 403 (нет прав доступа) - НЕ разлогиниваем пользователя!
+    if (error.response?.status === 403) {
+      console.warn('⚠️ 403 Forbidden - недостаточно прав для доступа к', error.config?.url)
+      // Просто пробрасываем ошибку дальше, не разлогиниваем
     }
     
     // Обработка 404 для эндпоинта /auth/me (пользователь удален из БД)

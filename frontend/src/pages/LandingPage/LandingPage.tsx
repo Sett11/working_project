@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   AppBar,
   Toolbar,
@@ -32,9 +32,20 @@ export default function LandingPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   // Начальное состояние: на десктопе сайдбар открыт, на мобильных - закрыт
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile)
+  // Флаг для отслеживания ручного переключения пользователем
+  const [userToggledSidebar, setUserToggledSidebar] = useState(false)
+
+  // Автоматическая синхронизация sidebarOpen с isMobile, если пользователь не переключал вручную
+  useEffect(() => {
+    if (!userToggledSidebar) {
+      setSidebarOpen(!isMobile)
+    }
+  }, [isMobile, userToggledSidebar])
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen)
+    // Устанавливаем флаг, что пользователь переключил сайдбар вручную
+    setUserToggledSidebar(true)
   }
 
   const features = [

@@ -36,7 +36,7 @@ export default function RegisterPage() {
   // Общие стили для всех TextField
   const textFieldSxProps = {
     '& .MuiOutlinedInput-root': {
-      backgroundColor: theme.palette.mode === 'light' ? '#E0F2F1' : theme.palette.grey[800],
+      backgroundColor: theme.palette.brand.teal50,
       '& fieldset': {
         borderColor: 'primary.main',
         borderWidth: '2px',
@@ -190,7 +190,7 @@ export default function RegisterPage() {
                         <IconButton
                           onClick={() => setShowPassword(!showPassword)}
                           edge="end"
-                          disabled={false}
+                          disabled={registerMutation.isPending || registerMutation.isSuccess}
                           sx={{ color: '#00897B' }}
                         >
                           {showPassword ? <VisibilityOff /> : <Visibility />}
@@ -226,7 +226,7 @@ export default function RegisterPage() {
                         <IconButton
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                           edge="end"
-                          disabled={false}
+                          disabled={registerMutation.isPending || registerMutation.isSuccess}
                           sx={{ color: '#00897B' }}
                         >
                           {showConfirmPassword ? <VisibilityOff /> : <Visibility />}

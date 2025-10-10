@@ -17,17 +17,15 @@ function App() {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   
   const logoutMutation = useLogout()
-  const deleteAccountMutation = useDeleteAccount()
+  const deleteAccountMutation = useDeleteAccount(() => setDeleteDialogOpen(false))
 
   const handleLogout = () => {
     logoutMutation.mutate()
   }
 
   const handleDeleteAccount = () => {
-    // Close dialog before mutation
-    setDeleteDialogOpen(false)
-    
-    // All success/error handling is now in the useDeleteAccount hook
+    // Dialog will stay open during mutation to show loading/error states
+    // It will be closed automatically on success via the hook's callback
     deleteAccountMutation.mutate()
   }
 

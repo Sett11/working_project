@@ -41,6 +41,8 @@ export function useComponent(id: number) {
     queryFn: () => componentsService.getById(id),
     // Keep data fresh for 10 minutes
     staleTime: 10 * 60 * 1000,
+    // Do not refetch on window focus (detail data is stable)
+    refetchOnWindowFocus: false,
     // Only fetch if id is valid
     enabled: id > 0,
   })
@@ -56,5 +58,7 @@ export function useComponentsByCategory(category: ComponentCategory) {
     queryFn: () => componentsService.getByCategory(category),
     // Keep data fresh for 10 minutes
     staleTime: 10 * 60 * 1000,
+    // Do not refetch on window focus (category data is stable)
+    refetchOnWindowFocus: false,
   })
 }

@@ -73,10 +73,10 @@ export default function LanguageSwitcher() {
             selected={language.code === i18n.language}
             aria-label={language.name}
           >
-            <ListItemIcon aria-hidden="true">
-              <Flag 
-                code={language.flagCode} 
-                style={{ width: '24px', height: '18px', objectFit: 'cover' }} 
+            <ListItemIcon aria-hidden="true" sx={{ minWidth: 32 }}>
+              <Flag
+                code={language.flagCode}
+                style={{ width: '24px', height: '18px', objectFit: 'cover' }}
               />
             </ListItemIcon>
             <ListItemText>

@@ -46,7 +46,7 @@ db:
 # -----------------------------------------------------------------------------
 cache:
   # Директория кэша
-  # Использует переменную окружения TRIVY_CACHE_DIR с fallback на ./cache
+  # Использует переменную окружения TRIVY_CACHE_DIR с fallback на ./.trivy-cache
   # Для переопределения: export TRIVY_CACHE_DIR=/custom/path
   dir: ${TRIVY_CACHE_DIR:-./.trivy-cache}
   

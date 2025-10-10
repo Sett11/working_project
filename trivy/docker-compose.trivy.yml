@@ -7,10 +7,10 @@ version: '3.8'
 services:
   # Сервис Trivy для сканирования безопасности
   trivy-scan:
-    # Закрепленная версия: 0.63.0 (выпущена 30.05.2025)
+    # Закрепленная версия: 0.66.0 (выпущена 02.09.2025)
     # Для обеспечения воспроизводимости сборок используется конкретная версия
     # Проверить актуальность: https://github.com/aquasecurity/trivy/releases
-    image: aquasec/trivy:0.63.0
+    image: aquasec/trivy:0.66.0
     container_name: trivy_scanner
     
     # Монтируем необходимые директории
@@ -20,7 +20,7 @@ services:
       
       # Кэш Trivy для ускорения повторных сканирований
       # Используется переменная окружения TRIVY_CACHE_DIR
-      - trivy-cache:${TRIVY_CACHE_DIR:-/tmp/trivy-cache}
+      - trivy-cache:/tmp/trivy-cache
       
       # Конфигурационные файлы
       - ./trivy-config.yaml:/config/trivy-config.yaml:ro
@@ -38,7 +38,7 @@ services:
       - TRIVY_CONFIG=/config/trivy-config.yaml
       
       # Кэш директория (можно переопределить через .env или docker-compose)
-      - TRIVY_CACHE_DIR=${TRIVY_CACHE_DIR:-/tmp/trivy-cache}
+      - TRIVY_CACHE_DIR=/tmp/trivy-cache
       
       # Основные настройки
       - TRIVY_DEBUG=false

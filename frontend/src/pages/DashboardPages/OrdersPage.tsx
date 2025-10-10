@@ -1,13 +1,14 @@
-import { Box, Typography, Paper, Alert } from '@mui/material'
-import { Receipt as ReceiptIcon } from '@mui/icons-material'
+import { Box, Typography, Paper, Alert, Button } from '@mui/material'
+import { Receipt as ReceiptIcon, Add as AddIcon } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/store'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 
 export default function OrdersPage() {
   const { t } = useTranslation()
   const { user } = useAuthStore()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   
   // Проверяем фильтр из URL
   const filter = searchParams.get('filter')
@@ -17,11 +18,22 @@ export default function OrdersPage() {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <ReceiptIcon sx={{ fontSize: 40, mr: 2, color: 'primary.main' }} />
-        <Typography variant="h4" component="h1" fontWeight={700}>
-          {pageTitle}
-        </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <ReceiptIcon sx={{ fontSize: 40, mr: 2, color: 'primary.main' }} />
+          <Typography variant="h4" component="h1" fontWeight={700}>
+            {pageTitle}
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={() => navigate('/dashboard/orders/create')}
+          sx={{ px: 3 }}
+        >
+          {t('dashboard:create_new_order')}
+        </Button>
       </Box>
 
       {isMyOrders && (

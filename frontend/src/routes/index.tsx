@@ -8,6 +8,8 @@ import LandingPage from '@/pages/LandingPage'
 import App from '@/App'
 import SettingsPage from '@/pages/DashboardPages/SettingsPage'
 import OrdersPage from '@/pages/DashboardPages/OrdersPage'
+import UsersPage from '@/pages/DashboardPages/UsersPage'
+import CreateOrderPage from '@/pages/DashboardPages/CreateOrderPage'
 import { Box, CircularProgress } from '@mui/material'
 
 // Общий интерфейс для охранных компонентов маршрутов
@@ -102,6 +104,8 @@ export default function AppRoutes() {
       >
         <Route path="settings" element={<SettingsPage />} />
         <Route path="orders" element={<OrdersPage />} />
+        <Route path="orders/create" element={<CreateOrderPage />} />
+        <Route path="users" element={<UsersPage />} />
         <Route index element={<Navigate to="/dashboard/orders?filter=my" replace />} />
       </Route>
 

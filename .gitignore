@@ -161,10 +161,14 @@ reports/*.sarif
 # Trivy logs
 logs/*.log
 logs/*.txt
+trivy/reports/*
+trivy/logs/*
 
 # Временные файлы
 temp_*
 *.tmp
+
+WARP.md
 
 
 # ═══════════════════════════════════════════════════════════════

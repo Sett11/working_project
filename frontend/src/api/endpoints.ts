@@ -10,6 +10,11 @@ export const API_ENDPOINTS = {
     DELETE_ACCOUNT: '/auth/delete',
   },
 
+  // Users (admin only)
+  USERS: {
+    LIST: '/users',
+  },
+
   // Air Conditioners (не используются в текущей версии, но оставлены для будущего)
   AIR_CONDITIONERS: {
     LIST: '/air-conditioners',

@@ -35,7 +35,7 @@ export default function LoginPage() {
   // Переиспользуемые стили для TextField (username и password)
   const textFieldSx = {
     '& .MuiOutlinedInput-root': {
-      backgroundColor: theme.palette.mode === 'light' ? '#E0F2F1' : theme.palette.grey[800],
+      backgroundColor: theme.palette.brand.teal50,
       '& fieldset': {
         borderColor: 'primary.main',
         borderWidth: '2px',
