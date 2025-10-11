@@ -1,5 +1,0 @@
-export * from './user.types'
-export * from './client.types'
-export * from './airConditioner.types'
-export * from './component.types'
-export * from './order.types'
